@@ -24,6 +24,66 @@
 
 static Tanto_R_Mesh mesh;
 
+struct Timer {
+    struct timespec startTime;
+    struct timespec endTime;
+    clockid_t clockId;
+    void (*startFn)(struct Timer*);
+    void (*stopFn)(struct Timer*);
+} timer;
+
+static void timerStart(struct Timer* t)
+{
+    clock_gettime(t->clockId, &t->startTime);
+}
+
+static void timerStop(struct Timer* t)
+{
+    clock_gettime(t->clockId, &t->endTime);
+}
+
+struct Stats {
+    uint64_t frameCount;
+    uint64_t nsTotal;
+    unsigned long nsDelta;
+    uint32_t shortestFrame;
+    uint32_t longestFrame;
+} stats;
+
+static void updateStats(const struct Timer* t, struct Stats* s)
+{
+    s->nsDelta  = (t->endTime.tv_sec * NS_PER_S + t->endTime.tv_nsec) - (t->startTime.tv_sec * NS_PER_S + t->startTime.tv_nsec);
+    s->nsTotal += s->nsDelta;
+
+    if (s->nsDelta > s->longestFrame) s->longestFrame = s->nsDelta;
+    if (s->nsDelta < s->shortestFrame) s->shortestFrame = s->nsDelta;
+
+    s->frameCount++;
+}
+
+static void sleepLoop(const struct Stats* s)
+{
+    struct timespec diffTime;
+    diffTime.tv_nsec = NS_TARGET > s->nsDelta ? NS_TARGET - s->nsDelta : 0;
+    diffTime.tv_sec  = 0;
+    // we could use the second parameter to handle interrupts and signals
+    nanosleep(&diffTime, NULL);
+}
+
+static void initTimer(void)
+{
+    memset(&timer, 0, sizeof(timer));
+    timer.clockId = CLOCK_MONOTONIC;
+    timer.startFn = timerStart;
+    timer.stopFn  = timerStop;
+}
+
+static void initStats(void)
+{
+    memset(&stats, 0, sizeof(stats));
+    stats.longestFrame = UINT32_MAX;
+}
+
 void painter_Init(void)
 {
     tanto_d_Init();
@@ -75,16 +135,8 @@ void painter_LoadPreMesh(Tanto_R_PreMesh m)
 
 void painter_StartLoop(void)
 {
-    struct timespec startTime = {0, 0};
-    struct timespec endTime = {0, 0};
-    struct timespec diffTime = {0, 0};
-    struct timespec remTime = {0, 0}; // this is just if we get signal interupted
-
-    uint64_t frameCount   = 0;
-    uint64_t nsTotal      = 0;
-    unsigned long nsDelta = 0;
-    uint32_t shortestFrame = NS_PER_S;
-    uint32_t longestFrame = 0;
+    initTimer();
+    initStats();
 
     // initialize matrices
     Mat4* xformProj    = r_GetXform(R_XFORM_PROJ);
@@ -97,7 +149,7 @@ void painter_StartLoop(void)
 
     while( parms.shouldRun ) 
     {
-        clock_gettime(CLOCK_MONOTONIC, &startTime);
+        timer.startFn(&timer);
 
         tanto_i_GetEvents();
         tanto_i_ProcessEvents();
@@ -106,7 +158,7 @@ void painter_StartLoop(void)
 
         g_Update();
 
-        if (parms.renderNeedsUpdate || frameCount == 0 ) 
+        if (parms.renderNeedsUpdate || stats.frameCount == 0 ) 
         {
             for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
             {
@@ -124,23 +176,11 @@ void painter_StartLoop(void)
             tanto_r_PresentFrame();
         }
 
-        clock_gettime(CLOCK_MONOTONIC, &endTime);
+        timer.stopFn(&timer);
 
-        nsDelta  = (endTime.tv_sec * NS_PER_S + endTime.tv_nsec) - (startTime.tv_sec * NS_PER_S + startTime.tv_nsec);
-        nsTotal += nsDelta;
+        updateStats(&timer, &stats);
 
-        //printf("Delta ns: %ld\n", nsDelta);
-
-        if (nsDelta > longestFrame) longestFrame = nsDelta;
-        if (nsDelta < shortestFrame) shortestFrame = nsDelta;
-
-        diffTime.tv_nsec = NS_TARGET > nsDelta ? NS_TARGET - nsDelta : 0;
-
-        //assert ( NS_TARGET > nsDelta );
-
-        nanosleep(&diffTime, &remTime);
-
-        frameCount++;
+        sleepLoop(&stats);
     }
 }
 
