@@ -18,10 +18,10 @@ typedef struct {
     Mat4 projInv;
 } UboMatrices;
 
-static Tanto_V_Block*      matrixBlock;
+static Tanto_V_BlockHostBuffer*      matrixBlock;
 static UboMatrices*  matrices;
 static const Tanto_R_Mesh*   hapiMesh;
-static Tanto_V_Block*      stbBlock;
+static Tanto_V_BlockHostBuffer*      stbBlock;
 
 static RtPushConstants pushConstants;
 
@@ -257,8 +257,8 @@ static void initOffscreenFrameBuffer(void)
 
 static void initDescriptors(void)
 {
-    matrixBlock = tanto_v_RequestBlock(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    matrices = (UboMatrices*)matrixBlock->address;
+    matrixBlock = tanto_v_RequestBlockHost(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    matrices = (UboMatrices*)matrixBlock->hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
     matrices->proj    = m_Ident_Mat4();
@@ -483,10 +483,10 @@ static void createShaderBindingTable(void)
     VkResult r;
     r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_RAYTRACE], 0, groupCount, sbtSize, shaderHandleData);
     assert( VK_SUCCESS == r );
-    stbBlock = tanto_v_RequestBlockAligned(sbtSize, baseAlignment);
+    stbBlock = tanto_v_RequestBlockHostAligned(sbtSize, baseAlignment);
 
     uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbBlock->address;
+    uint8_t* pTarget = stbBlock->hostData;
 
     for (int i = 0; i < groupCount; i++) 
     {
