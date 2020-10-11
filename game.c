@@ -1,4 +1,5 @@
 #include "game.h"
+#include "render.h"
 #include "common.h"
 #include <assert.h>
 #include <tanto/t_def.h>
@@ -16,6 +17,9 @@ static bool turnRight;
 static Mat4* viewMat;
 static Mat4* viewInvMat;
 
+static float brushX;
+static float brushY;
+
 Parms parms;
 
 static struct Player {
@@ -27,6 +31,7 @@ static struct Player {
 #define MOVE_SPEED 0.04
 #define TURN_SPEED 0.04
 
+Brush* brush;
 
 static Mat4 generatePlayerView(void)
 {
@@ -39,6 +44,8 @@ static Mat4 generatePlayerView(void)
 void g_Init(void)
 {
     player.pos = (Vec3){0, -2.5, -5};
+    brushX = 0;
+    brushY = 0;
 }
 
 void g_BindToView(Mat4* view, Mat4* viewInv)
@@ -47,6 +54,11 @@ void g_BindToView(Mat4* view, Mat4* viewInv)
     viewMat = view;
     if (viewInv)
         viewInvMat = viewInv;
+}
+
+void g_BindToBrush(Brush* br)
+{
+    brush = br;
 }
 
 void g_Responder(const Tanto_I_Event *event)
@@ -77,7 +89,8 @@ void g_Responder(const Tanto_I_Event *event)
         } break;
         case TANTO_I_MOTION: 
         {
-            printf("%d %d\n", event->data.mouseCoords.x, event->data.mouseCoords.y);
+            brushX = (float)event->data.mouseCoords.x / TANTO_WINDOW_WIDTH;
+            brushY = (float)event->data.mouseCoords.y / TANTO_WINDOW_HEIGHT;
             break;
         }
         case TANTO_I_MOUSEDOWN:
@@ -97,6 +110,7 @@ void g_Responder(const Tanto_I_Event *event)
 void g_Update(void)
 {
     assert(viewMat);
+    assert(brush);
     if (moveForward) 
     {
         Vec3 dir = FORWARD;
@@ -131,4 +145,6 @@ void g_Update(void)
     }
     *viewMat    = generatePlayerView();
     *viewInvMat = m_Invert4x4(viewMat);
+    brush->x = brushX;
+    brush->y = brushY;
 }

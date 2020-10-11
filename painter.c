@@ -112,6 +112,7 @@ void painter_LoadMesh(Tanto_R_Mesh m)
 
     r_InitRenderCommands();
     g_BindToView(r_GetXform(R_XFORM_VIEW), r_GetXform(R_XFORM_VIEW_INV));
+    g_BindToBrush(r_GetBrush());
 }
 
 void painter_LoadPreMesh(Tanto_R_PreMesh m)
@@ -131,6 +132,7 @@ void painter_LoadPreMesh(Tanto_R_PreMesh m)
 
     r_InitRenderCommands();
     g_BindToView(r_GetXform(R_XFORM_VIEW), r_GetXform(R_XFORM_VIEW_INV));
+    g_BindToBrush(r_GetBrush());
 }
 
 void painter_StartLoop(void)
@@ -179,6 +181,8 @@ void painter_StartLoop(void)
         timer.stopFn(&timer);
 
         updateStats(&timer, &stats);
+
+        printf("Delta ns: %ld\n", stats.nsDelta);
 
         sleepLoop(&stats);
     }

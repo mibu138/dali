@@ -1,5 +1,6 @@
 bin/*
 build/*
+shaders/spv/*
 compile_commands.json
 tags
 tanto

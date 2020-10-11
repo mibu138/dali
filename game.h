@@ -3,9 +3,11 @@
 
 #include <tanto/i_input.h>
 #include <tanto/m_math.h>
+#include "common.h"
 
 void g_Init(void);
 void g_BindToView(Mat4* viewMat, Mat4* viewMatInv);
+void g_BindToBrush(Brush* br);
 void g_Responder(const Tanto_I_Event *event);
 void g_Update(void);
 

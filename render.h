@@ -2,6 +2,7 @@
 #define VIEWER_R_COMMANDS_H
 
 #include <tanto/r_geo.h>
+#include "common.h"
 
 typedef enum {
     R_XFORM_MODEL,
@@ -23,6 +24,7 @@ typedef struct {
 void  r_InitRenderCommands(void);
 void  r_UpdateRenderCommands(void);
 Mat4* r_GetXform(r_XformType);
+Brush* r_GetBrush(void);
 void  r_LoadMesh(const Tanto_R_Mesh*);
 void  r_CommandCleanUp(void);
 

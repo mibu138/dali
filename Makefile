@@ -27,7 +27,7 @@ OBJS =  \
 		$(O)/render.o \
 		$(O)/painter.o \
 
-SHADERS =  \
+SHADERS =  $(SPV)/post-frag.spv \
 
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all

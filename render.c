@@ -1,6 +1,6 @@
 #include "render.h"
-#include "common.h"
 #include "tanto/v_image.h"
+#include "tanto/v_memory.h"
 #include <memory.h>
 #include <assert.h>
 #include <string.h>
@@ -11,6 +11,8 @@
 #include <tanto/r_pipeline.h>
 #include <tanto/r_raytrace.h>
 
+#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
+
 typedef struct {
     Mat4 model;
     Mat4 view;
@@ -19,10 +21,13 @@ typedef struct {
     Mat4 projInv;
 } UboMatrices;
 
-static Tanto_V_BlockHostBuffer*      matrixBlock;
-static UboMatrices*  matrices;
-static const Tanto_R_Mesh*   hapiMesh;
-static Tanto_V_BlockHostBuffer*      stbBlock;
+typedef Brush UboBrush;
+
+static Tanto_V_BlockHostBuffer*  matrixBlock;
+static Tanto_V_BlockHostBuffer*  brushBlock;
+static Tanto_V_BlockHostBuffer*  stbBlock;
+
+static const Tanto_R_Mesh*       hapiMesh;
 
 static RtPushConstants pushConstants;
 
@@ -90,17 +95,30 @@ static void initOffscreenFrameBuffer(void)
 static void initDescriptors(void)
 {
     matrixBlock = tanto_v_RequestBlockHost(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    matrices = (UboMatrices*)matrixBlock->hostData;
+    UboMatrices* matrices = (UboMatrices*)matrixBlock->hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
     matrices->proj    = m_Ident_Mat4();
     matrices->viewInv = m_Ident_Mat4();
     matrices->projInv = m_Ident_Mat4();
 
-    VkDescriptorBufferInfo uniformInfo = {
+    brushBlock = tanto_v_RequestBlockHost(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    UboBrush* brush = (UboBrush*)brushBlock->hostData;
+    brush->x = 0;
+    brush->y = 0;
+    brush->r = 0.01;
+    brush->mode = 0;
+
+    VkDescriptorBufferInfo uniformInfoMatrices = {
         .range  =  matrixBlock->size,
         .offset =  matrixBlock->vOffset,
         .buffer = *matrixBlock->vBuffer,
+    };
+
+    VkDescriptorBufferInfo uniformInfoBrush = {
+        .range  =  brushBlock->size,
+        .offset =  brushBlock->vOffset,
+        .buffer = *brushBlock->vBuffer,
     };
 
 #if RAY_TRACE
@@ -136,7 +154,7 @@ static void initDescriptors(void)
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &uniformInfo
+            .pBufferInfo = &uniformInfoMatrices
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -179,9 +197,79 @@ static void initDescriptors(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &imageInfo
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_POST],
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &uniformInfoBrush,
     }};
 
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
+}
+
+static void InitPipelines(void)
+{
+    const Tanto_R_DescriptorSet descSets[] = {{
+            R_DESC_SET_RASTER,
+            3, // binding count
+            {   {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+                {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
+                {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR}}
+        },{
+            R_DESC_SET_RAYTRACE,
+            2,
+            {   {1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 
+                    VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
+                {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 
+                    VK_SHADER_STAGE_RAYGEN_BIT_KHR}}
+        },{
+            R_DESC_SET_POST,
+            2,
+            {
+                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
+                {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT}}
+    }};
+
+    const VkPushConstantRange pushConstantRt = {
+        .stageFlags = 
+            VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+            VK_SHADER_STAGE_MISS_BIT_KHR,
+        .offset = 0,
+        .size = sizeof(RtPushConstants)
+    };
+
+    const Tanto_R_PipelineLayout pipelayouts[] = {{
+        R_PIPE_LAYOUT_RASTER, 1, {R_DESC_SET_RASTER}
+    },{
+        R_PIPE_LAYOUT_RAYTRACE, 2, {R_DESC_SET_RASTER, R_DESC_SET_RAYTRACE}, 1, {pushConstantRt}
+    },{
+        R_PIPE_LAYOUT_POST, 1, {R_DESC_SET_POST}
+    }};
+
+    const Tanto_R_PipelineInfo pipeInfos[] = {{
+        R_PIPE_RASTER,
+        TANTO_R_PIPELINE_RASTER_TYPE,
+        R_PIPE_LAYOUT_RASTER,
+        {TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, TANTO_SPVDIR"/default-vert.spv", TANTO_SPVDIR"/default-frag.spv"},
+        {}
+    },{
+        R_PIPE_RAYTRACE,
+        TANTO_R_PIPELINE_RAYTRACE_TYPE,
+        R_PIPE_LAYOUT_RAYTRACE
+    },{
+        R_PIPE_POST,
+        TANTO_R_PIPELINE_POSTPROC_TYPE,
+        R_PIPE_LAYOUT_POST,
+        {TANTO_R_RENDER_PASS_SWAPCHAIN_TYPE, "", SPVDIR"/post-frag.spv"}
+    }};
+
+    tanto_r_InitDescriptorSets(descSets, TANTO_ARRAY_SIZE(descSets));
+    tanto_r_InitPipelineLayouts(pipelayouts, TANTO_ARRAY_SIZE(pipelayouts));
+    tanto_r_InitPipelines(pipeInfos, TANTO_ARRAY_SIZE(pipeInfos));
 }
 
 static void rayTrace(const VkCommandBuffer* cmdBuf)
@@ -329,67 +417,6 @@ static void createShaderBindingTable(void)
     printf("Created shader binding table\n");
 }
 
-static void InitPipelines(void)
-{
-    const Tanto_R_DescriptorSet descSets[] = {{
-            R_DESC_SET_RASTER,
-            3, // binding count
-            {   {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-                {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
-                {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR}}
-        },{
-            R_DESC_SET_RAYTRACE,
-            2,
-            {   {1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 
-                    VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
-                {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 
-                    VK_SHADER_STAGE_RAYGEN_BIT_KHR}}
-        },{
-            R_DESC_SET_POST,
-            1,
-            {
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT}}
-    }};
-
-    const VkPushConstantRange pushConstantRt = {
-        .stageFlags = 
-            VK_SHADER_STAGE_RAYGEN_BIT_KHR |
-            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-            VK_SHADER_STAGE_MISS_BIT_KHR,
-        .offset = 0,
-        .size = sizeof(RtPushConstants)
-    };
-
-    const Tanto_R_PipelineLayout pipelayouts[] = {{
-        R_PIPE_LAYOUT_RASTER, 1, {R_DESC_SET_RASTER}
-    },{
-        R_PIPE_LAYOUT_RAYTRACE, 2, {R_DESC_SET_RASTER, R_DESC_SET_RAYTRACE}, 1, {pushConstantRt}
-    },{
-        R_PIPE_LAYOUT_POST, 1, {R_DESC_SET_POST}
-    }};
-
-    const Tanto_R_PipelineInfo pipeInfos[] = {{
-        R_PIPE_RASTER,
-        TANTO_R_PIPELINE_RASTER_TYPE,
-        R_PIPE_LAYOUT_RASTER,
-        {TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, TANTO_SPVDIR"/default-vert.spv", TANTO_SPVDIR"/default-frag.spv"},
-        {}
-    },{
-        R_PIPE_RAYTRACE,
-        TANTO_R_PIPELINE_RAYTRACE_TYPE,
-        R_PIPE_LAYOUT_RAYTRACE
-    },{
-        R_PIPE_POST,
-        TANTO_R_PIPELINE_POSTPROC_TYPE,
-        R_PIPE_LAYOUT_POST,
-        {TANTO_R_RENDER_PASS_SWAPCHAIN_TYPE, "", TANTO_SPVDIR"/post-frag.spv"}
-    }};
-
-    tanto_r_InitDescriptorSets(descSets, TANTO_ARRAY_SIZE(descSets));
-    tanto_r_InitPipelineLayouts(pipelayouts, TANTO_ARRAY_SIZE(pipelayouts));
-    tanto_r_InitPipelines(pipeInfos, TANTO_ARRAY_SIZE(pipeInfos));
-}
-
 void r_InitRenderCommands(void)
 {
     if (!createdPipelines)
@@ -468,6 +495,7 @@ void r_UpdateRenderCommands(void)
 
 Mat4* r_GetXform(r_XformType type)
 {
+    UboMatrices* matrices = (UboMatrices*)matrixBlock->hostData;
     switch (type) 
     {
         case R_XFORM_MODEL:    return &matrices->model;
@@ -477,6 +505,12 @@ Mat4* r_GetXform(r_XformType type)
         case R_XFORM_PROJ_INV: return &matrices->projInv;
     }
     return NULL;
+}
+
+Brush* r_GetBrush(void)
+{
+    assert (brushBlock->hostData);
+    return (Brush*)brushBlock->hostData;
 }
 
 void r_LoadMesh(const Tanto_R_Mesh* mesh)
