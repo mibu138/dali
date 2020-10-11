@@ -28,6 +28,8 @@ OBJS =  \
 		$(O)/painter.o \
 
 SHADERS =  $(SPV)/post-frag.spv \
+		   $(SPV)/raster-vert.spv \
+		   $(SPV)/raster-frag.spv \
 
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all

@@ -254,7 +254,7 @@ static void InitPipelines(void)
         R_PIPE_RASTER,
         TANTO_R_PIPELINE_RASTER_TYPE,
         R_PIPE_LAYOUT_RASTER,
-        {TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, TANTO_SPVDIR"/default-vert.spv", TANTO_SPVDIR"/default-frag.spv"},
+        {TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, SPVDIR"/raster-vert.spv", SPVDIR"/raster-frag.spv"},
         {}
     },{
         R_PIPE_RAYTRACE,
