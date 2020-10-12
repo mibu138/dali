@@ -25,6 +25,7 @@ layout(push_constant) uniform Constants {
     int   lightType;
     uint  colorOffset;
     uint  normalOffset;
+    uint  uvwOffset;
 } pushC;
 
 hitAttributeEXT vec3 hitAttrs;
@@ -42,6 +43,7 @@ void main()
 
     const uint nOffset = pushC.normalOffset;
     const uint cOffset = pushC.colorOffset;
+    const uint uvwOffset = pushC.uvwOffset;;
 
     const vec3 n0 = attribs.a[ind[0] + nOffset];
     const vec3 n1 = attribs.a[ind[1] + nOffset];
@@ -51,40 +53,13 @@ void main()
     const vec3 c1 = attribs.a[ind[1] + cOffset];
     const vec3 c2 = attribs.a[ind[2] + cOffset];
 
+    const vec3 uvw0 = attribs.a[ind[0] + uvwOffset];
+    const vec3 uvw1 = attribs.a[ind[1] + uvwOffset];
+    const vec3 uvw2 = attribs.a[ind[2] + uvwOffset];
+
     vec3 normal = n0 * barycen.x + n1 * barycen.y + n2 * barycen.z;
     vec3 color  = c0 * barycen.x + c1 * barycen.y + c2 * barycen.z;
+    vec3 uvw    = uvw0 * barycen.x + uvw1 * barycen.y + uvw2 * barycen.z;
 
-    const vec3 lightDir = pushC.lightDir;
-
-    float illume = clamp(dot(-1 * normal, lightDir), 0.0, 1.0);
-
-    isShadowed = true;
-
-    if (illume > 0)
-    {    
-        float tMin   = 0.001;
-        float tMax   = 100;
-        vec3  origin = gl_WorldRayOriginEXT + gl_WorldRayDirectionEXT * gl_HitTEXT;
-        vec3  rayDir = lightDir * -1;
-        uint  flags =
-            gl_RayFlagsTerminateOnFirstHitEXT | gl_RayFlagsOpaqueEXT | gl_RayFlagsSkipClosestHitShaderEXT;
-        isShadowed = true;
-        traceRayEXT(topLevelAS,  // acceleration structure
-                flags,       // rayFlags
-                0xFF,        // cullMask
-                0,           // sbtRecordOffset
-                0,           // sbtRecordStride
-                1,           // missIndex
-                origin,      // ray origin
-                tMin,        // ray min range
-                rayDir,      // ray direction
-                tMax,        // ray max range
-                1            // payload (location = 1)
-                );
-    }
-
-    if (isShadowed)
-        illume = 0.0;
-
-    prd.hitValue = color * illume;
+    prd.hitUv = uvw.xy;
 }

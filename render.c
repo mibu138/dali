@@ -96,9 +96,11 @@ static void initOffscreenFrameBuffer(void)
 
 static void initPaintImage(void)
 {
-    paintImage = tanto_v_CreateImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT, offscreenColorFormat, 
+    paintImage = tanto_v_CreateImageAndSampler(TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT, offscreenColorFormat, 
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT);
+
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, paintImage.handle);
 }
 
 static void initDescriptors(void)
@@ -136,7 +138,13 @@ static void initDescriptors(void)
         .pAccelerationStructures    = &topLevelAS
     };
 
-    VkDescriptorImageInfo imageInfo = {
+    VkDescriptorImageInfo imageInfoPaint = {
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageView   = paintImage.view,
+        .sampler     = paintImage.sampler
+    };
+
+    VkDescriptorImageInfo imageInfoOffscreenFBO = {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         .imageView   = offscreenFrameBuffer.colorAttachment.view,
         .sampler     = offscreenFrameBuffer.colorAttachment.sampler
@@ -181,6 +189,14 @@ static void initDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstBinding = 3,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &imageInfoPaint
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
             .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
             .dstBinding = 0,
             .descriptorCount = 1,
@@ -193,7 +209,7 @@ static void initDescriptors(void)
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo = &imageInfo
+            .pImageInfo = &imageInfoPaint
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -201,7 +217,7 @@ static void initDescriptors(void)
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfo
+            .pImageInfo = &imageInfoOffscreenFBO
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -219,7 +235,7 @@ static void InitPipelines(void)
 {
     const Tanto_R_DescriptorSet descSets[] = {{
             .id = R_DESC_SET_RASTER,
-            .bindingCount = 3, 
+            .bindingCount = 4, 
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -232,6 +248,10 @@ static void InitPipelines(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         },{
             .id = R_DESC_SET_RAYTRACE,
@@ -255,7 +275,7 @@ static void InitPipelines(void)
             },{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
             }}
         }
     };
@@ -275,8 +295,8 @@ static void InitPipelines(void)
         .descriptorSetIds = {R_DESC_SET_RASTER}
     },{
         .id = R_PIPE_LAYOUT_RAYTRACE, 
-        .descriptorSetCount = 2, 
-        .descriptorSetIds = {R_DESC_SET_RASTER, R_DESC_SET_RAYTRACE}, 
+        .descriptorSetCount = 3, 
+        .descriptorSetIds = {R_DESC_SET_RASTER, R_DESC_SET_RAYTRACE, R_DESC_SET_POST}, 
         .pushConstantCount = 1, 
         .pushConstantsRanges = {pushConstantRt}
     },{
@@ -334,7 +354,7 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelines[R_PIPE_RAYTRACE]);
 
     vkCmdBindDescriptorSets(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
-            pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 0, 2, descriptorSets, 0, NULL);
+            pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 0, 3, descriptorSets, 0, NULL);
 
     vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
@@ -377,7 +397,10 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     const VkStridedBufferRegionKHR callableShaderBindingTable = {
     };
 
-    vkCmdTraceRaysKHR(*cmdBuf, &raygenShaderBindingTable, &missShaderBindingTable, &hitShaderBindingTable, &callableShaderBindingTable, TANTO_WINDOW_WIDTH, TANTO_WINDOW_WIDTH, 1);
+    vkCmdTraceRaysKHR(*cmdBuf, &raygenShaderBindingTable,
+            &missShaderBindingTable, &hitShaderBindingTable,
+            &callableShaderBindingTable, TANTO_WINDOW_WIDTH,
+            TANTO_WINDOW_WIDTH, 1);
 
     printf("Raytrace recorded!\n");
 }
@@ -497,6 +520,7 @@ void r_InitRenderCommands(void)
     pushConstants.lightType = 0;
     pushConstants.colorOffset =  hapiMesh->colOffset / sizeof(Vec3);
     pushConstants.normalOffset = hapiMesh->norOffset / sizeof(Vec3);
+    pushConstants.uvwOffset    = hapiMesh->uvwOffset / sizeof(Vec3);
 
     //for (int i = 0; i < FRAME_COUNT; i++) 
     //{
@@ -542,11 +566,8 @@ void r_UpdateRenderCommands(void)
     //vkCmdBeginRenderPass(frame->commandBuffer, &rpassOffscreen, VK_SUBPASS_CONTENTS_INLINE);
     //vkCmdEndRenderPass(frame->commandBuffer);
 
-    if (parms.mode == MODE_RAY)
-        rayTrace(&frame->commandBuffer);
-    else 
-        rasterize(&frame->commandBuffer, &rpassOffscreen);
-
+    rayTrace(&frame->commandBuffer);
+    rasterize(&frame->commandBuffer, &rpassOffscreen);
     postProc(&frame->commandBuffer, &rpassSwap);
 
     r = vkEndCommandBuffer(frame->commandBuffer);

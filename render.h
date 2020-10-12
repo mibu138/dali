@@ -19,6 +19,7 @@ typedef struct {
     int   lightType;
     uint32_t colorOffset;
     uint32_t normalOffset;
+    uint32_t uvwOffset;
 } RtPushConstants;
 
 void  r_InitRenderCommands(void);
