@@ -1,6 +1,5 @@
 #include "render.h"
 #include "tanto/v_image.h"
-#include "tanto/v_memory.h"
 #include <memory.h>
 #include <assert.h>
 #include <string.h>
@@ -10,6 +9,7 @@
 #include <tanto/t_utils.h>
 #include <tanto/r_pipeline.h>
 #include <tanto/r_raytrace.h>
+#include <vulkan/vulkan_core.h>
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
@@ -121,7 +121,6 @@ static void initDescriptors(void)
         .buffer = *brushBlock->vBuffer,
     };
 
-#if RAY_TRACE
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
         .accelerationStructureCount = 1,
@@ -133,7 +132,6 @@ static void initDescriptors(void)
         .imageView   = offscreenFrameBuffer.colorAttachment.view,
         .sampler     = offscreenFrameBuffer.colorAttachment.sampler
     };
-#endif
 
     VkDescriptorBufferInfo vertBufInfo = {
         .offset = hapiMesh->vertexBlock->vOffset,
@@ -172,7 +170,6 @@ static void initDescriptors(void)
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .pBufferInfo = &indexBufInfo
         },{
-#if RAY_TRACE
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
             .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
@@ -189,7 +186,6 @@ static void initDescriptors(void)
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo = &imageInfo
         },{
-#endif
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
             .dstSet = descriptorSets[R_DESC_SET_POST],
@@ -213,25 +209,47 @@ static void initDescriptors(void)
 static void InitPipelines(void)
 {
     const Tanto_R_DescriptorSet descSets[] = {{
-            R_DESC_SET_RASTER,
-            3, // binding count
-            {   {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR},
-                {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
-                {1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR}}
+            .id = R_DESC_SET_RASTER,
+            .bindingCount = 3, 
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            }}
         },{
-            R_DESC_SET_RAYTRACE,
-            2,
-            {   {1, VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR, 
-                    VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR},
-                {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 
-                    VK_SHADER_STAGE_RAYGEN_BIT_KHR}}
+            .id = R_DESC_SET_RAYTRACE,
+            .bindingCount = 2,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            }}
         },{
-            R_DESC_SET_POST,
-            2,
-            {
-                {1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, VK_SHADER_STAGE_FRAGMENT_BIT},
-                {1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT}}
-    }};
+            .id = R_DESC_SET_POST,
+            .bindingCount = 2,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            }}
+        }
+    };
 
     const VkPushConstantRange pushConstantRt = {
         .stageFlags = 
@@ -243,28 +261,58 @@ static void InitPipelines(void)
     };
 
     const Tanto_R_PipelineLayout pipelayouts[] = {{
-        R_PIPE_LAYOUT_RASTER, 1, {R_DESC_SET_RASTER}
+        .id = R_PIPE_LAYOUT_RASTER, 
+        .descriptorSetCount = 1, 
+        .descriptorSetIds = {R_DESC_SET_RASTER}
     },{
-        R_PIPE_LAYOUT_RAYTRACE, 2, {R_DESC_SET_RASTER, R_DESC_SET_RAYTRACE}, 1, {pushConstantRt}
+        .id = R_PIPE_LAYOUT_RAYTRACE, 
+        .descriptorSetCount = 2, 
+        .descriptorSetIds = {R_DESC_SET_RASTER, R_DESC_SET_RAYTRACE}, 
+        .pushConstantCount = 1, 
+        .pushConstantsRanges = {pushConstantRt}
     },{
-        R_PIPE_LAYOUT_POST, 1, {R_DESC_SET_POST}
+        .id = R_PIPE_LAYOUT_POST, 
+        .descriptorSetCount = 1, 
+        .descriptorSetIds = {R_DESC_SET_POST}
     }};
 
     const Tanto_R_PipelineInfo pipeInfos[] = {{
-        R_PIPE_RASTER,
-        TANTO_R_PIPELINE_RASTER_TYPE,
-        R_PIPE_LAYOUT_RASTER,
-        {TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, SPVDIR"/raster-vert.spv", SPVDIR"/raster-frag.spv"},
-        {}
+        .id       = R_PIPE_RASTER,
+        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+        .layoutId = R_PIPE_LAYOUT_RASTER,
+        .payload.rasterInfo = {
+            .renderPassType = TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, 
+            .vertShader = SPVDIR"/raster-vert.spv", 
+            .fragShader = SPVDIR"/raster-frag.spv"
+        }
     },{
-        R_PIPE_RAYTRACE,
-        TANTO_R_PIPELINE_RAYTRACE_TYPE,
-        R_PIPE_LAYOUT_RAYTRACE
+        .id       = R_PIPE_RAYTRACE,
+        .type     = TANTO_R_PIPELINE_RAYTRACE_TYPE,
+        .layoutId = R_PIPE_LAYOUT_RAYTRACE,
+        .payload.rayTraceInfo = {
+            .raygenCount = 1,
+            .raygenShaders = (char*[]){
+                SPVDIR"/raytrace-rgen.spv",
+            },
+            .missCount = 2,
+            .missShaders = (char*[]){
+                SPVDIR"/raytrace-rmiss.spv",
+                SPVDIR"/raytraceShadow-rmiss.spv"
+            },
+            .chitCount = 1,
+            .chitShaders = (char*[]){
+                SPVDIR"/raytrace-rchit.spv"
+            }
+        }
     },{
-        R_PIPE_POST,
-        TANTO_R_PIPELINE_POSTPROC_TYPE,
-        R_PIPE_LAYOUT_POST,
-        {TANTO_R_RENDER_PASS_SWAPCHAIN_TYPE, "", SPVDIR"/post-frag.spv"}
+        .id       = R_PIPE_POST,
+        .type     = TANTO_R_PIPELINE_POSTPROC_TYPE,
+        .layoutId = R_PIPE_LAYOUT_POST,
+        .payload.rasterInfo = {
+            .renderPassType = TANTO_R_RENDER_PASS_SWAPCHAIN_TYPE,
+            .vertShader = "",
+            .fragShader = SPVDIR"/post-frag.spv"
+        }
     }};
 
     tanto_r_InitDescriptorSets(descSets, TANTO_ARRAY_SIZE(descSets));
@@ -340,16 +388,18 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
     if (hapiMesh)
     {
-        VkBuffer vertBuffers[3] = {
+        VkBuffer vertBuffers[4] = {
+            *hapiMesh->vertexBlock->vBuffer,
             *hapiMesh->vertexBlock->vBuffer,
             *hapiMesh->vertexBlock->vBuffer,
             *hapiMesh->vertexBlock->vBuffer
         };
 
-        const VkDeviceSize vertOffsets[3] = {
+        const VkDeviceSize vertOffsets[4] = {
             hapiMesh->posOffset, 
             hapiMesh->colOffset,
-            hapiMesh->norOffset
+            hapiMesh->norOffset,
+            hapiMesh->uvwOffset
         };
 
         vkCmdBindVertexBuffers(

@@ -30,6 +30,10 @@ OBJS =  \
 SHADERS =  $(SPV)/post-frag.spv \
 		   $(SPV)/raster-vert.spv \
 		   $(SPV)/raster-frag.spv \
+		   $(SPV)/raytrace-rgen.spv \
+		   $(SPV)/raytrace-rmiss.spv \
+		   $(SPV)/raytraceShadow-rmiss.spv \
+		   $(SPV)/raytrace-rchit.spv
 
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all
