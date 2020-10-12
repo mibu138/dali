@@ -1,5 +1,6 @@
 #include "render.h"
 #include "tanto/v_image.h"
+#include "tanto/v_memory.h"
 #include <memory.h>
 #include <assert.h>
 #include <string.h>
@@ -32,6 +33,7 @@ static const Tanto_R_Mesh*       hapiMesh;
 static RtPushConstants pushConstants;
 
 static Tanto_R_FrameBuffer  offscreenFrameBuffer;
+static Tanto_V_Image        paintImage;
 static bool createdPipelines;
 
 typedef enum {
@@ -90,6 +92,13 @@ static void initOffscreenFrameBuffer(void)
     V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &offscreenFrameBuffer.handle) );
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, offscreenFrameBuffer.colorAttachment.handle);
+}
+
+static void initPaintImage(void)
+{
+    paintImage = tanto_v_CreateImage(TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT, offscreenColorFormat, 
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
+            VK_IMAGE_ASPECT_COLOR_BIT);
 }
 
 static void initDescriptors(void)
@@ -292,7 +301,7 @@ static void InitPipelines(void)
         .payload.rayTraceInfo = {
             .raygenCount = 1,
             .raygenShaders = (char*[]){
-                SPVDIR"/raytrace-rgen.spv",
+                SPVDIR"/paint-rgen.spv",
             },
             .missCount = 2,
             .missShaders = (char*[]){
@@ -301,7 +310,7 @@ static void InitPipelines(void)
             },
             .chitCount = 1,
             .chitShaders = (char*[]){
-                SPVDIR"/raytrace-rchit.spv"
+                SPVDIR"/paint-rchit.spv"
             }
         }
     },{
@@ -479,6 +488,7 @@ void r_InitRenderCommands(void)
     createShaderBindingTable();
 
     initOffscreenFrameBuffer();
+    initPaintImage();
     initDescriptors();
 
     pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};

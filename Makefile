@@ -33,7 +33,9 @@ SHADERS =  $(SPV)/post-frag.spv \
 		   $(SPV)/raytrace-rgen.spv \
 		   $(SPV)/raytrace-rmiss.spv \
 		   $(SPV)/raytraceShadow-rmiss.spv \
-		   $(SPV)/raytrace-rchit.spv
+		   $(SPV)/raytrace-rchit.spv \
+		   $(SPV)/paint-rgen.spv \
+		   $(SPV)/paint-rchit.spv \
 
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all

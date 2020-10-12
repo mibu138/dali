@@ -106,7 +106,6 @@ void painter_LoadMesh(Tanto_R_Mesh m)
     mesh = m;
 
     r_LoadMesh(&mesh);
-    parms.mode = MODE_RAY;
     tanto_r_BuildBlas(&mesh);
     tanto_r_BuildTlas();
 
@@ -126,7 +125,6 @@ void painter_LoadPreMesh(Tanto_R_PreMesh m)
     free(m.indexData);
     //TODO should have a specialized free function. all allocation and freeing should be down in r_geo
 
-    parms.mode = MODE_RAY;
     tanto_r_BuildBlas(&mesh);
     tanto_r_BuildTlas();
 
