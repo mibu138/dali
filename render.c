@@ -325,7 +325,7 @@ static void InitPipelines(void)
             },
             .missCount = 2,
             .missShaders = (char*[]){
-                SPVDIR"/raytrace-rmiss.spv",
+                SPVDIR"/paint-rmiss.spv",
                 SPVDIR"/raytraceShadow-rmiss.spv"
             },
             .chitCount = 1,
