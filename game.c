@@ -17,8 +17,14 @@ static bool turnRight;
 static Mat4* viewMat;
 static Mat4* viewInvMat;
 
+typedef enum {
+    PAINT_MODE_PAINT,
+    PAINT_MODE_DO_NOTHING,
+} PaintMode;
+
 static float brushX;
 static float brushY;
+static PaintMode paintMode;
 
 Parms parms;
 
@@ -96,11 +102,15 @@ void g_Responder(const Tanto_I_Event *event)
         case TANTO_I_MOUSEDOWN:
         {
             printf("foo\n");
+            if (paintMode == PAINT_MODE_DO_NOTHING)
+                paintMode = PAINT_MODE_PAINT;
             break;
         }
         case TANTO_I_MOUSEUP:
         {
             printf("bar\n");
+            if (paintMode == PAINT_MODE_PAINT)
+                paintMode = PAINT_MODE_DO_NOTHING;
             break;
         }
         default: assert(0); // error
@@ -147,4 +157,5 @@ void g_Update(void)
     *viewInvMat = m_Invert4x4(viewMat);
     brush->x = brushX;
     brush->y = brushY;
+    brush->mode = paintMode;
 }

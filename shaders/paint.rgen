@@ -26,9 +26,16 @@ layout(location = 0) rayPayloadEXT hitPayload prd;
 
 void main() 
 {
+    if (brush.mode == 1) // not painting
+        return;
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
-    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy);
+    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
+    const vec2 brushPos = vec2(brush.x * 2 - 1.0, brush.y * 2 - 1.0);
     vec2 d = inUV * 2.0 - 1.0; //normalize to -1, 1 range
+    d = d * brush.r * 2.0; // map to -r to r
+    if (length(d) > brush.r * 2.0)
+        return;
+    d += brushPos;
 
     vec4 origin = cam.viewInv * vec4(0, 0, 0, 1);
     vec4 target = cam.projInv * vec4(d.x, d.y, 1, 1);
@@ -51,24 +58,10 @@ void main()
             0               // payload (location = 0)
     );
 
-    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(0.2, 0.6, 0.8, 1.0));
-    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitValue, 1.0));
-    vec2 uv = gl_LaunchIDEXT.xy / 1000.0f;
-    vec2 brushPos = vec2(brush.x, brush.y);
-    float dist = distance(uv, brushPos);
     vec4 color = vec4(1, 1, 1, 1);
 
-    bool pixelInBrush = dist < brush.r;
-    if (pixelInBrush)
-    {
-        ivec2 texel = ivec2(prd.hitUv * 1000);
-        vec4 colorOrig = imageLoad(image, texel);
-        color = max(color, colorOrig);
-        imageStore(image, texel, vec4(1.0, 1.0, 0.0, 1.0));
-    }
-    else
-        return;
-    //color = max(color, colorOrig);
-    ////imageStore(image, ivec2(gl_LaunchIDEXT.xy), color);
-    //imageStore(image, ivec2(gl_LaunchIDEXT.xy), vec4(prd.hitUv, 0.0, 1.0));
+    ivec2 texel = ivec2(prd.hitUv * vec2(gl_LaunchSizeEXT));
+    vec4 colorOrig = imageLoad(image, texel);
+    color = max(color, colorOrig);
+    imageStore(image, texel, vec4(0.9, 0.1, 0.2, 1.0));
 }
