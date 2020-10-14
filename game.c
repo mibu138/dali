@@ -24,6 +24,8 @@ typedef enum {
 
 static float brushX;
 static float brushY;
+static Vec3  brushColor;
+static float brushRadius;
 static PaintMode paintMode;
 
 Parms parms;
@@ -32,6 +34,8 @@ static struct Player {
     Vec3  pos;
     float angle;
 } player;
+
+G_GameState gameState;
 
 #define FORWARD {0, 0, -1};
 #define MOVE_SPEED 0.04
@@ -52,6 +56,10 @@ void g_Init(void)
     player.pos = (Vec3){0, -2.5, -5};
     brushX = 0;
     brushY = 0;
+    brushColor = (Vec3){1.0, 0.4, 0.2};
+    brushRadius = 0.01;
+    paintMode = 1;
+    gameState.shouldRun = true;
 }
 
 void g_BindToView(Mat4* view, Mat4* viewInv)
@@ -79,7 +87,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_D: turnRight = true; break;
             case TANTO_KEY_SPACE: moveUp = true; break;
             case TANTO_KEY_CTRL: moveDown = true; break;
-            case TANTO_KEY_ESC: parms.shouldRun = false; break;
+            case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case TANTO_KEY_R:    parms.mode = (parms.mode == MODE_RAY ? MODE_RASTER : MODE_RAY); parms.renderNeedsUpdate = true; break;
             default: return;
         } break;
@@ -157,5 +165,21 @@ void g_Update(void)
     *viewInvMat = m_Invert4x4(viewMat);
     brush->x = brushX;
     brush->y = brushY;
+    brush->r = brushColor.x[0];
+    brush->g = brushColor.x[1];
+    brush->b = brushColor.x[2];
     brush->mode = paintMode;
+    brush->radius = brushRadius;
+}
+
+void g_SetColor(const float r, const float g, const float b)
+{
+    brushColor.x[0] = r;
+    brushColor.x[1] = g;
+    brushColor.x[2] = b;
+}
+
+void g_SetRadius(const float r)
+{
+    brushRadius = r;
 }

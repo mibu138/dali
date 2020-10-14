@@ -3,6 +3,7 @@
 #extension GL_GOOGLE_include_directive : enable
 
 #include "raycommon.glsl"
+#include "common.glsl"
 
 layout(binding = 0, set = 0) uniform Camera {
     mat4 model;
@@ -18,7 +19,10 @@ layout(binding = 1, set = 1, rgba32f) uniform image2D image;
 layout(set = 2, binding = 1) uniform Brush {
     float x;
     float y;
+    float radius;
     float r;
+    float g;
+    float b;
     int   mode;
 } brush;
 
@@ -30,10 +34,12 @@ void main()
         return;
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
-    const vec2 brushPos = vec2(brush.x * 2 - 1.0, brush.y * 2 - 1.0);
+    vec2 brushPos = vec2(brush.x, brush.y);
+    brushPos = brushPos * 2.0 - 1.0;
     vec2 d = inUV * 2.0 - 1.0; //normalize to -1, 1 range
-    d = d * brush.r * 2.0; // map to -r to r
-    if (length(d) > brush.r * 2.0)
+    d = d * brush.radius * 2.0; // map to -r to r
+    const float dist = length(d);
+    if (dist > brush.radius * 2.0)
         return;
     d += brushPos;
 
@@ -58,10 +64,14 @@ void main()
             0               // payload (location = 0)
     );
 
-    vec4 color = vec4(1, 1, 1, 1);
+    //vec4 color = vec4(brush.color[0], brush.color[1], brush.color[2], 1.0);
+    //vec4 color = vec4(brush.col, 1.0);
+    const float pressure = 1.0 - (dist / (brush.radius * 2.0));
+    const float value = smoothstep(0.0, 0.2, pressure);
+    vec4 color = vec4(brush.r, brush.g, brush.b, value);
 
     ivec2 texel = ivec2(prd.hitUv * vec2(gl_LaunchSizeEXT));
     vec4 colorOrig = imageLoad(image, texel);
-    color = max(color, colorOrig);
-    imageStore(image, texel, vec4(0.9, 0.1, 0.2, 1.0));
+    color = vec4(over(color, colorOrig), 1.0);
+    imageStore(image, texel, color);
 }

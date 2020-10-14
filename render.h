@@ -27,6 +27,6 @@ void  r_UpdateRenderCommands(void);
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
 void  r_LoadMesh(const Tanto_R_Mesh*);
-void  r_CommandCleanUp(void);
+void  r_CleanUp(void);
 
 #endif /* end of include guard: R_COMMANDS_H */

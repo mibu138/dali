@@ -34,7 +34,11 @@ static RtPushConstants pushConstants;
 
 static Tanto_R_FrameBuffer  offscreenFrameBuffer;
 static Tanto_V_Image        paintImage;
+static Vec2                 paintImageDim;
+
+// pipelines and paint images should persist through cooks
 static bool createdPipelines;
+static bool createdPaintImage;
 
 typedef enum {
     R_PIPE_RASTER,
@@ -72,7 +76,8 @@ static void initOffscreenFrameBuffer(void)
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
             VK_IMAGE_USAGE_SAMPLED_BIT |
             VK_IMAGE_USAGE_STORAGE_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT);
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_FILTER_NEAREST);
     //
     // seting render pass and depth attachment
     offscreenFrameBuffer.pRenderPass = &offscreenRenderPass;
@@ -96,9 +101,12 @@ static void initOffscreenFrameBuffer(void)
 
 static void initPaintImage(void)
 {
-    paintImage = tanto_v_CreateImageAndSampler(TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT, offscreenColorFormat, 
+    paintImageDim.x = 4096;
+    paintImageDim.y = 4096;
+    paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, offscreenColorFormat, 
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
-            VK_IMAGE_ASPECT_COLOR_BIT);
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_FILTER_LINEAR);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, paintImage.handle);
 }
@@ -115,10 +123,9 @@ static void initDescriptors(void)
 
     brushBlock = tanto_v_RequestBlockHost(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     UboBrush* brush = (UboBrush*)brushBlock->hostData;
-    brush->x = 0;
-    brush->y = 0;
-    brush->r = 0.01;
-    brush->mode = 0;
+    memset(brush, 0, sizeof(Brush));
+    brush->radius = 0.01;
+    brush->mode = 1;
 
     VkDescriptorBufferInfo uniformInfoMatrices = {
         .range  =  matrixBlock->size,
@@ -399,8 +406,8 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
 
     vkCmdTraceRaysKHR(*cmdBuf, &raygenShaderBindingTable,
             &missShaderBindingTable, &hitShaderBindingTable,
-            &callableShaderBindingTable, TANTO_WINDOW_WIDTH,
-            TANTO_WINDOW_WIDTH, 1);
+            &callableShaderBindingTable, paintImageDim.x, 
+            paintImageDim.y, 1);
 
     printf("Raytrace recorded!\n");
 }
@@ -511,7 +518,11 @@ void r_InitRenderCommands(void)
     createShaderBindingTable();
 
     initOffscreenFrameBuffer();
-    initPaintImage();
+    if (!createdPaintImage)
+    {
+        initPaintImage();
+        createdPaintImage = true;
+    }
     initDescriptors();
 
     pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
@@ -599,12 +610,17 @@ void r_LoadMesh(const Tanto_R_Mesh* mesh)
     hapiMesh = mesh;
 }
 
-void r_CommandCleanUp(void)
+void r_CleanUp(void)
 {
-    vkDestroySampler(device, offscreenFrameBuffer.colorAttachment.sampler, NULL);
     vkDestroyFramebuffer(device, offscreenFrameBuffer.handle, NULL);
-    vkDestroyImageView(device, offscreenFrameBuffer.colorAttachment.view, NULL);
-    vkDestroyImage(device, offscreenFrameBuffer.colorAttachment.handle, NULL);
-    vkDestroyImageView(device, offscreenFrameBuffer.depthAttachment.view, NULL);
-    vkDestroyImage(device, offscreenFrameBuffer.depthAttachment.handle, NULL);
+    //vkDestroySampler(device, offscreenFrameBuffer.colorAttachment.sampler, NULL);
+    //vkDestroyImageView(device, offscreenFrameBuffer.colorAttachment.view, NULL);
+    //vkDestroyImage(device, offscreenFrameBuffer.colorAttachment.handle, NULL);
+    //vkDestroyImageView(device, offscreenFrameBuffer.depthAttachment.view, NULL);
+    //vkDestroyImage(device, offscreenFrameBuffer.depthAttachment.handle, NULL);
+    tanto_v_DestroyImage(offscreenFrameBuffer.colorAttachment);
+    tanto_v_DestroyImage(offscreenFrameBuffer.depthAttachment);
+    //vkDestroySampler(device, paintImage.sampler, NULL);
+    //vkDestroyImage(device, paintImage.handle, NULL);
+    //vkDestroyImageView(device, paintImage.view, NULL);
 }

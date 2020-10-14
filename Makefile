@@ -20,7 +20,8 @@ NAME = painter
 DEPS =  \
 		game.h \
 		render.h \
-		painter.h
+		painter.h \
+		common.h
 
 OBJS =  \
 		$(O)/game.o \

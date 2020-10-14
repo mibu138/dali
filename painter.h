@@ -9,5 +9,9 @@ void painter_LoadMesh(Tanto_R_Mesh mesh);
 void painter_StartLoop(void);
 void painter_ReloadMesh(Tanto_R_PreMesh mesh);
 void painter_StopLoop(void);
+bool painter_ShouldRun(void);
+void painter_ShutDown(void);
+void painter_SetColor(const float r, const float g, const float b);
+void painter_SetRadius(const float r);
 
 #endif /* end of include guard: PAINTER_H */

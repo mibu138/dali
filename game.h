@@ -5,10 +5,18 @@
 #include <tanto/m_math.h>
 #include "common.h"
 
+typedef struct {
+    bool shouldRun;
+} G_GameState;
+
+extern G_GameState gameState;
+
 void g_Init(void);
 void g_BindToView(Mat4* viewMat, Mat4* viewMatInv);
 void g_BindToBrush(Brush* br);
 void g_Responder(const Tanto_I_Event *event);
 void g_Update(void);
+void g_SetColor(const float r, const float g, const float b);
+void g_SetRadius(const float r);
 
 #endif /* end of include guard: G_GAME_H */

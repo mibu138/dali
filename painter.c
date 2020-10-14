@@ -122,6 +122,7 @@ void painter_LoadPreMesh(Tanto_R_PreMesh m)
     free(m.posData);
     free(m.colData);
     free(m.norData);
+    free(m.uvwData);
     free(m.indexData);
     //TODO should have a specialized free function. all allocation and freeing should be down in r_geo
 
@@ -189,7 +190,7 @@ void painter_StartLoop(void)
 void painter_ReloadMesh(Tanto_R_PreMesh pm)
 {
     vkDeviceWaitIdle(device);
-    r_CommandCleanUp();
+    r_CleanUp();
     tanto_r_RayTraceCleanUp();
     tanto_v_CleanUpMemory();
 
@@ -202,4 +203,29 @@ void painter_ReloadMesh(Tanto_R_PreMesh pm)
 void painter_StopLoop(void)
 {
     parms.shouldRun = false;
+}
+
+void painter_ShutDown(void)
+{
+    vkDeviceWaitIdle(device);
+    r_CleanUp();
+    tanto_i_CleanUp();
+    tanto_r_CleanUp();
+    tanto_v_CleanUp();
+    tanto_d_CleanUp();
+}
+
+bool painter_ShouldRun(void)
+{
+    return gameState.shouldRun;
+}
+
+void painter_SetColor(const float r, const float g, const float b)
+{
+    g_SetColor(r, g, b);
+}
+
+void painter_SetRadius(const float r)
+{
+    g_SetRadius(r);
 }
