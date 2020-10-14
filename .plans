@@ -1,0 +1,5 @@
+Wed Oct 14 01:28:52 EDT 2020
+It would be cool to, in addition to painting through images on the screen, paint through images using surfaces with 0 gaussian curvature.
+So like cylindrical geometry. This would be useful for painting onto beams and such, or even faces. Zero gaussian curvature would allow
+for distortion free images, though perhaps any aribitrary shape could be used (2nd or 3rd input). So a pre-textured peice of geometry
+gets passed in to provide not only the image to paint through but also the "carrier" of the paint.
