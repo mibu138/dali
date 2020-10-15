@@ -24,9 +24,9 @@ typedef struct {
 
 typedef Brush UboBrush;
 
-static Tanto_V_BlockHostBuffer*  matrixBlock;
-static Tanto_V_BlockHostBuffer*  brushBlock;
-static Tanto_V_BlockHostBuffer*  stbBlock;
+static Tanto_V_BufferRegion  matrixBlock;
+static Tanto_V_BufferRegion  brushBlock;
+static Tanto_V_BufferRegion  stbBlock;
 
 static const Tanto_R_Mesh*       hapiMesh;
 
@@ -113,30 +113,30 @@ static void initPaintImage(void)
 
 static void initDescriptors(void)
 {
-    matrixBlock = tanto_v_RequestBlockHost(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    UboMatrices* matrices = (UboMatrices*)matrixBlock->hostData;
+    matrixBlock = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    UboMatrices* matrices = (UboMatrices*)matrixBlock.hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
     matrices->proj    = m_Ident_Mat4();
     matrices->viewInv = m_Ident_Mat4();
     matrices->projInv = m_Ident_Mat4();
 
-    brushBlock = tanto_v_RequestBlockHost(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
-    UboBrush* brush = (UboBrush*)brushBlock->hostData;
+    brushBlock = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    UboBrush* brush = (UboBrush*)brushBlock.hostData;
     memset(brush, 0, sizeof(Brush));
     brush->radius = 0.01;
     brush->mode = 1;
 
     VkDescriptorBufferInfo uniformInfoMatrices = {
-        .range  =  matrixBlock->size,
-        .offset =  matrixBlock->vOffset,
-        .buffer = *matrixBlock->vBuffer,
+        .range  = matrixBlock.size,
+        .offset = matrixBlock.offset,
+        .buffer = matrixBlock.buffer,
     };
 
     VkDescriptorBufferInfo uniformInfoBrush = {
-        .range  =  brushBlock->size,
-        .offset =  brushBlock->vOffset,
-        .buffer = *brushBlock->vBuffer,
+        .range  = brushBlock.size,
+        .offset = brushBlock.offset,
+        .buffer = brushBlock.buffer,
     };
 
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
@@ -158,15 +158,15 @@ static void initDescriptors(void)
     };
 
     VkDescriptorBufferInfo vertBufInfo = {
-        .offset = hapiMesh->vertexBlock->vOffset,
-        .range  = hapiMesh->vertexBlock->size,
-        .buffer = *hapiMesh->vertexBlock->vBuffer,
+        .offset = hapiMesh->vertexBlock.offset,
+        .range  = hapiMesh->vertexBlock.size,
+        .buffer = hapiMesh->vertexBlock.buffer,
     };
 
     VkDescriptorBufferInfo indexBufInfo = {
-        .offset =  hapiMesh->indexBlock->vOffset,
-        .range  =  hapiMesh->indexBlock->size,
-        .buffer = *hapiMesh->indexBlock->vBuffer,
+        .offset = hapiMesh->indexBlock.offset,
+        .range  = hapiMesh->indexBlock.size,
+        .buffer = hapiMesh->indexBlock.buffer,
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -371,7 +371,7 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
     const VkDeviceSize sbtSize = rtprops.shaderGroupBaseAlignment * 4;
-    const VkDeviceSize baseAlignment = stbBlock->vOffset;
+    const VkDeviceSize baseAlignment = stbBlock.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 3u * progSize; // have to jump over 2 miss shaders
@@ -381,21 +381,21 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
 
     const VkStridedBufferRegionKHR raygenShaderBindingTable = {
-        .buffer = *stbBlock->vBuffer,
+        .buffer = stbBlock.buffer,
         .offset = rayGenOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR missShaderBindingTable = {
-        .buffer = *stbBlock->vBuffer,
+        .buffer = stbBlock.buffer,
         .offset = missOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR hitShaderBindingTable = {
-        .buffer = *stbBlock->vBuffer,
+        .buffer = stbBlock.buffer,
         .offset = hitGroupOffset,
         .stride = progSize,
         .size   = sbtSize,
@@ -428,10 +428,10 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
     if (hapiMesh)
     {
         VkBuffer vertBuffers[4] = {
-            *hapiMesh->vertexBlock->vBuffer,
-            *hapiMesh->vertexBlock->vBuffer,
-            *hapiMesh->vertexBlock->vBuffer,
-            *hapiMesh->vertexBlock->vBuffer
+            hapiMesh->vertexBlock.buffer,
+            hapiMesh->vertexBlock.buffer,
+            hapiMesh->vertexBlock.buffer,
+            hapiMesh->vertexBlock.buffer
         };
 
         const VkDeviceSize vertOffsets[4] = {
@@ -447,12 +447,12 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
         vkCmdBindIndexBuffer(
             *cmdBuf, 
-            *hapiMesh->indexBlock->vBuffer, 
-            hapiMesh->indexBlock->vOffset, TANTO_VERT_INDEX_TYPE);
+            hapiMesh->indexBlock.buffer, 
+            hapiMesh->indexBlock.offset, TANTO_VERT_INDEX_TYPE);
 
         vkCmdDrawIndexed(*cmdBuf, 
             hapiMesh->indexCount, 1, 0, 
-            hapiMesh->vertexBlock->vOffset, 0);
+            hapiMesh->vertexBlock.offset, 0);
     }
 
     vkCmdEndRenderPass(*cmdBuf);
@@ -492,10 +492,10 @@ static void createShaderBindingTable(void)
     VkResult r;
     r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_RAYTRACE], 0, groupCount, sbtSize, shaderHandleData);
     assert( VK_SUCCESS == r );
-    stbBlock = tanto_v_RequestBlockHostAligned(sbtSize, baseAlignment);
+    stbBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbBlock->hostData;
+    uint8_t* pTarget = stbBlock.hostData;
 
     for (int i = 0; i < groupCount; i++) 
     {
@@ -587,7 +587,7 @@ void r_UpdateRenderCommands(void)
 
 Mat4* r_GetXform(r_XformType type)
 {
-    UboMatrices* matrices = (UboMatrices*)matrixBlock->hostData;
+    UboMatrices* matrices = (UboMatrices*)matrixBlock.hostData;
     switch (type) 
     {
         case R_XFORM_MODEL:    return &matrices->model;
@@ -601,8 +601,8 @@ Mat4* r_GetXform(r_XformType type)
 
 Brush* r_GetBrush(void)
 {
-    assert (brushBlock->hostData);
-    return (Brush*)brushBlock->hostData;
+    assert (brushBlock.hostData);
+    return (Brush*)brushBlock.hostData;
 }
 
 void r_LoadMesh(const Tanto_R_Mesh* mesh)
