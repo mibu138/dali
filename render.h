@@ -22,11 +22,12 @@ typedef struct {
     uint32_t uvwOffset;
 } RtPushConstants;
 
-void  r_InitRenderCommands(void);
+void  r_InitRenderer(void);
 void  r_UpdateRenderCommands(void);
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
-void  r_LoadMesh(const Tanto_R_Mesh*);
+void  r_LoadMesh(Tanto_R_Mesh mesh);
+void  r_ClearMesh(void);
 void  r_CleanUp(void);
 
 #endif /* end of include guard: R_COMMANDS_H */

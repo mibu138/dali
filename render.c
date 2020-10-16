@@ -28,7 +28,7 @@ static Tanto_V_BufferRegion  matrixBlock;
 static Tanto_V_BufferRegion  brushBlock;
 static Tanto_V_BufferRegion  stbBlock;
 
-static const Tanto_R_Mesh*       hapiMesh;
+static Tanto_R_Mesh          hapiMesh;
 
 static RtPushConstants pushConstants;
 
@@ -111,7 +111,56 @@ static void initPaintImage(void)
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, paintImage.handle);
 }
 
-static void initDescriptors(void)
+static void updateMeshDescriptors(void)
+{
+    VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+        .accelerationStructureCount = 1,
+        .pAccelerationStructures    = &topLevelAS
+    };
+
+    VkDescriptorBufferInfo vertBufInfo = {
+        .offset = hapiMesh.vertexBlock.offset,
+        .range  = hapiMesh.vertexBlock.size,
+        .buffer = hapiMesh.vertexBlock.buffer,
+    };
+
+    VkDescriptorBufferInfo indexBufInfo = {
+        .offset = hapiMesh.indexBlock.offset,
+        .range  = hapiMesh.indexBlock.size,
+        .buffer = hapiMesh.indexBlock.buffer,
+    };
+
+    VkWriteDescriptorSet writes[] = {{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &vertBufInfo
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &indexBufInfo
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+            .pNext = &asInfo
+    }};
+
+    vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
+}
+
+static void initNonMeshDescriptors(void)
 {
     matrixBlock = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
     UboMatrices* matrices = (UboMatrices*)matrixBlock.hostData;
@@ -139,12 +188,6 @@ static void initDescriptors(void)
         .buffer = brushBlock.buffer,
     };
 
-    VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
-        .accelerationStructureCount = 1,
-        .pAccelerationStructures    = &topLevelAS
-    };
-
     VkDescriptorImageInfo imageInfoPaint = {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         .imageView   = paintImage.view,
@@ -155,18 +198,6 @@ static void initDescriptors(void)
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         .imageView   = offscreenFrameBuffer.colorAttachment.view,
         .sampler     = offscreenFrameBuffer.colorAttachment.sampler
-    };
-
-    VkDescriptorBufferInfo vertBufInfo = {
-        .offset = hapiMesh->vertexBlock.offset,
-        .range  = hapiMesh->vertexBlock.size,
-        .buffer = hapiMesh->vertexBlock.buffer,
-    };
-
-    VkDescriptorBufferInfo indexBufInfo = {
-        .offset = hapiMesh->indexBlock.offset,
-        .range  = hapiMesh->indexBlock.size,
-        .buffer = hapiMesh->indexBlock.buffer,
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -181,34 +212,10 @@ static void initDescriptors(void)
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
             .dstSet = descriptorSets[R_DESC_SET_RASTER],
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo = &vertBufInfo
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
-            .dstBinding = 2,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo = &indexBufInfo
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
             .dstBinding = 3,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &imageInfoPaint
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-            .pNext = &asInfo
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -425,20 +432,18 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-    if (hapiMesh)
-    {
         VkBuffer vertBuffers[4] = {
-            hapiMesh->vertexBlock.buffer,
-            hapiMesh->vertexBlock.buffer,
-            hapiMesh->vertexBlock.buffer,
-            hapiMesh->vertexBlock.buffer
+            hapiMesh.vertexBlock.buffer,
+            hapiMesh.vertexBlock.buffer,
+            hapiMesh.vertexBlock.buffer,
+            hapiMesh.vertexBlock.buffer
         };
 
         const VkDeviceSize vertOffsets[4] = {
-            hapiMesh->posOffset, 
-            hapiMesh->colOffset,
-            hapiMesh->norOffset,
-            hapiMesh->uvwOffset
+            hapiMesh.posOffset, 
+            hapiMesh.colOffset,
+            hapiMesh.norOffset,
+            hapiMesh.uvwOffset
         };
 
         vkCmdBindVertexBuffers(
@@ -447,13 +452,12 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
         vkCmdBindIndexBuffer(
             *cmdBuf, 
-            hapiMesh->indexBlock.buffer, 
-            hapiMesh->indexBlock.offset, TANTO_VERT_INDEX_TYPE);
+            hapiMesh.indexBlock.buffer, 
+            hapiMesh.indexBlock.offset, TANTO_VERT_INDEX_TYPE);
 
         vkCmdDrawIndexed(*cmdBuf, 
-            hapiMesh->indexCount, 1, 0, 
-            hapiMesh->vertexBlock.offset, 0);
-    }
+            hapiMesh.indexCount, 1, 0, 
+            hapiMesh.vertexBlock.offset, 0);
 
     vkCmdEndRenderPass(*cmdBuf);
 }
@@ -506,32 +510,23 @@ static void createShaderBindingTable(void)
     printf("Created shader binding table\n");
 }
 
-void r_InitRenderCommands(void)
+void r_InitRenderer(void)
 {
-    if (!createdPipelines)
-    {
-        InitPipelines();
-        createdPipelines = true;
-    }
-    assert(hapiMesh);
-
-    createShaderBindingTable();
+    InitPipelines();
 
     initOffscreenFrameBuffer();
-    if (!createdPaintImage)
-    {
-        initPaintImage();
-        createdPaintImage = true;
-    }
-    initDescriptors();
+    initPaintImage();
+
+    createShaderBindingTable();
+    initNonMeshDescriptors();
 
     pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
     pushConstants.lightIntensity = 1.0;
     pushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
     pushConstants.lightType = 0;
-    pushConstants.colorOffset =  hapiMesh->colOffset / sizeof(Vec3);
-    pushConstants.normalOffset = hapiMesh->norOffset / sizeof(Vec3);
-    pushConstants.uvwOffset    = hapiMesh->uvwOffset / sizeof(Vec3);
+    pushConstants.colorOffset =  hapiMesh.colOffset / sizeof(Vec3);
+    pushConstants.normalOffset = hapiMesh.norOffset / sizeof(Vec3);
+    pushConstants.uvwOffset    = hapiMesh.uvwOffset / sizeof(Vec3);
 
     //for (int i = 0; i < FRAME_COUNT; i++) 
     //{
@@ -605,9 +600,19 @@ Brush* r_GetBrush(void)
     return (Brush*)brushBlock.hostData;
 }
 
-void r_LoadMesh(const Tanto_R_Mesh* mesh)
+void r_LoadMesh(Tanto_R_Mesh mesh)
 {
     hapiMesh = mesh;
+    tanto_r_BuildBlas(&hapiMesh);
+    tanto_r_BuildTlas();
+
+    updateMeshDescriptors();
+}
+
+void r_ClearMesh(void)
+{
+    tanto_r_RayTraceDestroyAccelStructs();
+    tanto_r_FreeMesh(hapiMesh);
 }
 
 void r_CleanUp(void)

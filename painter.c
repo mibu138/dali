@@ -2,6 +2,7 @@
 #include "game.h"
 #include "common.h"
 #include "render.h"
+#include "tanto/r_geo.h"
 
 #include <stdio.h>
 #include <assert.h>
@@ -21,8 +22,6 @@
 #define NS_TARGET 16666666 // 1 / 60 seconds
 //#define NS_TARGET 500000000
 #define NS_PER_S  1000000000
-
-static Tanto_R_Mesh mesh;
 
 struct Timer {
     struct timespec startTime;
@@ -98,40 +97,27 @@ void painter_Init(void)
     tanto_i_Init();
     printf("Input initialized\n");
     tanto_i_Subscribe(g_Responder);
+    r_InitRenderer();
     g_Init();
-}
-
-void painter_LoadMesh(Tanto_R_Mesh m)
-{
-    mesh = m;
-
-    r_LoadMesh(&mesh);
-    tanto_r_BuildBlas(&mesh);
-    tanto_r_BuildTlas();
-
-    r_InitRenderCommands();
     g_BindToView(r_GetXform(R_XFORM_VIEW), r_GetXform(R_XFORM_VIEW_INV));
     g_BindToBrush(r_GetBrush());
 }
 
+void painter_LoadMesh(Tanto_R_Mesh m)
+{
+    r_LoadMesh(m);
+}
+
 void painter_LoadPreMesh(Tanto_R_PreMesh m)
 {
-    mesh = tanto_r_PreMeshToMesh(m);
-    r_LoadMesh(&mesh);
-
+    Tanto_R_Mesh mesh = tanto_r_PreMeshToMesh(m);
     free(m.posData);
     free(m.colData);
     free(m.norData);
     free(m.uvwData);
     free(m.indexData);
-    //TODO should have a specialized free function. all allocation and freeing should be down in r_geo
 
-    tanto_r_BuildBlas(&mesh);
-    tanto_r_BuildTlas();
-
-    r_InitRenderCommands();
-    g_BindToView(r_GetXform(R_XFORM_VIEW), r_GetXform(R_XFORM_VIEW_INV));
-    g_BindToBrush(r_GetBrush());
+    painter_LoadMesh(mesh);
 }
 
 void painter_StartLoop(void)
@@ -185,6 +171,30 @@ void painter_StartLoop(void)
 
         sleepLoop(&stats);
     }
+    if (parms.reload)
+    {
+        parms.reload = false;
+        vkDeviceWaitIdle(device);
+
+        r_ClearMesh();
+        Tanto_R_Mesh cube = tanto_r_CreateCube();
+        r_LoadMesh(cube);
+
+        painter_StartLoop();
+
+        //vkDeviceWaitIdle(device);
+        //r_CleanUp();
+        //tanto_r_RayTraceCleanUp();
+        //tanto_v_CleanUpMemory();
+
+        //vkDeviceWaitIdle(device);
+
+        //tanto_v_InitMemory();
+        //tanto_r_InitRayTracing();
+        //Tanto_R_Mesh cube = tanto_r_CreateCube();
+        //painter_LoadMesh(cube);
+        //painter_StartLoop();
+    }
 }
 
 void painter_ReloadMesh(Tanto_R_PreMesh pm)
@@ -193,6 +203,8 @@ void painter_ReloadMesh(Tanto_R_PreMesh pm)
     r_CleanUp();
     tanto_r_RayTraceCleanUp();
     tanto_v_CleanUpMemory();
+
+    vkDeviceWaitIdle(device);
 
     tanto_v_InitMemory();
     tanto_r_InitRayTracing();

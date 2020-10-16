@@ -88,7 +88,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_SPACE: moveUp = true; break;
             case TANTO_KEY_CTRL: moveDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
-            case TANTO_KEY_R:    parms.mode = (parms.mode == MODE_RAY ? MODE_RASTER : MODE_RAY); parms.renderNeedsUpdate = true; break;
+            case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
             default: return;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)

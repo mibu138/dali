@@ -12,6 +12,7 @@ typedef struct {
     ModeID mode;
     bool   renderNeedsUpdate;
     bool   shouldRun;
+    bool   reload;
 } Parms;
 
 extern Parms parms; 
