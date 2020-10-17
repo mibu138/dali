@@ -100,13 +100,13 @@ void painter_Init(void)
     tanto_i_Subscribe(g_Responder);
     r_InitRenderer();
     g_Init();
+    g_BindToView(r_GetXform(R_XFORM_VIEW), r_GetXform(R_XFORM_VIEW_INV));
+    g_BindToBrush(r_GetBrush());
 }
 
 void painter_LoadMesh(Tanto_R_Mesh m)
 {
     r_LoadMesh(m);
-    g_BindToView(r_GetXform(R_XFORM_VIEW), r_GetXform(R_XFORM_VIEW_INV));
-    g_BindToBrush(r_GetBrush());
 }
 
 void painter_LoadPreMesh(Tanto_R_PreMesh m)
@@ -118,7 +118,7 @@ void painter_LoadPreMesh(Tanto_R_PreMesh m)
     free(m.uvwData);
     free(m.indexData);
 
-    painter_LoadMesh(mesh);
+    r_LoadMesh(mesh);
 }
 
 void painter_StartLoop(void)
@@ -168,7 +168,7 @@ void painter_StartLoop(void)
 
         updateStats(&timer, &stats);
 
-        printf("Delta ns: %ld\n", stats.nsDelta);
+        //printf("Delta ns: %ld\n", stats.nsDelta);
 
         sleepLoop(&stats);
     }
@@ -182,33 +182,14 @@ void painter_StartLoop(void)
         r_LoadMesh(cube);
 
         painter_StartLoop();
-
-        //vkDeviceWaitIdle(device);
-        //r_CleanUp();
-        //tanto_r_RayTraceCleanUp();
-        //tanto_v_CleanUpMemory();
-
-        //vkDeviceWaitIdle(device);
-
-        //tanto_v_InitMemory();
-        //tanto_r_InitRayTracing();
-        //Tanto_R_Mesh cube = tanto_r_CreateCube();
-        //painter_LoadMesh(cube);
-        //painter_StartLoop();
     }
 }
 
 void painter_ReloadMesh(Tanto_R_PreMesh pm)
 {
     vkDeviceWaitIdle(device);
-    r_CleanUp();
-    tanto_r_RayTraceCleanUp();
-    tanto_v_CleanUpMemory();
+    r_ClearMesh();
 
-    vkDeviceWaitIdle(device);
-
-    tanto_v_InitMemory();
-    tanto_r_InitRayTracing();
     painter_LoadPreMesh(pm);
     painter_StartLoop();
 }
