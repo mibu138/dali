@@ -32,8 +32,8 @@ static PaintMode paintMode;
 Parms parms;
 
 static struct Player {
-    Vec3  pos;
-    float angle;
+    Vec3 pos;
+    Vec3 target;
 } player;
 
 G_GameState gameState;
@@ -44,17 +44,17 @@ G_GameState gameState;
 
 Brush* brush;
 
+const Vec3 UP_VEC = {0, 1, 0};
+
 static Mat4 generatePlayerView(void)
 {
-    Mat4 m = m_Ident_Mat4();
-    m = m_RotateY_Mat4(-player.angle, &m);
-    m = m_Translate_Mat4(m_Scale_Vec3(-1, &player.pos), &m);
-    return m;
+    return m_LookAt(&player.pos, &player.target, &UP_VEC);
 }
 
 void g_Init(void)
 {
-    player.pos = (Vec3){0, 2.5, 5};
+    player.pos = (Vec3){0, 0., 3};
+    player.target = (Vec3){0, 0, 0};
     brushX = 0;
     brushY = 0;
     brushColor = (Vec3){1.0, 0.4, 0.2};
@@ -132,15 +132,15 @@ void g_Update(void)
     assert(brush);
     if (moveForward) 
     {
-        Vec3 dir = FORWARD;
-        dir = m_RotateY_Vec3(player.angle, &dir);
+        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
+        dir = m_Normalize_Vec3(&dir);
         dir = m_Scale_Vec3(MOVE_SPEED, &dir);
         player.pos = m_Add_Vec3(&player.pos, &dir);
     }
     if (moveBackward) 
     {
-        Vec3 dir = FORWARD;
-        dir = m_RotateY_Vec3(player.angle, &dir);
+        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
+        dir = m_Normalize_Vec3(&dir);
         dir = m_Scale_Vec3(-MOVE_SPEED, &dir);
         player.pos = m_Add_Vec3(&player.pos, &dir);
     }
@@ -156,11 +156,21 @@ void g_Update(void)
     }
     if (turnLeft)
     {
-        player.angle += TURN_SPEED;
+        const Vec3 up = (Vec3){0, 1.0, 0.0};
+        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
+        dir = m_Normalize_Vec3(&dir);
+        Vec3 left = m_Cross(&up, &dir);
+        left = m_Scale_Vec3(MOVE_SPEED, &left);
+        player.pos = m_Add_Vec3(&player.pos, &left);
     }
     if (turnRight)
     {
-        player.angle -= TURN_SPEED;
+        const Vec3 up = (Vec3){0, 1.0, 0.0};
+        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
+        dir = m_Normalize_Vec3(&dir);
+        Vec3 right = m_Cross(&dir, &up);
+        right = m_Scale_Vec3(MOVE_SPEED, &right);
+        player.pos = m_Add_Vec3(&player.pos, &right);
     }
     *viewMat    = generatePlayerView();
     *viewInvMat = m_Invert4x4(viewMat);
