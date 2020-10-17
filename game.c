@@ -1,6 +1,7 @@
 #include "game.h"
 #include "render.h"
 #include "common.h"
+#include "tanto/m_math.h"
 #include <assert.h>
 #include <tanto/t_def.h>
 
@@ -47,13 +48,13 @@ static Mat4 generatePlayerView(void)
 {
     Mat4 m = m_Ident_Mat4();
     m = m_RotateY_Mat4(-player.angle, &m);
-    m = m_Translate_Mat4(player.pos, &m);
+    m = m_Translate_Mat4(m_Scale_Vec3(-1, &player.pos), &m);
     return m;
 }
 
 void g_Init(void)
 {
-    player.pos = (Vec3){0, -2.5, -5};
+    player.pos = (Vec3){0, 2.5, 5};
     brushX = 0;
     brushY = 0;
     brushColor = (Vec3){1.0, 0.4, 0.2};
@@ -133,24 +134,24 @@ void g_Update(void)
     {
         Vec3 dir = FORWARD;
         dir = m_RotateY_Vec3(player.angle, &dir);
-        dir = m_Scale_Vec3(-MOVE_SPEED, &dir);
+        dir = m_Scale_Vec3(MOVE_SPEED, &dir);
         player.pos = m_Add_Vec3(&player.pos, &dir);
     }
     if (moveBackward) 
     {
         Vec3 dir = FORWARD;
         dir = m_RotateY_Vec3(player.angle, &dir);
-        dir = m_Scale_Vec3(MOVE_SPEED, &dir);
+        dir = m_Scale_Vec3(-MOVE_SPEED, &dir);
         player.pos = m_Add_Vec3(&player.pos, &dir);
     }
     if( moveUp)
     {
-        Vec3 up = {0.0, -MOVE_SPEED, 0.0};
+        Vec3 up = {0.0, MOVE_SPEED, 0.0};
         player.pos = m_Add_Vec3(&player.pos, &up);
     }
     if (moveDown)
     {
-        Vec3 down = {0.0, MOVE_SPEED, 0.0};
+        Vec3 down = {0.0, -MOVE_SPEED, 0.0};
         player.pos = m_Add_Vec3(&player.pos, &down);
     }
     if (turnLeft)
