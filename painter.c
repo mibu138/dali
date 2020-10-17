@@ -85,6 +85,7 @@ static void initStats(void)
 
 void painter_Init(void)
 {
+    tanto_v_config.rayTraceEnabled = true;
     tanto_d_Init();
     printf("Display initialized\n");
     tanto_v_Init();

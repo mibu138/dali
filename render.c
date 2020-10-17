@@ -440,10 +440,10 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
         };
 
         const VkDeviceSize vertOffsets[4] = {
-            hapiMesh.posOffset, 
-            hapiMesh.colOffset,
-            hapiMesh.norOffset,
-            hapiMesh.uvwOffset
+            hapiMesh.posOffset + hapiMesh.vertexBlock.offset, 
+            hapiMesh.colOffset + hapiMesh.vertexBlock.offset,
+            hapiMesh.norOffset + hapiMesh.vertexBlock.offset,
+            hapiMesh.uvwOffset + hapiMesh.vertexBlock.offset
         };
 
         vkCmdBindVertexBuffers(
@@ -457,7 +457,7 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
         vkCmdDrawIndexed(*cmdBuf, 
             hapiMesh.indexCount, 1, 0, 
-            hapiMesh.vertexBlock.offset, 0);
+            0, 0);
 
     vkCmdEndRenderPass(*cmdBuf);
 }
@@ -603,7 +603,7 @@ Brush* r_GetBrush(void)
 void r_LoadMesh(Tanto_R_Mesh mesh)
 {
     hapiMesh = mesh;
-    tanto_r_BuildBlas(&hapiMesh);
+    tanto_r_BuildBlas(&mesh);
     tanto_r_BuildTlas();
 
     updateMeshDescriptors();
