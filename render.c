@@ -520,14 +520,6 @@ void r_InitRenderer(void)
     createShaderBindingTable();
     initNonMeshDescriptors();
 
-    pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
-    pushConstants.lightIntensity = 1.0;
-    pushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
-    pushConstants.lightType = 0;
-    pushConstants.colorOffset =  hapiMesh.colOffset / sizeof(Vec3);
-    pushConstants.normalOffset = hapiMesh.norOffset / sizeof(Vec3);
-    pushConstants.uvwOffset    = hapiMesh.uvwOffset / sizeof(Vec3);
-
     //for (int i = 0; i < FRAME_COUNT; i++) 
     //{
     //    r_RequestFrame();
@@ -540,6 +532,14 @@ void r_InitRenderer(void)
 
 void r_UpdateRenderCommands(void)
 {
+    pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
+    pushConstants.lightIntensity = 1.0;
+    pushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
+    pushConstants.lightType = 0;
+    pushConstants.colorOffset =  hapiMesh.colOffset / sizeof(Vec3);
+    pushConstants.normalOffset = hapiMesh.norOffset / sizeof(Vec3);
+    pushConstants.uvwOffset    = hapiMesh.uvwOffset / sizeof(Vec3);
+
     VkResult r;
     Tanto_R_Frame* frame = &frames[curFrameIndex];
     vkResetCommandPool(device, frame->commandPool, 0);
@@ -603,7 +603,7 @@ Brush* r_GetBrush(void)
 void r_LoadMesh(Tanto_R_Mesh mesh)
 {
     hapiMesh = mesh;
-    tanto_r_BuildBlas(&mesh);
+    tanto_r_BuildBlas(&hapiMesh);
     tanto_r_BuildTlas();
 
     updateMeshDescriptors();
