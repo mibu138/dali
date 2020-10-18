@@ -37,6 +37,9 @@ static Tanto_V_Image        paintImage;
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
+#define PAINT_IMG_SIZE 32000
+#define BRUSH_IMG_SIZE 2048
+
 typedef enum {
     R_PIPE_RASTER,
     R_PIPE_RAYTRACE,
@@ -98,8 +101,8 @@ static void initOffscreenFrameBuffer(void)
 
 static void initPaintImage(void)
 {
-    paintImageDim.x = 4096;
-    paintImageDim.y = 4096;
+    paintImageDim.x = PAINT_IMG_SIZE;
+    paintImageDim.y = PAINT_IMG_SIZE;
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, offscreenColorFormat, 
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -517,8 +520,8 @@ void r_InitRenderer(void)
     createShaderBindingTable();
     initNonMeshDescriptors();
 
-    brushDim.x = 2048;
-    brushDim.y = 2048;
+    brushDim.x = BRUSH_IMG_SIZE;
+    brushDim.y = BRUSH_IMG_SIZE;
 
     //for (int i = 0; i < FRAME_COUNT; i++) 
     //{
