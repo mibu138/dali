@@ -35,6 +35,7 @@ static RtPushConstants pushConstants;
 static Tanto_R_FrameBuffer  offscreenFrameBuffer;
 static Tanto_V_Image        paintImage;
 static Vec2                 paintImageDim;
+static Vec2                 brushDim;
 
 // pipelines and paint images should persist through cooks
 static bool createdPipelines;
@@ -101,8 +102,8 @@ static void initOffscreenFrameBuffer(void)
 
 static void initPaintImage(void)
 {
-    paintImageDim.x = 4096;
-    paintImageDim.y = 4096;
+    paintImageDim.x = 8192;
+    paintImageDim.y = 8192;
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, offscreenColorFormat, 
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -413,8 +414,8 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
 
     vkCmdTraceRaysKHR(*cmdBuf, &raygenShaderBindingTable,
             &missShaderBindingTable, &hitShaderBindingTable,
-            &callableShaderBindingTable, paintImageDim.x, 
-            paintImageDim.y, 1);
+            &callableShaderBindingTable, brushDim.x, 
+            brushDim.y, 1);
 
     printf("Raytrace recorded!\n");
 }
@@ -519,6 +520,9 @@ void r_InitRenderer(void)
 
     createShaderBindingTable();
     initNonMeshDescriptors();
+
+    brushDim.x = 2048;
+    brushDim.y = 2048;
 
     //for (int i = 0; i < FRAME_COUNT; i++) 
     //{

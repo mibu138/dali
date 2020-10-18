@@ -30,7 +30,7 @@ layout(location = 0) rayPayloadEXT hitPayload prd;
 
 void main() 
 {
-    if (brush.mode == 1) // not painting
+    if (brush.mode > 0) // not painting
         return;
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
@@ -70,7 +70,7 @@ void main()
     const float value = smoothstep(0.0, 0.2, pressure);
     vec4 color = vec4(brush.r, brush.g, brush.b, value);
 
-    ivec2 texel = ivec2(prd.hitUv * vec2(gl_LaunchSizeEXT));
+    ivec2 texel = ivec2(prd.hitUv * vec2(imageSize(image)));
     vec4 colorOrig = imageLoad(image, texel);
     color = vec4(over(color, colorOrig), 1.0);
     imageStore(image, texel, color);

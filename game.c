@@ -6,28 +6,36 @@
 #include <tanto/t_def.h>
 
 
-static bool moveForward;
-static bool moveBackward;
+static bool zoomIn;
+static bool zoomOut;
+static bool tumbleUp;
+static bool tumbleDown;
+static bool tumbleLeft;
+static bool tumbleRight;
 static bool moveUp;
 static bool moveDown;
-//static bool moveLeft;
-//static bool moveRight;
-static bool turnLeft;
-static bool turnRight;
+
+struct Drag {
+    bool active;
+    Vec2 startPos;
+} drag;
+
+static Vec2  mousePos;
 
 static Mat4* viewMat;
 static Mat4* viewInvMat;
 
 typedef enum {
-    PAINT_MODE_PAINT,
-    PAINT_MODE_DO_NOTHING,
-} PaintMode;
+    MODE_PAINT,
+    MODE_DO_NOTHING,
+    MODE_VIEW,
+} Mode;
 
 static float brushX;
 static float brushY;
 static Vec3  brushColor;
 static float brushRadius;
-static PaintMode paintMode;
+static Mode  mode;
 
 Parms parms;
 
@@ -59,7 +67,7 @@ void g_Init(void)
     brushY = 0;
     brushColor = (Vec3){1.0, 0.4, 0.2};
     brushRadius = 0.01;
-    paintMode = 1;
+    mode = MODE_DO_NOTHING;
     gameState.shouldRun = true;
 }
 
@@ -82,79 +90,94 @@ void g_Responder(const Tanto_I_Event *event)
     {
         case TANTO_I_KEYDOWN: switch (event->data.keyCode)
         {
-            case TANTO_KEY_W: moveForward = true; break;
-            case TANTO_KEY_S: moveBackward = true; break;
-            case TANTO_KEY_A: turnLeft = true; break;
-            case TANTO_KEY_D: turnRight = true; break;
-            case TANTO_KEY_SPACE: moveUp = true; break;
-            case TANTO_KEY_CTRL: moveDown = true; break;
+            case TANTO_KEY_W: zoomIn = true; break;
+            case TANTO_KEY_S: zoomOut = true; break;
+            case TANTO_KEY_A: tumbleLeft = true; break;
+            case TANTO_KEY_D: tumbleRight = true; break;
+            case TANTO_KEY_E: moveUp = true; break;
+            case TANTO_KEY_Q: moveDown = true; break;
+            case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
+            case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
             default: return;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)
         {
-            case TANTO_KEY_W: moveForward = false; break;
-            case TANTO_KEY_S: moveBackward = false; break;
-            case TANTO_KEY_A: turnLeft = false; break;
-            case TANTO_KEY_D: turnRight = false; break;
-            case TANTO_KEY_SPACE: moveUp = false; break;
-            case TANTO_KEY_CTRL: moveDown = false; break;
+            case TANTO_KEY_W: zoomIn = false; break;
+            case TANTO_KEY_S: zoomOut = false; break;
+            case TANTO_KEY_A: tumbleLeft = false; break;
+            case TANTO_KEY_D: tumbleRight = false; break;
+            case TANTO_KEY_E: moveUp = false; break;
+            case TANTO_KEY_Q: moveDown = false; break;
+            case TANTO_KEY_SPACE: mode = MODE_DO_NOTHING; break;
+            case TANTO_KEY_CTRL: tumbleDown = false; break;
             default: return;
         } break;
         case TANTO_I_MOTION: 
         {
-            brushX = (float)event->data.mouseCoords.x / TANTO_WINDOW_WIDTH;
-            brushY = (float)event->data.mouseCoords.y / TANTO_WINDOW_HEIGHT;
+            mousePos.x = (float)event->data.mouseCoords.x / TANTO_WINDOW_WIDTH;
+            mousePos.y = (float)event->data.mouseCoords.y / TANTO_WINDOW_HEIGHT;
             break;
         }
         case TANTO_I_MOUSEDOWN:
         {
-            printf("foo\n");
-            if (paintMode == PAINT_MODE_DO_NOTHING)
-                paintMode = PAINT_MODE_PAINT;
+            if (mode == MODE_DO_NOTHING)
+                mode = MODE_PAINT;
+            if (mode == MODE_VIEW)
+            {
+                drag.active = true;
+                const Vec2 p = {
+                    .x = (float)event->data.mouseCoords.x / TANTO_WINDOW_WIDTH,
+                    .y = (float)event->data.mouseCoords.y / TANTO_WINDOW_HEIGHT
+                };
+                drag.startPos = p;
+                printf("drag active\n");
+            }
             break;
         }
         case TANTO_I_MOUSEUP:
         {
             printf("bar\n");
-            if (paintMode == PAINT_MODE_PAINT)
-                paintMode = PAINT_MODE_DO_NOTHING;
+            if (mode == MODE_PAINT)
+                mode = MODE_DO_NOTHING;
+            if (mode == MODE_VIEW)
+                drag.active = false;
             break;
         }
         default: assert(0); // error
     }
 }
 
-void g_Update(void)
+static void handleKeyMovement(void)
 {
-    assert(viewMat);
-    assert(brush);
-    if (moveForward) 
+    if (zoomIn) 
     {
         Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
         dir = m_Normalize_Vec3(&dir);
         dir = m_Scale_Vec3(MOVE_SPEED, &dir);
         player.pos = m_Add_Vec3(&player.pos, &dir);
     }
-    if (moveBackward) 
+    if (zoomOut) 
     {
         Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
         dir = m_Normalize_Vec3(&dir);
         dir = m_Scale_Vec3(-MOVE_SPEED, &dir);
         player.pos = m_Add_Vec3(&player.pos, &dir);
     }
-    if( moveUp)
+    if (moveUp)
     {
         Vec3 up = {0.0, MOVE_SPEED, 0.0};
         player.pos = m_Add_Vec3(&player.pos, &up);
+        player.target = m_Add_Vec3(&player.target, &up);
     }
     if (moveDown)
     {
         Vec3 down = {0.0, -MOVE_SPEED, 0.0};
         player.pos = m_Add_Vec3(&player.pos, &down);
+        player.target = m_Add_Vec3(&player.target, &down);
     }
-    if (turnLeft)
+    if (tumbleLeft)
     {
         const Vec3 up = (Vec3){0, 1.0, 0.0};
         Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
@@ -163,7 +186,7 @@ void g_Update(void)
         left = m_Scale_Vec3(MOVE_SPEED, &left);
         player.pos = m_Add_Vec3(&player.pos, &left);
     }
-    if (turnRight)
+    if (tumbleRight)
     {
         const Vec3 up = (Vec3){0, 1.0, 0.0};
         Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
@@ -172,15 +195,48 @@ void g_Update(void)
         right = m_Scale_Vec3(MOVE_SPEED, &right);
         player.pos = m_Add_Vec3(&player.pos, &right);
     }
+}
+
+static void handleMouseMovement(void)
+{
+    static Vec3 cachedPos;
+    if (drag.active)
+    {
+        float angleY = mousePos.x - drag.startPos.x;
+        float angleX = mousePos.y - drag.startPos.y;
+        angleY *= -3.14;
+        angleX *=  3.14;
+        Vec3 temp = m_Sub_Vec3(&cachedPos, &player.target);
+        const Vec3 z = m_Normalize_Vec3(&temp);
+        temp = m_Cross(&z, &UP_VEC);
+        const Vec3 x = m_Normalize_Vec3(&temp);
+        temp = m_Cross(&x, &z);
+        const Vec3 y = m_Normalize_Vec3(&temp);
+        const Mat4 rotY = m_BuildRotate(angleY, &y);
+        const Mat4 rotX = m_BuildRotate(angleX, &x);
+        const Mat4 rot = m_Mult_Mat4(&rotX, &rotY);
+        player.pos = m_Mult_Mat4Vec3(&rot, &cachedPos);
+    }
+    else
+        cachedPos = player.pos;
+}
+
+void g_Update(void)
+{
+    assert(viewMat);
+    assert(brush);
+    handleKeyMovement();
+    handleMouseMovement();
     *viewMat    = generatePlayerView();
     *viewInvMat = m_Invert4x4(viewMat);
-    brush->x = brushX;
-    brush->y = brushY;
+    brush->x = mousePos.x;
+    brush->y = mousePos.y;
     brush->r = brushColor.x[0];
     brush->g = brushColor.x[1];
     brush->b = brushColor.x[2];
-    brush->mode = paintMode;
+    brush->mode = mode;
     brush->radius = brushRadius;
+    printf("Brush mode %d\n", mode);
 }
 
 void g_SetColor(const float r, const float g, const float b)
