@@ -37,10 +37,6 @@ static Tanto_V_Image        paintImage;
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
-// pipelines and paint images should persist through cooks
-static bool createdPipelines;
-static bool createdPaintImage;
-
 typedef enum {
     R_PIPE_RASTER,
     R_PIPE_RAYTRACE,
@@ -102,8 +98,8 @@ static void initOffscreenFrameBuffer(void)
 
 static void initPaintImage(void)
 {
-    paintImageDim.x = 8192;
-    paintImageDim.y = 8192;
+    paintImageDim.x = 4096;
+    paintImageDim.y = 4096;
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, offscreenColorFormat, 
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,

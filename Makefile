@@ -21,7 +21,8 @@ DEPS =  \
 		game.h \
 		render.h \
 		painter.h \
-		common.h
+		common.h \
+		shaders/common.glsl
 
 OBJS =  \
 		$(O)/game.o \
@@ -31,10 +32,7 @@ OBJS =  \
 SHADERS =  $(SPV)/post-frag.spv \
 		   $(SPV)/raster-vert.spv \
 		   $(SPV)/raster-frag.spv \
-		   $(SPV)/raytrace-rgen.spv \
-		   $(SPV)/raytrace-rmiss.spv \
 		   $(SPV)/raytraceShadow-rmiss.spv \
-		   $(SPV)/raytrace-rchit.spv \
 		   $(SPV)/paint-rgen.spv \
 		   $(SPV)/paint-rchit.spv \
 		   $(SPV)/paint-rmiss.spv
@@ -50,7 +48,7 @@ all: bin lib tags
 shaders: $(SHADERS)
 
 clean: 
-	rm -f $(O)/* $(LIB)/$(LIBNAME) $(BIN)/*
+	rm -f $(O)/* $(LIB)/$(LIBNAME) $(BIN)/* $(SPV)/*
 
 tags:
 	ctags -R .
@@ -67,7 +65,7 @@ staticlib: $(OBJS) $(DEPS) shaders
 $(O)/%.o:  %.c $(DEPS)
 	$(CC) $(CFLAGS) $(INFLAGS) -c $< -o $@
 
-$(SPV)/%-vert.spv: $(GLSL)/%.vert
+$(SPV)/%-vert.spv: $(GLSL)/%.vert $(DEPS)
 	$(GLC) $(GLFLAGS) $< -o $@
 
 $(SPV)/%-frag.spv: $(GLSL)/%.frag

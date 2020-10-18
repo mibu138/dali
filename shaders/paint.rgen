@@ -67,11 +67,11 @@ void main()
     //vec4 color = vec4(brush.color[0], brush.color[1], brush.color[2], 1.0);
     //vec4 color = vec4(brush.col, 1.0);
     const float pressure = 1.0 - (dist / (brush.radius * 2.0));
-    const float value = smoothstep(0.0, 0.2, pressure);
-    vec4 color = vec4(brush.r, brush.g, brush.b, value);
+    const float value = smoothstep(0.0, 0.6, pressure);
+    vec4 color = vec4(brush.r * value, brush.g * value, brush.b * value, value);
 
     ivec2 texel = ivec2(prd.hitUv * vec2(imageSize(image)));
     vec4 colorOrig = imageLoad(image, texel);
-    color = vec4(over(color, colorOrig), 1.0);
+    color = over(color, colorOrig);
     imageStore(image, texel, color);
 }

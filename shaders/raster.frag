@@ -16,9 +16,12 @@ const vec3 lightDir = {-0.707106769, -0.5, -0.5};
 void main()
 {
     const float illume = clamp(dot(-1 * inNormal, lightDir), 0.0, 1.0);
+    const ivec2 texel = ivec2(inUvw.xy * 50);
+    const float b = float((texel.x + texel.y) % 2) * 0.2 + 0.3;
+    const vec4 uvColor = vec4(b, b, b, 1.0);
     const vec4 inColor = vec4(inColor, 1.0);
     const vec4 tex = texture(image, inUvw.xy).rgba;
-    const vec3 albedo = over(tex, inColor);
-    outColor = vec4(albedo * illume, 1.0);
+    const vec4 albedo = over(tex, uvColor);
+    outColor = vec4(albedo.rgb * illume, 1.0);
     //outColor = vec4(inUvw, 1);
 }
