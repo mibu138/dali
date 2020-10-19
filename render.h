@@ -28,6 +28,7 @@ Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
 void  r_LoadMesh(Tanto_R_Mesh mesh);
 void  r_ClearMesh(void);
+void  r_SavePaintImage(void);
 void  r_CleanUp(void);
 
 #endif /* end of include guard: R_COMMANDS_H */

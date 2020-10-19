@@ -96,6 +96,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_D: tumbleRight = true; break;
             case TANTO_KEY_E: moveUp = true; break;
             case TANTO_KEY_Q: moveDown = true; break;
+            case TANTO_KEY_P: r_SavePaintImage(); break;
             case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;

@@ -37,8 +37,8 @@ static Tanto_V_Image        paintImage;
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
-#define PAINT_IMG_SIZE 32000
-#define BRUSH_IMG_SIZE 2048
+#define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
+#define BRUSH_IMG_SIZE 0x0800
 
 typedef enum {
     R_PIPE_RASTER,
@@ -96,7 +96,7 @@ static void initOffscreenFrameBuffer(void)
 
     V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &offscreenFrameBuffer.handle) );
 
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, offscreenFrameBuffer.colorAttachment.handle);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &offscreenFrameBuffer.colorAttachment);
 }
 
 static void initPaintImage(void)
@@ -104,11 +104,11 @@ static void initPaintImage(void)
     paintImageDim.x = PAINT_IMG_SIZE;
     paintImageDim.y = PAINT_IMG_SIZE;
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, offscreenColorFormat, 
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, 
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR);
 
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, paintImage.handle);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &paintImage);
 }
 
 static void updateMeshDescriptors(void)
@@ -162,7 +162,8 @@ static void updateMeshDescriptors(void)
 
 static void initNonMeshDescriptors(void)
 {
-    matrixBlock = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    matrixBlock = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboMatrices* matrices = (UboMatrices*)matrixBlock.hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
@@ -170,7 +171,8 @@ static void initNonMeshDescriptors(void)
     matrices->viewInv = m_Ident_Mat4();
     matrices->projInv = m_Ident_Mat4();
 
-    brushBlock = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT);
+    brushBlock = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboBrush* brush = (UboBrush*)brushBlock.hostData;
     memset(brush, 0, sizeof(Brush));
     brush->radius = 0.01;
@@ -496,7 +498,7 @@ static void createShaderBindingTable(void)
     VkResult r;
     r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_RAYTRACE], 0, groupCount, sbtSize, shaderHandleData);
     assert( VK_SUCCESS == r );
-    stbBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_TYPE);
+    stbBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
     uint8_t* pTarget = stbBlock.hostData;
@@ -616,6 +618,11 @@ void r_ClearMesh(void)
 {
     tanto_r_RayTraceDestroyAccelStructs();
     tanto_r_FreeMesh(hapiMesh);
+}
+
+void r_SavePaintImage(void)
+{
+    tanto_v_SaveImage(&paintImage, TANTO_V_IMAGE_FILE_PNG_TYPE);
 }
 
 void r_CleanUp(void)
