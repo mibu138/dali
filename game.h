@@ -12,8 +12,6 @@ typedef struct {
 extern G_GameState gameState;
 
 void g_Init(void);
-void g_BindToView(Mat4* viewMat, Mat4* viewMatInv);
-void g_BindToBrush(Brush* br);
 void g_Responder(const Tanto_I_Event *event);
 void g_Update(void);
 void g_SetColor(const float r, const float g, const float b);

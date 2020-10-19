@@ -27,6 +27,7 @@ typedef Brush UboBrush;
 static Tanto_V_BufferRegion  matrixBlock;
 static Tanto_V_BufferRegion  brushBlock;
 static Tanto_V_BufferRegion  stbBlock;
+static Tanto_V_BufferRegion  playerBlock;
 
 static Tanto_R_Mesh          hapiMesh;
 
@@ -178,6 +179,9 @@ static void initNonMeshDescriptors(void)
     brush->radius = 0.01;
     brush->mode = 1;
 
+    playerBlock = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    memset(playerBlock.hostData, 0, sizeof(UboPlayer));
+
     VkDescriptorBufferInfo uniformInfoMatrices = {
         .range  = matrixBlock.size,
         .offset = matrixBlock.offset,
@@ -188,6 +192,12 @@ static void initNonMeshDescriptors(void)
         .range  = brushBlock.size,
         .offset = brushBlock.offset,
         .buffer = brushBlock.buffer,
+    };
+
+    VkDescriptorBufferInfo uniformInfoPlayer = {
+        .range  = playerBlock.size,
+        .offset = playerBlock.offset,
+        .buffer = playerBlock.buffer,
     };
 
     VkDescriptorImageInfo imageInfoPaint = {
@@ -221,6 +231,14 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstBinding = 4,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = &uniformInfoPlayer
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
             .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
             .dstBinding = 1,
             .descriptorCount = 1,
@@ -251,7 +269,7 @@ static void InitPipelines(void)
 {
     const Tanto_R_DescriptorSet descSets[] = {{
             .id = R_DESC_SET_RASTER,
-            .bindingCount = 4, 
+            .bindingCount = 5, 
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -267,6 +285,10 @@ static void InitPipelines(void)
             },{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         },{
@@ -603,6 +625,12 @@ Brush* r_GetBrush(void)
 {
     assert (brushBlock.hostData);
     return (Brush*)brushBlock.hostData;
+}
+
+UboPlayer* r_GetPlayer(void)
+{
+    assert(playerBlock.hostData);
+    return (UboPlayer*)playerBlock.hostData;
 }
 
 void r_LoadMesh(Tanto_R_Mesh mesh)

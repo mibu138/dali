@@ -100,8 +100,6 @@ void painter_Init(void)
     tanto_i_Subscribe(g_Responder);
     r_InitRenderer();
     g_Init();
-    g_BindToView(r_GetXform(R_XFORM_VIEW), r_GetXform(R_XFORM_VIEW_INV));
-    g_BindToBrush(r_GetBrush());
 }
 
 void painter_LoadMesh(Tanto_R_Mesh m)

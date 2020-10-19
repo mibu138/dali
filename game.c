@@ -3,6 +3,7 @@
 #include "common.h"
 #include "tanto/m_math.h"
 #include <assert.h>
+#include <string.h>
 #include <tanto/t_def.h>
 
 
@@ -51,6 +52,7 @@ G_GameState gameState;
 #define TURN_SPEED 0.04
 
 Brush* brush;
+UboPlayer* uboPlayer;
 
 const Vec3 UP_VEC = {0, 1, 0};
 
@@ -69,6 +71,10 @@ void g_Init(void)
     brushRadius = 0.01;
     mode = MODE_DO_NOTHING;
     gameState.shouldRun = true;
+    viewMat = r_GetXform(R_XFORM_VIEW);
+    viewInvMat = r_GetXform(R_XFORM_VIEW_INV);
+    brush = r_GetBrush();
+    uboPlayer = r_GetPlayer();
 }
 
 void g_BindToView(Mat4* view, Mat4* viewInv)
@@ -82,6 +88,11 @@ void g_BindToView(Mat4* view, Mat4* viewInv)
 void g_BindToBrush(Brush* br)
 {
     brush = br;
+}
+
+void g_BindToPlayer(UboPlayer* ubo)
+{
+    uboPlayer = ubo;
 }
 
 void g_Responder(const Tanto_I_Event *event)
@@ -211,9 +222,7 @@ static void handleMouseMovement(void)
         const Vec3 z = m_Normalize_Vec3(&temp);
         temp = m_Cross(&z, &UP_VEC);
         const Vec3 x = m_Normalize_Vec3(&temp);
-        temp = m_Cross(&x, &z);
-        const Vec3 y = m_Normalize_Vec3(&temp);
-        const Mat4 rotY = m_BuildRotate(angleY, &y);
+        const Mat4 rotY = m_BuildRotate(angleY, &UP_VEC);
         const Mat4 rotX = m_BuildRotate(angleX, &x);
         const Mat4 rot = m_Mult_Mat4(&rotX, &rotY);
         player.pos = m_Mult_Mat4Vec3(&rot, &cachedPos);
@@ -226,6 +235,8 @@ void g_Update(void)
 {
     assert(viewMat);
     assert(brush);
+    assert(uboPlayer);
+    assert(sizeof(struct Player) == sizeof(UboPlayer));
     handleKeyMovement();
     handleMouseMovement();
     *viewMat    = generatePlayerView();
@@ -237,6 +248,7 @@ void g_Update(void)
     brush->b = brushColor.x[2];
     brush->mode = mode;
     brush->radius = brushRadius;
+    memcpy(uboPlayer, &player, sizeof(UboPlayer));
     printf("Brush mode %d\n", mode);
 }
 

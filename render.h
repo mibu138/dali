@@ -26,6 +26,7 @@ void  r_InitRenderer(void);
 void  r_UpdateRenderCommands(void);
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
+UboPlayer* r_GetPlayer(void);
 void  r_LoadMesh(Tanto_R_Mesh mesh);
 void  r_ClearMesh(void);
 void  r_SavePaintImage(void);
