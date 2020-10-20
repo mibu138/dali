@@ -52,6 +52,7 @@ Parms parms;
 static struct Player {
     Vec3 pos;
     Vec3 target;
+    Vec3 pivot;
 } player;
 
 G_GameState gameState;
@@ -79,13 +80,38 @@ static int intersectMesh(const Vec3* orig, const Vec3* dir, const Tanto_R_Mesh* 
         if (m_IntersectTriangle(orig, dir, &vert2, &vert1, &vert0, &t, &u, &v))
         {
             printf("HIT!\n");
-            hitPos->x[0] = t;
-            hitPos->x[1] = u;
-            hitPos->x[2] = v;
+            Vec3 edge1 = m_Sub_Vec3(&vert1, &vert2);
+            Vec3 edge2 = m_Sub_Vec3(&vert0, &vert2);
+            edge1 = m_Scale_Vec3(u, &edge1);
+            edge2 = m_Scale_Vec3(v, &edge2);
+            *hitPos = m_Add_Vec3(&edge1, &edge2);
+            *hitPos = m_Add_Vec3(&vert2, hitPos);
             return 1;
         }
     }
     return 0;
+}
+
+static void setViewerPivotByIntersection(void)
+{
+    const float mx = mousePos.x * 2.0 - 1.0;
+    const float my = mousePos.y * 2.0 - 1.0;
+    Vec4 temp = {mx, my, 1, 1};
+    const Vec3 orig = player.pos;
+    assert (projInvMat);
+    temp = m_Mult_Mat4Vec4(projInvMat, &temp);
+    temp = m_Normalize_Vec4(&temp);
+    Vec3 temp3 = (Vec3){temp.x[0], temp.x[1], temp.x[2]};
+    const Vec3 dir = m_Mult_Mat4Vec3(viewInvMat, &temp3);
+    const Tanto_R_Mesh* mesh = r_GetMesh();
+    Vec3 hitPos;
+    int r = intersectMesh(&orig, &dir, mesh, &hitPos);
+    if (r)
+    {
+        printf("HURAH!\n");
+        printVec3(&hitPos);
+        player.target = hitPos;
+    }
 }
 
 static Mat4 generatePlayerView(void)
@@ -145,24 +171,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
-            case TANTO_KEY_I: 
-            {
-                Vec4 temp = {0, 0, 1, 1};
-                const Vec3 orig = player.pos;
-                assert (projInvMat);
-                temp = m_Mult_Mat4Vec4(projInvMat, &temp);
-                temp = m_Normalize_Vec4(&temp);
-                Vec3 temp3 = (Vec3){temp.x[0], temp.x[1], temp.x[2]};
-                const Vec3 dir = m_Mult_Mat4Vec3(viewInvMat, &temp3);
-                const Tanto_R_Mesh* mesh = r_GetMesh();
-                Vec3 hitPos;
-                int r = intersectMesh(&orig, &dir, mesh, &hitPos);
-                if (r)
-                {
-                    printf("HURAH!\n");
-                    printVec3(&hitPos);
-                }
-            } break;
+            case TANTO_KEY_I: setViewerPivotByIntersection(); break;
             default: return;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)
@@ -193,6 +202,22 @@ void g_Responder(const Tanto_I_Event *event)
                     .y = (float)event->data.mouseData.y / TANTO_WINDOW_HEIGHT
                 };
                 drag.startPos = p;
+                setViewerPivotByIntersection();
+                if (event->data.mouseData.buttonCode == TANTO_MOUSE_LEFT)
+                {
+                    printf("LEFT\n");
+                    drag.mode = TUMBLE;
+                }
+                if (event->data.mouseData.buttonCode == TANTO_MOUSE_MID)
+                {
+                    printf("MID\n");
+                    drag.mode = PAN;
+                }
+                if (event->data.mouseData.buttonCode == TANTO_MOUSE_RIGHT)
+                {
+                    printf("RIGHT\n");
+                    drag.mode = ZOOM;
+                }
                 printf("drag active\n");
             } break;
             default: break;
@@ -262,23 +287,63 @@ static void handleKeyMovement(void)
 static void handleMouseMovement(void)
 {
     static Vec3 cachedPos;
+    static Vec3 cachedTarget;
     if (drag.active)
     {
-        float angleY = mousePos.x - drag.startPos.x;
-        float angleX = mousePos.y - drag.startPos.y;
-        angleY *= -3.14;
-        angleX *=  3.14;
-        Vec3 temp = m_Sub_Vec3(&cachedPos, &player.target);
-        const Vec3 z = m_Normalize_Vec3(&temp);
-        temp = m_Cross(&z, &UP_VEC);
-        const Vec3 x = m_Normalize_Vec3(&temp);
-        const Mat4 rotY = m_BuildRotate(angleY, &UP_VEC);
-        const Mat4 rotX = m_BuildRotate(angleX, &x);
-        const Mat4 rot = m_Mult_Mat4(&rotX, &rotY);
-        player.pos = m_Mult_Mat4Vec3(&rot, &cachedPos);
+        switch (drag.mode) 
+        {
+            case TUMBLE: 
+            {
+                float angleY = mousePos.x - drag.startPos.x;
+                float angleX = mousePos.y - drag.startPos.y;
+                angleY *= -3.14;
+                angleX *=  3.14;
+                Vec3 temp = m_Sub_Vec3(&cachedPos, &cachedTarget);
+                const Vec3 z = m_Normalize_Vec3(&temp);
+                temp = m_Cross(&z, &UP_VEC);
+                const Vec3 x = m_Normalize_Vec3(&temp);
+                const Mat4 rotY = m_BuildRotate(angleY, &UP_VEC);
+                const Mat4 rotX = m_BuildRotate(angleX, &x);
+                const Mat4 rot = m_Mult_Mat4(&rotX, &rotY);
+                player.pos = m_Mult_Mat4Vec3(&rot, &cachedPos);
+            } break;
+            case PAN: 
+            {
+                float deltaX = mousePos.x - drag.startPos.x;
+                float deltaY = mousePos.y - drag.startPos.y;
+                deltaX *= 3;
+                deltaY *= 3;
+                Vec3 temp = m_Sub_Vec3(&cachedPos, &cachedTarget);
+                const Vec3 z = m_Normalize_Vec3(&temp);
+                temp = m_Cross(&z, &UP_VEC);
+                Vec3 x = m_Normalize_Vec3(&temp);
+                temp = m_Cross(&x, &z);
+                Vec3 y = m_Normalize_Vec3(&temp);
+                x = m_Scale_Vec3(deltaX, &x);
+                y = m_Scale_Vec3(deltaY, &y);
+                const Vec3 delta = m_Add_Vec3(&x, &y);
+                player.pos = m_Add_Vec3(&cachedPos, &delta);
+                player.target = m_Add_Vec3(&cachedTarget, &delta);
+            } break;
+            case ZOOM: 
+            {
+                float deltaX = mousePos.x - drag.startPos.x;
+                float deltaY = mousePos.y - drag.startPos.y;
+                //float scale = -1 * (deltaX + deltaY * -1);
+                float scale = -1 * deltaX;
+                Vec3 temp = m_Sub_Vec3(&cachedPos, &cachedTarget);
+                Vec3 z = m_Normalize_Vec3(&temp);
+                z = m_Scale_Vec3(scale, &z);
+                player.pos = m_Add_Vec3(&cachedPos, &z);
+            } break;
+            default: break;
+        }
     }
     else
+    {
         cachedPos = player.pos;
+        cachedTarget = player.target;
+    }
 }
 
 void g_Update(void)
@@ -287,7 +352,7 @@ void g_Update(void)
     assert(brush);
     assert(uboPlayer);
     assert(sizeof(struct Player) == sizeof(UboPlayer));
-    handleKeyMovement();
+    //handleKeyMovement();
     handleMouseMovement();
     *viewMat    = generatePlayerView();
     *viewInvMat = m_Invert4x4(viewMat);
