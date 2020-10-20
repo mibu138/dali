@@ -2,6 +2,7 @@
 #include "render.h"
 #include "common.h"
 #include "tanto/m_math.h"
+#include "tanto/t_utils.h"
 #include <assert.h>
 #include <string.h>
 #include <tanto/t_def.h>
@@ -16,15 +17,23 @@ static bool tumbleRight;
 static bool moveUp;
 static bool moveDown;
 
+typedef enum {
+    TUMBLE,
+    PAN,
+    ZOOM,
+} DragMode ;
+
 struct Drag {
-    bool active;
-    Vec2 startPos;
+    bool     active;
+    Vec2     startPos;
+    DragMode mode;
 } drag;
 
 static Vec2  mousePos;
 
 static Mat4* viewMat;
 static Mat4* viewInvMat;
+static Mat4* projInvMat;
 
 typedef enum {
     MODE_PAINT,
@@ -56,6 +65,29 @@ UboPlayer* uboPlayer;
 
 const Vec3 UP_VEC = {0, 1, 0};
 
+static int intersectMesh(const Vec3* orig, const Vec3* dir, const Tanto_R_Mesh* mesh, Vec3* hitPos)
+{
+    const uint32_t       indexCount = mesh->indexCount;
+    const Vec3*          vertices   = (Vec3*)(mesh->vertexBlock.hostData + mesh->posOffset);
+    const Tanto_R_Index* indices    = (Tanto_R_Index*)mesh->indexBlock.hostData;
+    for (int i = 0; i < indexCount; i += 3) 
+    {
+        const Vec3 vert0 = vertices[indices[i+0]];
+        const Vec3 vert1 = vertices[indices[i+1]];
+        const Vec3 vert2 = vertices[indices[i+2]];
+        float t, u, v;
+        if (m_IntersectTriangle(orig, dir, &vert2, &vert1, &vert0, &t, &u, &v))
+        {
+            printf("HIT!\n");
+            hitPos->x[0] = t;
+            hitPos->x[1] = u;
+            hitPos->x[2] = v;
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static Mat4 generatePlayerView(void)
 {
     return m_LookAt(&player.pos, &player.target, &UP_VEC);
@@ -73,6 +105,7 @@ void g_Init(void)
     gameState.shouldRun = true;
     viewMat = r_GetXform(R_XFORM_VIEW);
     viewInvMat = r_GetXform(R_XFORM_VIEW_INV);
+    projInvMat = r_GetXform(R_XFORM_PROJ_INV);
     brush = r_GetBrush();
     uboPlayer = r_GetPlayer();
 }
@@ -112,6 +145,24 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
+            case TANTO_KEY_I: 
+            {
+                Vec4 temp = {0, 0, 1, 1};
+                const Vec3 orig = player.pos;
+                assert (projInvMat);
+                temp = m_Mult_Mat4Vec4(projInvMat, &temp);
+                temp = m_Normalize_Vec4(&temp);
+                Vec3 temp3 = (Vec3){temp.x[0], temp.x[1], temp.x[2]};
+                const Vec3 dir = m_Mult_Mat4Vec3(viewInvMat, &temp3);
+                const Tanto_R_Mesh* mesh = r_GetMesh();
+                Vec3 hitPos;
+                int r = intersectMesh(&orig, &dir, mesh, &hitPos);
+                if (r)
+                {
+                    printf("HURAH!\n");
+                    printVec3(&hitPos);
+                }
+            } break;
             default: return;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)
@@ -128,35 +179,34 @@ void g_Responder(const Tanto_I_Event *event)
         } break;
         case TANTO_I_MOTION: 
         {
-            mousePos.x = (float)event->data.mouseCoords.x / TANTO_WINDOW_WIDTH;
-            mousePos.y = (float)event->data.mouseCoords.y / TANTO_WINDOW_HEIGHT;
-            break;
-        }
-        case TANTO_I_MOUSEDOWN:
+            mousePos.x = (float)event->data.mouseData.x / TANTO_WINDOW_WIDTH;
+            mousePos.y = (float)event->data.mouseData.y / TANTO_WINDOW_HEIGHT;
+        } break;
+        case TANTO_I_MOUSEDOWN: switch (mode) 
         {
-            if (mode == MODE_DO_NOTHING)
-                mode = MODE_PAINT;
-            if (mode == MODE_VIEW)
+            case MODE_DO_NOTHING: mode = MODE_PAINT; break;
+            case MODE_VIEW:
             {
                 drag.active = true;
                 const Vec2 p = {
-                    .x = (float)event->data.mouseCoords.x / TANTO_WINDOW_WIDTH,
-                    .y = (float)event->data.mouseCoords.y / TANTO_WINDOW_HEIGHT
+                    .x = (float)event->data.mouseData.x / TANTO_WINDOW_WIDTH,
+                    .y = (float)event->data.mouseData.y / TANTO_WINDOW_HEIGHT
                 };
                 drag.startPos = p;
                 printf("drag active\n");
-            }
-            break;
-        }
+            } break;
+            default: break;
+        } break;
         case TANTO_I_MOUSEUP:
         {
             printf("bar\n");
-            if (mode == MODE_PAINT)
-                mode = MODE_DO_NOTHING;
-            if (mode == MODE_VIEW)
-                drag.active = false;
-            break;
-        }
+            switch (mode) 
+            {
+                case MODE_PAINT: mode = MODE_DO_NOTHING; break;
+                case MODE_VIEW:  drag.active = false; break;
+                default: break;
+            }
+        } break;
         default: assert(0); // error
     }
 }
@@ -249,7 +299,6 @@ void g_Update(void)
     brush->mode = mode;
     brush->radius = brushRadius;
     memcpy(uboPlayer, &player, sizeof(UboPlayer));
-    printf("Brush mode %d\n", mode);
 }
 
 void g_SetColor(const float r, const float g, const float b)
@@ -263,3 +312,4 @@ void g_SetRadius(const float r)
 {
     brushRadius = r;
 }
+

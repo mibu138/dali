@@ -667,3 +667,8 @@ void r_CleanUp(void)
     //vkDestroyImage(device, paintImage.handle, NULL);
     //vkDestroyImageView(device, paintImage.view, NULL);
 }
+
+const Tanto_R_Mesh* r_GetMesh(void)
+{
+    return &hapiMesh;
+}
