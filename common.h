@@ -27,17 +27,5 @@ typedef struct {
     int   mode;
 } Brush;
 
-typedef struct {
-    float posX;
-    float posY;
-    float posZ;
-    float targetX;
-    float targetY;
-    float targetZ;
-    float pivotX;
-    float pivotY;
-    float pivotZ;
-} UboPlayer;
-
 #endif /* end of include guard: VIEWER_COMMON_H */
 

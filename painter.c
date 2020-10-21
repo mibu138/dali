@@ -18,6 +18,7 @@
 #include <tanto/r_raytrace.h>
 #include <tanto/m_math.h>
 #include <tanto/t_utils.h>
+#include <tanto/i_input.h>
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
 //#define NS_TARGET 500000000

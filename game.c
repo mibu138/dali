@@ -6,6 +6,7 @@
 #include <assert.h>
 #include <string.h>
 #include <tanto/t_def.h>
+#include <tanto/i_input.h>
 
 
 static bool zoomIn;
@@ -51,6 +52,7 @@ static Mode  mode;
 
 Parms parms;
 
+// order matters here since we memcpy to a matching ubo
 static struct Player {
     Vec3 pos;
     Vec3 target;
@@ -373,7 +375,7 @@ void g_Update(void)
     assert(viewMat);
     assert(brush);
     assert(uboPlayer);
-    assert(sizeof(struct Player) == sizeof(UboPlayer));
+    //assert(sizeof(struct Player) == sizeof(UboPlayer));
     //handleKeyMovement();
     handleMouseMovement();
     *viewMat    = generatePlayerView();

@@ -22,6 +22,29 @@ typedef struct {
     uint32_t uvwOffset;
 } RtPushConstants;
 
+typedef struct {
+    Mat4 model;
+    Mat4 view;
+    Mat4 proj;
+    Mat4 viewInv;
+    Mat4 projInv;
+} UboMatrices;
+
+typedef struct {
+    float posX;
+    float posY;
+    float posZ;
+    float targetX;
+    float targetY;
+    float targetZ;
+} UboPlayer;
+
+typedef struct {
+    float x;
+    float y;
+    float z;
+} Selection;
+
 void  r_InitRenderer(void);
 void  r_UpdateRenderCommands(void);
 Mat4* r_GetXform(r_XformType);
