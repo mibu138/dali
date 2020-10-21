@@ -38,7 +38,6 @@ typedef enum {
     R_PIPE_RASTER,
     R_PIPE_RAYTRACE,
     R_PIPE_POST,
-    R_PIPE_SINGLE_RAY,
     R_PIPE_ID_SIZE
 } R_PipelineId;
 
@@ -53,7 +52,6 @@ typedef enum {
     R_DESC_SET_RASTER,
     R_DESC_SET_RAYTRACE,
     R_DESC_SET_POST,
-    R_DESC_SET_SINGLE_RAY,
     R_DESC_SET_ID_SIZE
 } R_DescriptorSetId;
 
@@ -251,6 +249,14 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &storageBufInfoSelection
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
             .dstSet = descriptorSets[R_DESC_SET_POST],
             .dstBinding = 0,
             .descriptorCount = 1,
@@ -297,7 +303,7 @@ static void InitPipelines(void)
             }}
         },{
             .id = R_DESC_SET_RAYTRACE,
-            .bindingCount = 2,
+            .bindingCount = 3,
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
@@ -306,6 +312,10 @@ static void InitPipelines(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
             }}
         },{
             .id = R_DESC_SET_POST,
