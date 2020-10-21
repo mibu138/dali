@@ -40,7 +40,7 @@ SHADERS =  $(SPV)/post-frag.spv \
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all
 
-release: CFLAGS += -DNDEBUG -O2
+release: CFLAGS += -DNDEBUG -O3
 release: all
 
 all: bin lib tags

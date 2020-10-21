@@ -39,7 +39,7 @@ static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
 #define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
-#define BRUSH_IMG_SIZE 0x0800
+#define BRUSH_IMG_SIZE 0x2000
 
 typedef enum {
     R_PIPE_RASTER,

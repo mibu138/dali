@@ -17,6 +17,8 @@ static bool tumbleRight;
 static bool moveUp;
 static bool moveDown;
 
+static bool pivotChanged;
+
 typedef enum {
     TUMBLE,
     PAN,
@@ -79,7 +81,6 @@ static int intersectMesh(const Vec3* orig, const Vec3* dir, const Tanto_R_Mesh* 
         float t, u, v;
         if (m_IntersectTriangle(orig, dir, &vert2, &vert1, &vert0, &t, &u, &v))
         {
-            printf("HIT!\n");
             Vec3 edge1 = m_Sub_Vec3(&vert1, &vert2);
             Vec3 edge2 = m_Sub_Vec3(&vert0, &vert2);
             edge1 = m_Scale_Vec3(u, &edge1);
@@ -108,10 +109,23 @@ static void setViewerPivotByIntersection(void)
     int r = intersectMesh(&orig, &dir, mesh, &hitPos);
     if (r)
     {
-        printf("HURAH!\n");
-        printVec3(&hitPos);
-        player.target = hitPos;
+        player.pivot = hitPos;
     }
+}
+
+
+static void lerpTargetToPivot(void)
+{
+    const float inc = 0.001;
+    static float t = 0.0;
+    if (pivotChanged)
+    {
+        t = 0.0;
+        pivotChanged = false;
+    }
+    t += inc;
+    if (t >= 1.0) return;
+    player.target = m_Lerp_Vec3(&player.target, &player.pivot, t);
 }
 
 static Mat4 generatePlayerView(void)
@@ -123,6 +137,7 @@ void g_Init(void)
 {
     player.pos = (Vec3){0, 0., 3};
     player.target = (Vec3){0, 0, 0};
+    player.pivot = player.target;
     brushX = 0;
     brushY = 0;
     brushColor = (Vec3){1.0, 0.4, 0.2};
@@ -202,29 +217,27 @@ void g_Responder(const Tanto_I_Event *event)
                     .y = (float)event->data.mouseData.y / TANTO_WINDOW_HEIGHT
                 };
                 drag.startPos = p;
-                setViewerPivotByIntersection();
                 if (event->data.mouseData.buttonCode == TANTO_MOUSE_LEFT)
                 {
-                    printf("LEFT\n");
                     drag.mode = TUMBLE;
+                    setViewerPivotByIntersection();
+                    pivotChanged = true;
                 }
                 if (event->data.mouseData.buttonCode == TANTO_MOUSE_MID)
                 {
-                    printf("MID\n");
                     drag.mode = PAN;
                 }
                 if (event->data.mouseData.buttonCode == TANTO_MOUSE_RIGHT)
                 {
-                    printf("RIGHT\n");
                     drag.mode = ZOOM;
+                    setViewerPivotByIntersection();
+                    pivotChanged = true;
                 }
-                printf("drag active\n");
             } break;
             default: break;
         } break;
         case TANTO_I_MOUSEUP:
         {
-            printf("bar\n");
             switch (mode) 
             {
                 case MODE_PAINT: mode = MODE_DO_NOTHING; break;
@@ -286,10 +299,15 @@ static void handleKeyMovement(void)
 
 static void handleMouseMovement(void)
 {
-    static Vec3 cachedPos;
-    static Vec3 cachedTarget;
+    static struct Player cached;
+    static bool   cachedDrag = false;
     if (drag.active)
     {
+        if (!cachedDrag)
+        {
+            cached = player;
+            cachedDrag = true;
+        }
         switch (drag.mode) 
         {
             case TUMBLE: 
@@ -298,14 +316,18 @@ static void handleMouseMovement(void)
                 float angleX = mousePos.y - drag.startPos.y;
                 angleY *= -3.14;
                 angleX *=  3.14;
-                Vec3 temp = m_Sub_Vec3(&cachedPos, &cachedTarget);
-                const Vec3 z = m_Normalize_Vec3(&temp);
-                temp = m_Cross(&z, &UP_VEC);
+                const Vec3 pivotToPos = m_Sub_Vec3(&cached.pos, &cached.pivot);
+                const Vec3 z = m_Normalize_Vec3(&pivotToPos);
+                Vec3 temp = m_Cross(&z, &UP_VEC);
                 const Vec3 x = m_Normalize_Vec3(&temp);
                 const Mat4 rotY = m_BuildRotate(angleY, &UP_VEC);
                 const Mat4 rotX = m_BuildRotate(angleX, &x);
                 const Mat4 rot = m_Mult_Mat4(&rotX, &rotY);
-                player.pos = m_Mult_Mat4Vec3(&rot, &cachedPos);
+                Vec3 pos = m_Sub_Vec3(&cached.pos, &cached.pivot);
+                pos = m_Mult_Mat4Vec3(&rot, &pos);
+                pos = m_Add_Vec3(&pos, &cached.pivot);
+                player.pos = pos;
+                lerpTargetToPivot();
             } break;
             case PAN: 
             {
@@ -313,7 +335,7 @@ static void handleMouseMovement(void)
                 float deltaY = mousePos.y - drag.startPos.y;
                 deltaX *= 3;
                 deltaY *= 3;
-                Vec3 temp = m_Sub_Vec3(&cachedPos, &cachedTarget);
+                Vec3 temp = m_Sub_Vec3(&cached.pos, &cached.target);
                 const Vec3 z = m_Normalize_Vec3(&temp);
                 temp = m_Cross(&z, &UP_VEC);
                 Vec3 x = m_Normalize_Vec3(&temp);
@@ -322,8 +344,8 @@ static void handleMouseMovement(void)
                 x = m_Scale_Vec3(deltaX, &x);
                 y = m_Scale_Vec3(deltaY, &y);
                 const Vec3 delta = m_Add_Vec3(&x, &y);
-                player.pos = m_Add_Vec3(&cachedPos, &delta);
-                player.target = m_Add_Vec3(&cachedTarget, &delta);
+                player.pos = m_Add_Vec3(&cached.pos, &delta);
+                player.target = m_Add_Vec3(&cached.target, &delta);
             } break;
             case ZOOM: 
             {
@@ -331,18 +353,18 @@ static void handleMouseMovement(void)
                 float deltaY = mousePos.y - drag.startPos.y;
                 //float scale = -1 * (deltaX + deltaY * -1);
                 float scale = -1 * deltaX;
-                Vec3 temp = m_Sub_Vec3(&cachedPos, &cachedTarget);
+                Vec3 temp = m_Sub_Vec3(&cached.pos, &cached.pivot);
                 Vec3 z = m_Normalize_Vec3(&temp);
                 z = m_Scale_Vec3(scale, &z);
-                player.pos = m_Add_Vec3(&cachedPos, &z);
+                player.pos = m_Add_Vec3(&cached.pos, &z);
+                lerpTargetToPivot();
             } break;
             default: break;
         }
     }
     else
     {
-        cachedPos = player.pos;
-        cachedTarget = player.target;
+        cachedDrag = false;
     }
 }
 

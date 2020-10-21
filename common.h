@@ -34,6 +34,9 @@ typedef struct {
     float targetX;
     float targetY;
     float targetZ;
+    float pivotX;
+    float pivotY;
+    float pivotZ;
 } UboPlayer;
 
 #endif /* end of include guard: VIEWER_COMMON_H */
