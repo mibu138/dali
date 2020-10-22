@@ -17,6 +17,7 @@ typedef struct {
     Vec3 lightDir;
     float lightIntensity;
     int   lightType;
+    uint32_t posOffset;
     uint32_t colorOffset;
     uint32_t normalOffset;
     uint32_t uvwOffset;
@@ -43,10 +44,12 @@ typedef struct {
     float x;
     float y;
     float z;
+    int   hit;
 } Selection;
 
 void  r_InitRenderer(void);
 void  r_UpdateRenderCommands(void);
+int   r_GetSelectionPos(Vec3* v);
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
 UboPlayer* r_GetPlayer(void);

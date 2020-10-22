@@ -10,6 +10,7 @@
 #include <tanto/t_utils.h>
 #include <tanto/r_pipeline.h>
 #include <tanto/r_raytrace.h>
+#include <tanto/v_command.h>
 #include <vulkan/vulkan_core.h>
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
@@ -18,7 +19,8 @@ typedef Brush UboBrush;
 
 static Tanto_V_BufferRegion  matrixBlock;
 static Tanto_V_BufferRegion  brushBlock;
-static Tanto_V_BufferRegion  stbBlock;
+static Tanto_V_BufferRegion  stbPaintBlock;
+static Tanto_V_BufferRegion  stbSelectBlock;
 static Tanto_V_BufferRegion  playerBlock;
 static Tanto_V_BufferRegion  selectionBlock;
 
@@ -31,13 +33,14 @@ static Tanto_V_Image        paintImage;
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
-#define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
+#define PAINT_IMG_SIZE 0x1000 // 0x1000 = 4096
 #define BRUSH_IMG_SIZE 0x1000
 
 typedef enum {
     R_PIPE_RASTER,
     R_PIPE_RAYTRACE,
     R_PIPE_POST,
+    R_PIPE_SELECT,
     R_PIPE_ID_SIZE
 } R_PipelineId;
 
@@ -315,7 +318,7 @@ static void InitPipelines(void)
             },{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
             }}
         },{
             .id = R_DESC_SET_POST,
@@ -393,11 +396,85 @@ static void InitPipelines(void)
             .vertShader = "",
             .fragShader = SPVDIR"/post-frag.spv"
         }
+    },{
+        .id       = R_PIPE_SELECT,
+        .type     = TANTO_R_PIPELINE_RAYTRACE_TYPE,
+        .layoutId = R_PIPE_LAYOUT_RAYTRACE,
+        .payload.rayTraceInfo = {
+            .raygenCount = 1,
+            .raygenShaders = (char*[]){
+                SPVDIR"/select-rgen.spv",
+            },
+            .missCount = 1,
+            .missShaders = (char*[]){
+                SPVDIR"/select-rmiss.spv",
+            },
+            .chitCount = 1,
+            .chitShaders = (char*[]){
+                SPVDIR"/select-rchit.spv"
+            }
+        }
     }};
 
     tanto_r_InitDescriptorSets(descSets, TANTO_ARRAY_SIZE(descSets));
     tanto_r_InitPipelineLayouts(pipelayouts, TANTO_ARRAY_SIZE(pipelayouts));
     tanto_r_InitPipelines(pipeInfos, TANTO_ARRAY_SIZE(pipeInfos));
+}
+
+static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
+{
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelines[R_PIPE_SELECT]);
+
+    vkCmdBindDescriptorSets(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
+            pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 0, 3, descriptorSets, 0, NULL);
+
+    vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 
+        VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+        VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &pushConstants);
+
+    const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
+    const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
+    const VkDeviceSize sbtSize = rtprops.shaderGroupBaseAlignment * 3;
+    const VkDeviceSize baseAlignment = stbSelectBlock.offset;
+    const VkDeviceSize rayGenOffset   = baseAlignment;
+    const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
+    const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
+
+    printf("Prog\n");
+
+    assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
+
+    const VkStridedBufferRegionKHR raygenShaderBindingTable = {
+        .buffer = stbSelectBlock.buffer,
+        .offset = rayGenOffset,
+        .stride = progSize,
+        .size   = sbtSize,
+    };
+
+    const VkStridedBufferRegionKHR missShaderBindingTable = {
+        .buffer = stbSelectBlock.buffer,
+        .offset = missOffset,
+        .stride = progSize,
+        .size   = sbtSize,
+    };
+
+    const VkStridedBufferRegionKHR hitShaderBindingTable = {
+        .buffer = stbSelectBlock.buffer,
+        .offset = hitGroupOffset,
+        .stride = progSize,
+        .size   = sbtSize,
+    };
+
+    const VkStridedBufferRegionKHR callableShaderBindingTable = {
+    };
+
+    vkCmdTraceRaysKHR(*cmdBuf, &raygenShaderBindingTable,
+            &missShaderBindingTable, &hitShaderBindingTable,
+            &callableShaderBindingTable, 1, 
+            1, 1);
+
+    printf("RaytraceSelect recorded!\n");
 }
 
 static void rayTrace(const VkCommandBuffer* cmdBuf)
@@ -415,7 +492,7 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
     const VkDeviceSize sbtSize = rtprops.shaderGroupBaseAlignment * 3;
-    const VkDeviceSize baseAlignment = stbBlock.offset;
+    const VkDeviceSize baseAlignment = stbPaintBlock.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
@@ -425,21 +502,21 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
 
     const VkStridedBufferRegionKHR raygenShaderBindingTable = {
-        .buffer = stbBlock.buffer,
+        .buffer = stbPaintBlock.buffer,
         .offset = rayGenOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR missShaderBindingTable = {
-        .buffer = stbBlock.buffer,
+        .buffer = stbPaintBlock.buffer,
         .offset = missOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR hitShaderBindingTable = {
-        .buffer = stbBlock.buffer,
+        .buffer = stbPaintBlock.buffer,
         .offset = hitGroupOffset,
         .stride = progSize,
         .size   = sbtSize,
@@ -517,7 +594,7 @@ static void postProc(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo*
     vkCmdEndRenderPass(*cmdBuf);
 }
 
-static void createShaderBindingTableSingleIntersection(void)
+static void createShaderBindingTableSelect(void)
 {
     const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const uint32_t groupCount = 3;
@@ -531,12 +608,12 @@ static void createShaderBindingTableSingleIntersection(void)
     printf("ShaderGroups total size   : %d\n", sbtSize);
 
     VkResult r;
-    r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_RAYTRACE], 0, groupCount, sbtSize, shaderHandleData);
+    r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_SELECT], 0, groupCount, sbtSize, shaderHandleData);
     assert( VK_SUCCESS == r );
-    stbBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    stbSelectBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbBlock.hostData;
+    uint8_t* pTarget = stbSelectBlock.hostData;
 
     for (int i = 0; i < groupCount; i++) 
     {
@@ -560,13 +637,11 @@ static void createShaderBindingTablePaint(void)
     printf("ShaderGroup base alignment: %d\n", baseAlignment);
     printf("ShaderGroups total size   : %d\n", sbtSize);
 
-    VkResult r;
-    r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_RAYTRACE], 0, groupCount, sbtSize, shaderHandleData);
-    assert( VK_SUCCESS == r );
-    stbBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    V_ASSERT( vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_RAYTRACE], 0, groupCount, sbtSize, shaderHandleData) );
+    stbPaintBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbBlock.hostData;
+    uint8_t* pTarget = stbPaintBlock.hostData;
 
     for (int i = 0; i < groupCount; i++) 
     {
@@ -577,6 +652,18 @@ static void createShaderBindingTablePaint(void)
     printf("Created shader binding table\n");
 }
 
+static void updatePushConstants(void)
+{
+    pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
+    pushConstants.lightIntensity = 1.0;
+    pushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
+    pushConstants.lightType = 0;
+    pushConstants.posOffset =    hapiMesh.posOffset / sizeof(Vec3);
+    pushConstants.colorOffset =  hapiMesh.colOffset / sizeof(Vec3);
+    pushConstants.normalOffset = hapiMesh.norOffset / sizeof(Vec3);
+    pushConstants.uvwOffset    = hapiMesh.uvwOffset / sizeof(Vec3);
+}
+
 void r_InitRenderer(void)
 {
     InitPipelines();
@@ -585,27 +672,45 @@ void r_InitRenderer(void)
     initPaintImage();
 
     createShaderBindingTablePaint();
+    createShaderBindingTableSelect();
     initNonMeshDescriptors();
 
     brushDim.x = BRUSH_IMG_SIZE;
     brushDim.y = BRUSH_IMG_SIZE;
 }
 
+int r_GetSelectionPos(Vec3* v)
+{
+    Tanto_V_CommandPool pool = tanto_v_RequestOneTimeUseCommand(0);
+
+    rayTraceSelect(&pool.buffer);
+
+    vkEndCommandBuffer(pool.buffer);
+
+    tanto_v_SubmitToQueueWait(&pool.buffer, TANTO_V_QUEUE_GRAPHICS_TYPE, 0);
+
+    vkDestroyCommandPool(device, pool.handle, NULL);
+
+    Selection* sel = (Selection*)selectionBlock.hostData;
+    if (sel->hit)
+    {
+        v->x[0] = sel->x;
+        v->x[1] = sel->y;
+        v->x[2] = sel->z;
+        return 1;
+    }
+    else
+        return 0;
+}
+
 void r_UpdateRenderCommands(void)
 {
-    pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
-    pushConstants.lightIntensity = 1.0;
-    pushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
-    pushConstants.lightType = 0;
-    pushConstants.colorOffset =  hapiMesh.colOffset / sizeof(Vec3);
-    pushConstants.normalOffset = hapiMesh.norOffset / sizeof(Vec3);
-    pushConstants.uvwOffset    = hapiMesh.uvwOffset / sizeof(Vec3);
+    updatePushConstants();
 
-    VkResult r;
     Tanto_R_Frame* frame = &frames[curFrameIndex];
     vkResetCommandPool(device, frame->commandPool, 0);
     VkCommandBufferBeginInfo cbbi = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    r = vkBeginCommandBuffer(frame->commandBuffer, &cbbi);
+    V_ASSERT( vkBeginCommandBuffer(frame->commandBuffer, &cbbi) );
 
     VkClearValue clearValueColor = {0.002f, 0.023f, 0.009f, 1.0f};
     VkClearValue clearValueDepth = {1.0, 0};
@@ -637,8 +742,7 @@ void r_UpdateRenderCommands(void)
     rasterize(&frame->commandBuffer, &rpassOffscreen);
     postProc(&frame->commandBuffer, &rpassSwap);
 
-    r = vkEndCommandBuffer(frame->commandBuffer);
-    assert ( VK_SUCCESS == r );
+    V_ASSERT( vkEndCommandBuffer(frame->commandBuffer) );
 }
 
 Mat4* r_GetXform(r_XformType type)

@@ -1,0 +1,77 @@
+#version 460
+#extension GL_EXT_ray_tracing : require
+#extension GL_GOOGLE_include_directive : enable
+
+#include "selcommon.glsl"
+#include "common.glsl"
+
+layout(binding = 0, set = 0) uniform Camera {
+    mat4 model;
+    mat4 view;
+    mat4 proj;
+    mat4 viewInv;
+    mat4 projInv;
+} cam;
+
+layout(set = 1, binding = 0) uniform accelerationStructureEXT topLevelAS;
+
+layout(set = 1, binding = 2) buffer Selection {
+    float x;
+    float y;
+    float z;
+    int   hit;
+} selection;
+
+layout(set = 2, binding = 1) uniform Brush {
+    float x;
+    float y;
+    float radius;
+    float r;
+    float g;
+    float b;
+    int   mode;
+} brush;
+
+
+layout(location = 0) rayPayloadEXT hitPayload prd;
+
+void main() 
+{
+    if (brush.mode == 0) // in painting mode. we should not get here 
+        return;
+    vec2 mousePos = vec2(brush.x, brush.y);
+    mousePos = mousePos * 2.0 - 1.0;
+
+    vec4 origin = cam.viewInv * vec4(0, 0, 0, 1);
+    vec4 target = cam.projInv * vec4(mousePos.x, mousePos.y, 1, 1);
+    vec4 dir    = cam.viewInv * vec4(normalize(target.xyz), 0);
+
+    uint  rayFlags = gl_RayFlagsOpaqueEXT;
+    float tMin     = 0.001;
+    float tMax     = 10000.0;
+
+    traceRayEXT(topLevelAS,     // acceleration structure
+            rayFlags,       // rayFlags
+            0xFF,           // cullMask
+            0,              // sbtRecordOffset
+            0,              // sbtRecordStride
+            0,              // missIndex
+            origin.xyz,     // ray origin
+            tMin,           // ray min range
+            dir.xyz,  // ray direction
+            tMax,           // ray max range
+            0               // payload (location = 0)
+    );
+
+    if (prd.hit)
+    {
+        vec3 pos = prd.hitPos;
+
+        selection.x = pos.x;
+        selection.y = pos.y;
+        selection.z = pos.z;
+        selection.hit = 1;
+    }
+    else 
+        selection.hit = 0;
+}

@@ -22,7 +22,9 @@ DEPS =  \
 		render.h \
 		painter.h \
 		common.h \
-		shaders/common.glsl
+		shaders/common.glsl \
+		shaders/selcommon.glsl \
+		shaders/raycommon.glsl
 
 OBJS =  \
 		$(O)/game.o \
@@ -35,7 +37,10 @@ SHADERS =  $(SPV)/post-frag.spv \
 		   $(SPV)/raytraceShadow-rmiss.spv \
 		   $(SPV)/paint-rgen.spv \
 		   $(SPV)/paint-rchit.spv \
-		   $(SPV)/paint-rmiss.spv
+		   $(SPV)/paint-rmiss.spv \
+		   $(SPV)/select-rgen.spv \
+		   $(SPV)/select-rchit.spv \
+		   $(SPV)/select-rmiss.spv
 
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all

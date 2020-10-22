@@ -70,45 +70,10 @@ UboPlayer* uboPlayer;
 
 const Vec3 UP_VEC = {0, 1, 0};
 
-static int intersectMesh(const Vec3* orig, const Vec3* dir, const Tanto_R_Mesh* mesh, Vec3* hitPos)
-{
-    const uint32_t       indexCount = mesh->indexCount;
-    const Vec3*          vertices   = (Vec3*)(mesh->vertexBlock.hostData + mesh->posOffset);
-    const Tanto_R_Index* indices    = (Tanto_R_Index*)mesh->indexBlock.hostData;
-    for (int i = 0; i < indexCount; i += 3) 
-    {
-        const Vec3 vert0 = vertices[indices[i+0]];
-        const Vec3 vert1 = vertices[indices[i+1]];
-        const Vec3 vert2 = vertices[indices[i+2]];
-        float t, u, v;
-        if (m_IntersectTriangle(orig, dir, &vert2, &vert1, &vert0, &t, &u, &v))
-        {
-            Vec3 edge1 = m_Sub_Vec3(&vert1, &vert2);
-            Vec3 edge2 = m_Sub_Vec3(&vert0, &vert2);
-            edge1 = m_Scale_Vec3(u, &edge1);
-            edge2 = m_Scale_Vec3(v, &edge2);
-            *hitPos = m_Add_Vec3(&edge1, &edge2);
-            *hitPos = m_Add_Vec3(&vert2, hitPos);
-            return 1;
-        }
-    }
-    return 0;
-}
-
 static void setViewerPivotByIntersection(void)
 {
-    const float mx = mousePos.x * 2.0 - 1.0;
-    const float my = mousePos.y * 2.0 - 1.0;
-    Vec4 temp = {mx, my, 1, 1};
-    const Vec3 orig = player.pos;
-    assert (projInvMat);
-    temp = m_Mult_Mat4Vec4(projInvMat, &temp);
-    temp = m_Normalize_Vec4(&temp);
-    Vec3 temp3 = (Vec3){temp.x[0], temp.x[1], temp.x[2]};
-    const Vec3 dir = m_Mult_Mat4Vec3(viewInvMat, &temp3);
-    const Tanto_R_Mesh* mesh = r_GetMesh();
     Vec3 hitPos;
-    int r = intersectMesh(&orig, &dir, mesh, &hitPos);
+    int r = r_GetSelectionPos(&hitPos);
     if (r)
     {
         player.pivot = hitPos;
@@ -123,7 +88,6 @@ static void lerpTargetToPivot(void)
     if (pivotChanged)
     {
         t = 0.0;
-        pivotChanged = false;
     }
     t += inc;
     if (t >= 1.0) return;
@@ -188,7 +152,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
-            case TANTO_KEY_I: setViewerPivotByIntersection(); break;
+            case TANTO_KEY_I: break;
             default: return;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)
@@ -222,7 +186,6 @@ void g_Responder(const Tanto_I_Event *event)
                 if (event->data.mouseData.buttonCode == TANTO_MOUSE_LEFT)
                 {
                     drag.mode = TUMBLE;
-                    setViewerPivotByIntersection();
                     pivotChanged = true;
                 }
                 if (event->data.mouseData.buttonCode == TANTO_MOUSE_MID)
@@ -232,7 +195,6 @@ void g_Responder(const Tanto_I_Event *event)
                 if (event->data.mouseData.buttonCode == TANTO_MOUSE_RIGHT)
                 {
                     drag.mode = ZOOM;
-                    setViewerPivotByIntersection();
                     pivotChanged = true;
                 }
             } break;
@@ -377,11 +339,14 @@ void g_Update(void)
     assert(uboPlayer);
     //assert(sizeof(struct Player) == sizeof(UboPlayer));
     //handleKeyMovement();
-    handleMouseMovement();
-    *viewMat    = generatePlayerView();
-    *viewInvMat = m_Invert4x4(viewMat);
     brush->x = mousePos.x;
     brush->y = mousePos.y;
+    if (pivotChanged)
+        setViewerPivotByIntersection();
+    handleMouseMovement();
+    pivotChanged = false;
+    *viewMat    = generatePlayerView();
+    *viewInvMat = m_Invert4x4(viewMat);
     brush->r = brushColor.x[0];
     brush->g = brushColor.x[1];
     brush->b = brushColor.x[2];
