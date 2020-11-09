@@ -80,7 +80,6 @@ static void setViewerPivotByIntersection(void)
     }
 }
 
-
 static void lerpTargetToPivot(void)
 {
     const float inc = 0.001;
@@ -152,6 +151,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
+            case TANTO_KEY_C: r_ClearPaintImage(); break;
             case TANTO_KEY_I: break;
             default: return;
         } break;

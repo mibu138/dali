@@ -101,7 +101,8 @@ static void initPaintImage(void)
     paintImageDim.x = PAINT_IMG_SIZE;
     paintImageDim.y = PAINT_IMG_SIZE;
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, offscreenColorFormat, 
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, 
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR);
 
@@ -681,15 +682,11 @@ void r_InitRenderer(void)
 
 int r_GetSelectionPos(Vec3* v)
 {
-    Tanto_V_CommandPool pool = tanto_v_RequestOneTimeUseCommand(0);
+    Tanto_V_CommandPool pool = tanto_v_RequestOneTimeUseCommand();
 
     rayTraceSelect(&pool.buffer);
 
-    vkEndCommandBuffer(pool.buffer);
-
-    tanto_v_SubmitToQueueWait(&pool.buffer, TANTO_V_QUEUE_GRAPHICS_TYPE, 0);
-
-    vkDestroyCommandPool(device, pool.handle, NULL);
+    tanto_v_SubmitOneTimeCommandAndWait(&pool, 0);
 
     Selection* sel = (Selection*)selectionBlock.hostData;
     if (sel->hit)
@@ -791,6 +788,11 @@ void r_SavePaintImage(void)
     tanto_v_SaveImage(&paintImage, TANTO_V_IMAGE_FILE_PNG_TYPE);
 }
 
+void r_ClearPaintImage(void)
+{
+    tanto_v_ClearColorImage(&paintImage);
+}
+
 void r_CleanUp(void)
 {
     vkDestroyFramebuffer(device, offscreenFrameBuffer.handle, NULL);
@@ -810,3 +812,4 @@ const Tanto_R_Mesh* r_GetMesh(void)
 {
     return &hapiMesh;
 }
+
