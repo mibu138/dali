@@ -17,19 +17,24 @@
 
 typedef Brush UboBrush;
 
-static Tanto_V_BufferRegion  matrixBlock;
-static Tanto_V_BufferRegion  brushBlock;
-static Tanto_V_BufferRegion  stbPaintBlock;
-static Tanto_V_BufferRegion  stbSelectBlock;
-static Tanto_V_BufferRegion  playerBlock;
-static Tanto_V_BufferRegion  selectionBlock;
+static Tanto_V_BufferRegion  matrixRegion;
+static Tanto_V_BufferRegion  brushRegion;
+static Tanto_V_BufferRegion  stbPaintRegion;
+static Tanto_V_BufferRegion  stbSelectRegion;
+static Tanto_V_BufferRegion  playerRegion;
+static Tanto_V_BufferRegion  selectionRegion;
 
-static Tanto_R_Mesh          hapiMesh;
+static Tanto_R_Mesh          renderMesh;
 
 static RtPushConstants pushConstants;
 
-static Tanto_R_FrameBuffer  offscreenFrameBuffer;
+static Tanto_V_Image        colorAttachment;
+static Tanto_V_Image        depthAttachment;
 static Tanto_V_Image        paintImage;
+
+static VkFramebuffer        offscreenFrameBuffer;
+static VkFramebuffer        swapchainFrameBuffers[TANTO_FRAME_COUNT];
+
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
@@ -58,42 +63,29 @@ typedef enum {
     R_DESC_SET_ID_SIZE
 } R_DescriptorSetId;
 
-static void initOffscreenFrameBuffer(void)
+static void initOffscreenAttachments(void)
 {
     //initDepthAttachment();
-    offscreenFrameBuffer.depthAttachment = tanto_v_CreateImage(
+    depthAttachment = tanto_v_CreateImage(
             TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT,
             depthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
-            VK_IMAGE_ASPECT_DEPTH_BIT);
+            VK_IMAGE_ASPECT_DEPTH_BIT, 
+            VK_SAMPLE_COUNT_1_BIT);
 
-    offscreenFrameBuffer.colorAttachment = tanto_v_CreateImageAndSampler(
+    colorAttachment = tanto_v_CreateImageAndSampler(
             TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT, offscreenColorFormat,
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | 
             VK_IMAGE_USAGE_SAMPLED_BIT |
             VK_IMAGE_USAGE_STORAGE_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_SAMPLE_COUNT_1_BIT,
             VK_FILTER_NEAREST);
     //
     // seting render pass and depth attachment
-    offscreenFrameBuffer.pRenderPass = &offscreenRenderPass;
 
-    const VkImageView attachments[] = {offscreenFrameBuffer.colorAttachment.view, offscreenFrameBuffer.depthAttachment.view};
-
-    VkFramebufferCreateInfo framebufferInfo = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .layers = 1,
-        .height = TANTO_WINDOW_HEIGHT,
-        .width  = TANTO_WINDOW_WIDTH,
-        .renderPass = *offscreenFrameBuffer.pRenderPass,
-        .attachmentCount = 2,
-        .pAttachments = attachments
-    };
-
-    V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &offscreenFrameBuffer.handle) );
-
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &offscreenFrameBuffer.colorAttachment);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &colorAttachment);
 }
 
 static void initPaintImage(void)
@@ -104,7 +96,8 @@ static void initPaintImage(void)
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_FILTER_LINEAR);
+            VK_FILTER_LINEAR, 
+            1);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &paintImage);
 }
@@ -118,15 +111,15 @@ static void updateMeshDescriptors(void)
     };
 
     VkDescriptorBufferInfo vertBufInfo = {
-        .offset = hapiMesh.vertexBlock.offset,
-        .range  = hapiMesh.vertexBlock.size,
-        .buffer = hapiMesh.vertexBlock.buffer,
+        .offset = renderMesh.vertexBlock.offset,
+        .range  = renderMesh.vertexBlock.size,
+        .buffer = renderMesh.vertexBlock.buffer,
     };
 
     VkDescriptorBufferInfo indexBufInfo = {
-        .offset = hapiMesh.indexBlock.offset,
-        .range  = hapiMesh.indexBlock.size,
-        .buffer = hapiMesh.indexBlock.buffer,
+        .offset = renderMesh.indexBlock.offset,
+        .range  = renderMesh.indexBlock.size,
+        .buffer = renderMesh.indexBlock.buffer,
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -160,50 +153,50 @@ static void updateMeshDescriptors(void)
 
 static void initNonMeshDescriptors(void)
 {
-    matrixBlock = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    matrixRegion = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
-    UboMatrices* matrices = (UboMatrices*)matrixBlock.hostData;
+    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
     matrices->proj    = m_Ident_Mat4();
     matrices->viewInv = m_Ident_Mat4();
     matrices->projInv = m_Ident_Mat4();
 
-    brushBlock = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    brushRegion = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
-    UboBrush* brush = (UboBrush*)brushBlock.hostData;
+    UboBrush* brush = (UboBrush*)brushRegion.hostData;
     memset(brush, 0, sizeof(Brush));
     brush->radius = 0.01;
     brush->mode = 1;
 
-    playerBlock = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
-    memset(playerBlock.hostData, 0, sizeof(UboPlayer));
+    playerRegion = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    memset(playerRegion.hostData, 0, sizeof(UboPlayer));
 
-    selectionBlock = tanto_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    selectionRegion = tanto_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
 
     VkDescriptorBufferInfo uniformInfoMatrices = {
-        .range  = matrixBlock.size,
-        .offset = matrixBlock.offset,
-        .buffer = matrixBlock.buffer,
+        .range  = matrixRegion.size,
+        .offset = matrixRegion.offset,
+        .buffer = matrixRegion.buffer,
     };
 
     VkDescriptorBufferInfo uniformInfoBrush = {
-        .range  = brushBlock.size,
-        .offset = brushBlock.offset,
-        .buffer = brushBlock.buffer,
+        .range  = brushRegion.size,
+        .offset = brushRegion.offset,
+        .buffer = brushRegion.buffer,
     };
 
     VkDescriptorBufferInfo uniformInfoPlayer = {
-        .range  = playerBlock.size,
-        .offset = playerBlock.offset,
-        .buffer = playerBlock.buffer,
+        .range  = playerRegion.size,
+        .offset = playerRegion.offset,
+        .buffer = playerRegion.buffer,
     };
 
     VkDescriptorBufferInfo storageBufInfoSelection= {
-        .range  = selectionBlock.size,
-        .offset = selectionBlock.offset,
-        .buffer = selectionBlock.buffer,
+        .range  = selectionRegion.size,
+        .offset = selectionRegion.offset,
+        .buffer = selectionRegion.buffer,
     };
 
     VkDescriptorImageInfo imageInfoPaint = {
@@ -214,8 +207,8 @@ static void initNonMeshDescriptors(void)
 
     VkDescriptorImageInfo imageInfoOffscreenFBO = {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .imageView   = offscreenFrameBuffer.colorAttachment.view,
-        .sampler     = offscreenFrameBuffer.colorAttachment.sampler
+        .imageView   = colorAttachment.view,
+        .sampler     = colorAttachment.sampler
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -366,7 +359,9 @@ static void InitPipelines(void)
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_RASTER,
         .payload.rasterInfo = {
-            .renderPassType = TANTO_R_RENDER_PASS_OFFSCREEN_TYPE, 
+            .renderPass = offscreenRenderPass, 
+            .vertexDescription = tanto_r_GetVertexDescription3D_Default(),
+            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
             .vertShader = SPVDIR"/raster-vert.spv", 
             .fragShader = SPVDIR"/raster-frag.spv"
         }
@@ -393,7 +388,9 @@ static void InitPipelines(void)
         .type     = TANTO_R_PIPELINE_POSTPROC_TYPE,
         .layoutId = R_PIPE_LAYOUT_POST,
         .payload.rasterInfo = {
-            .renderPassType = TANTO_R_RENDER_PASS_SWAPCHAIN_TYPE,
+            .renderPass = swapchainRenderPass,
+            .vertexDescription = tanto_r_GetVertexDescription3D_Default(),
+            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
             .vertShader = "",
             .fragShader = SPVDIR"/post-frag.spv"
         }
@@ -437,7 +434,7 @@ static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
     const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
     const VkDeviceSize sbtSize = rtprops.shaderGroupBaseAlignment * 3;
-    const VkDeviceSize baseAlignment = stbSelectBlock.offset;
+    const VkDeviceSize baseAlignment = stbSelectRegion.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
@@ -447,21 +444,21 @@ static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
     assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
 
     const VkStridedBufferRegionKHR raygenShaderBindingTable = {
-        .buffer = stbSelectBlock.buffer,
+        .buffer = stbSelectRegion.buffer,
         .offset = rayGenOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR missShaderBindingTable = {
-        .buffer = stbSelectBlock.buffer,
+        .buffer = stbSelectRegion.buffer,
         .offset = missOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR hitShaderBindingTable = {
-        .buffer = stbSelectBlock.buffer,
+        .buffer = stbSelectRegion.buffer,
         .offset = hitGroupOffset,
         .stride = progSize,
         .size   = sbtSize,
@@ -493,7 +490,7 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
     const VkDeviceSize sbtSize = rtprops.shaderGroupBaseAlignment * 3;
-    const VkDeviceSize baseAlignment = stbPaintBlock.offset;
+    const VkDeviceSize baseAlignment = stbPaintRegion.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
@@ -503,21 +500,21 @@ static void rayTrace(const VkCommandBuffer* cmdBuf)
     assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
 
     const VkStridedBufferRegionKHR raygenShaderBindingTable = {
-        .buffer = stbPaintBlock.buffer,
+        .buffer = stbPaintRegion.buffer,
         .offset = rayGenOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR missShaderBindingTable = {
-        .buffer = stbPaintBlock.buffer,
+        .buffer = stbPaintRegion.buffer,
         .offset = missOffset,
         .stride = progSize,
         .size   = sbtSize,
     };
 
     const VkStridedBufferRegionKHR hitShaderBindingTable = {
-        .buffer = stbPaintBlock.buffer,
+        .buffer = stbPaintRegion.buffer,
         .offset = hitGroupOffset,
         .stride = progSize,
         .size   = sbtSize,
@@ -548,17 +545,17 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         VkBuffer vertBuffers[4] = {
-            hapiMesh.vertexBlock.buffer,
-            hapiMesh.vertexBlock.buffer,
-            hapiMesh.vertexBlock.buffer,
-            hapiMesh.vertexBlock.buffer
+            renderMesh.vertexBlock.buffer,
+            renderMesh.vertexBlock.buffer,
+            renderMesh.vertexBlock.buffer,
+            renderMesh.vertexBlock.buffer
         };
 
         const VkDeviceSize vertOffsets[4] = {
-            hapiMesh.posOffset + hapiMesh.vertexBlock.offset, 
-            hapiMesh.colOffset + hapiMesh.vertexBlock.offset,
-            hapiMesh.norOffset + hapiMesh.vertexBlock.offset,
-            hapiMesh.uvwOffset + hapiMesh.vertexBlock.offset
+            renderMesh.posOffset + renderMesh.vertexBlock.offset, 
+            renderMesh.colOffset + renderMesh.vertexBlock.offset,
+            renderMesh.norOffset + renderMesh.vertexBlock.offset,
+            renderMesh.uvwOffset + renderMesh.vertexBlock.offset
         };
 
         vkCmdBindVertexBuffers(
@@ -567,11 +564,11 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
         vkCmdBindIndexBuffer(
             *cmdBuf, 
-            hapiMesh.indexBlock.buffer, 
-            hapiMesh.indexBlock.offset, TANTO_VERT_INDEX_TYPE);
+            renderMesh.indexBlock.buffer, 
+            renderMesh.indexBlock.offset, TANTO_VERT_INDEX_TYPE);
 
         vkCmdDrawIndexed(*cmdBuf, 
-            hapiMesh.indexCount, 1, 0, 
+            renderMesh.indexCount, 1, 0, 
             0, 0);
 
     vkCmdEndRenderPass(*cmdBuf);
@@ -611,10 +608,10 @@ static void createShaderBindingTableSelect(void)
     VkResult r;
     r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_SELECT], 0, groupCount, sbtSize, shaderHandleData);
     assert( VK_SUCCESS == r );
-    stbSelectBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    stbSelectRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbSelectBlock.hostData;
+    uint8_t* pTarget = stbSelectRegion.hostData;
 
     for (int i = 0; i < groupCount; i++) 
     {
@@ -639,10 +636,10 @@ static void createShaderBindingTablePaint(void)
     printf("ShaderGroups total size   : %d\n", sbtSize);
 
     V_ASSERT( vkGetRayTracingShaderGroupHandlesKHR(device, pipelines[R_PIPE_RAYTRACE], 0, groupCount, sbtSize, shaderHandleData) );
-    stbPaintBlock = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    stbPaintRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbPaintBlock.hostData;
+    uint8_t* pTarget = stbPaintRegion.hostData;
 
     for (int i = 0; i < groupCount; i++) 
     {
@@ -659,17 +656,43 @@ static void updatePushConstants(void)
     pushConstants.lightIntensity = 1.0;
     pushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
     pushConstants.lightType = 0;
-    pushConstants.posOffset =    hapiMesh.posOffset / sizeof(Vec3);
-    pushConstants.colorOffset =  hapiMesh.colOffset / sizeof(Vec3);
-    pushConstants.normalOffset = hapiMesh.norOffset / sizeof(Vec3);
-    pushConstants.uvwOffset    = hapiMesh.uvwOffset / sizeof(Vec3);
+    pushConstants.posOffset =    renderMesh.posOffset / sizeof(Vec3);
+    pushConstants.colorOffset =  renderMesh.colOffset / sizeof(Vec3);
+    pushConstants.normalOffset = renderMesh.norOffset / sizeof(Vec3);
+    pushConstants.uvwOffset    = renderMesh.uvwOffset / sizeof(Vec3);
+}
+
+static void initFrameBuffers(void)
+{
+    const VkImageView offscreenAttachments[] = {colorAttachment.view, depthAttachment.view};
+
+    VkFramebufferCreateInfo framebufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .layers = 1,
+        .height = TANTO_WINDOW_HEIGHT,
+        .width  = TANTO_WINDOW_WIDTH,
+        .renderPass = offscreenRenderPass,
+        .attachmentCount = 2,
+        .pAttachments = offscreenAttachments 
+    };
+
+    V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &offscreenFrameBuffer) );
+
+    framebufferInfo.renderPass = swapchainRenderPass;
+    framebufferInfo.attachmentCount = 1;
+
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        framebufferInfo.pAttachments = &frames[i].swapImage.view;
+        V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapchainFrameBuffers[i]) );
+    }
 }
 
 void r_InitRenderer(void)
 {
     InitPipelines();
 
-    initOffscreenFrameBuffer();
+    initOffscreenAttachments();
     initPaintImage();
 
     createShaderBindingTablePaint();
@@ -678,6 +701,8 @@ void r_InitRenderer(void)
 
     brushDim.x = BRUSH_IMG_SIZE;
     brushDim.y = BRUSH_IMG_SIZE;
+
+    initFrameBuffers();
 }
 
 int r_GetSelectionPos(Vec3* v)
@@ -688,7 +713,7 @@ int r_GetSelectionPos(Vec3* v)
 
     tanto_v_SubmitOneTimeCommandAndWait(&pool, 0);
 
-    Selection* sel = (Selection*)selectionBlock.hostData;
+    Selection* sel = (Selection*)selectionRegion.hostData;
     if (sel->hit)
     {
         v->x[0] = sel->x;
@@ -719,8 +744,8 @@ void r_UpdateRenderCommands(void)
         .clearValueCount = 2,
         .pClearValues = clears,
         .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
-        .renderPass =  *offscreenFrameBuffer.pRenderPass,
-        .framebuffer = offscreenFrameBuffer.handle,
+        .renderPass =  offscreenRenderPass,
+        .framebuffer = offscreenFrameBuffer
     };
 
     const VkRenderPassBeginInfo rpassSwap = {
@@ -728,8 +753,8 @@ void r_UpdateRenderCommands(void)
         .clearValueCount = 1,
         .pClearValues = clears,
         .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
-        .renderPass =  *frame->renderPass,
-        .framebuffer = frame->frameBuffer 
+        .renderPass =  swapchainRenderPass,
+        .framebuffer = swapchainFrameBuffers[curFrameIndex]
     };
 
     //vkCmdBeginRenderPass(frame->commandBuffer, &rpassOffscreen, VK_SUBPASS_CONTENTS_INLINE);
@@ -744,7 +769,7 @@ void r_UpdateRenderCommands(void)
 
 Mat4* r_GetXform(r_XformType type)
 {
-    UboMatrices* matrices = (UboMatrices*)matrixBlock.hostData;
+    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     switch (type) 
     {
         case R_XFORM_MODEL:    return &matrices->model;
@@ -758,20 +783,20 @@ Mat4* r_GetXform(r_XformType type)
 
 Brush* r_GetBrush(void)
 {
-    assert (brushBlock.hostData);
-    return (Brush*)brushBlock.hostData;
+    assert (brushRegion.hostData);
+    return (Brush*)brushRegion.hostData;
 }
 
 UboPlayer* r_GetPlayer(void)
 {
-    assert(playerBlock.hostData);
-    return (UboPlayer*)playerBlock.hostData;
+    assert(playerRegion.hostData);
+    return (UboPlayer*)playerRegion.hostData;
 }
 
 void r_LoadMesh(Tanto_R_Mesh mesh)
 {
-    hapiMesh = mesh;
-    tanto_r_BuildBlas(&hapiMesh);
+    renderMesh = mesh;
+    tanto_r_BuildBlas(&renderMesh);
     tanto_r_BuildTlas();
 
     updateMeshDescriptors();
@@ -780,7 +805,7 @@ void r_LoadMesh(Tanto_R_Mesh mesh)
 void r_ClearMesh(void)
 {
     tanto_r_RayTraceDestroyAccelStructs();
-    tanto_r_FreeMesh(hapiMesh);
+    tanto_r_FreeMesh(renderMesh);
 }
 
 void r_SavePaintImage(void)
@@ -795,14 +820,14 @@ void r_ClearPaintImage(void)
 
 void r_CleanUp(void)
 {
-    vkDestroyFramebuffer(device, offscreenFrameBuffer.handle, NULL);
+    vkDestroyFramebuffer(device, offscreenFrameBuffer, NULL);
     //vkDestroySampler(device, offscreenFrameBuffer.colorAttachment.sampler, NULL);
     //vkDestroyImageView(device, offscreenFrameBuffer.colorAttachment.view, NULL);
     //vkDestroyImage(device, offscreenFrameBuffer.colorAttachment.handle, NULL);
     //vkDestroyImageView(device, offscreenFrameBuffer.depthAttachment.view, NULL);
     //vkDestroyImage(device, offscreenFrameBuffer.depthAttachment.handle, NULL);
-    tanto_v_DestroyImage(offscreenFrameBuffer.colorAttachment);
-    tanto_v_DestroyImage(offscreenFrameBuffer.depthAttachment);
+    tanto_v_DestroyImage(colorAttachment);
+    tanto_v_DestroyImage(depthAttachment);
     //vkDestroySampler(device, paintImage.sampler, NULL);
     //vkDestroyImage(device, paintImage.handle, NULL);
     //vkDestroyImageView(device, paintImage.view, NULL);
@@ -810,6 +835,6 @@ void r_CleanUp(void)
 
 const Tanto_R_Mesh* r_GetMesh(void)
 {
-    return &hapiMesh;
+    return &renderMesh;
 }
 
