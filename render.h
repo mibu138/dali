@@ -48,8 +48,9 @@ typedef struct {
 } Selection;
 
 void  r_InitRenderer(void);
-void  r_UpdateRenderCommands(void);
+void  r_UpdateRenderCommands(const int8_t frameIndex);
 int   r_GetSelectionPos(Vec3* v);
+void  r_RecreateSwapchain();
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
 UboPlayer* r_GetPlayer(void);
