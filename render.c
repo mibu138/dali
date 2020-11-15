@@ -826,7 +826,6 @@ void r_RecreateSwapchain(void)
 
     tanto_r_RecreateSwapchain();
     initOffscreenAttachments();
-    initOffscreenAttachments();
     initPipelines();
     initFramebuffers();
     updateWindowSizeDependentDescriptors();
