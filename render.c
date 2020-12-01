@@ -478,8 +478,6 @@ static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
             &missShaderBindingTable, &hitShaderBindingTable,
             &callableShaderBindingTable, 1, 
             1, 1);
-
-    printf("RaytraceSelect recorded!\n");
 }
 
 static void rayTrace(const VkCommandBuffer* cmdBuf)
@@ -696,6 +694,26 @@ static void initFramebuffers(void)
     }
 }
 
+static void cleanUpSwapchainDependent(void)
+{
+    vkDestroyFramebuffer(device, offscreenFrameBuffer, NULL);
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        vkDestroyFramebuffer(device, swapchainFrameBuffers[i], NULL);
+    }
+    vkDestroyPipeline(device, pipelineRaster, NULL);
+    vkDestroyPipeline(device, pipelineRayTrace, NULL);
+    vkDestroyPipeline(device, pipelineSelect, NULL);
+    vkDestroyPipeline(device, pipelinePost, NULL);
+    //vkDestroySampler(device, offscreenFrameBuffer.colorAttachment.sampler, NULL);
+    //vkDestroyImageView(device, offscreenFrameBuffer.colorAttachment.view, NULL);
+    //vkDestroyImage(device, offscreenFrameBuffer.colorAttachment.handle, NULL);
+    //vkDestroyImageView(device, offscreenFrameBuffer.depthAttachment.view, NULL);
+    //vkDestroyImage(device, offscreenFrameBuffer.depthAttachment.handle, NULL);
+    tanto_v_DestroyImage(colorAttachment);
+    tanto_v_DestroyImage(depthAttachment);
+}
+
 void r_InitRenderer(void)
 {
     initDescSetsAndPipeLayouts();
@@ -821,8 +839,7 @@ void r_ClearMesh(void)
 void r_RecreateSwapchain(void)
 {
     vkDeviceWaitIdle(device);
-
-    r_CleanUp();
+    cleanUpSwapchainDependent();
 
     tanto_r_RecreateSwapchain();
     initOffscreenAttachments();
@@ -836,8 +853,6 @@ void r_RecreateSwapchain(void)
     }
 }
 
-
-
 void r_SavePaintImage(void)
 {
     tanto_v_SaveImage(&paintImage, TANTO_V_IMAGE_FILE_PNG_TYPE);
@@ -850,21 +865,8 @@ void r_ClearPaintImage(void)
 
 void r_CleanUp(void)
 {
-    vkDestroyFramebuffer(device, offscreenFrameBuffer, NULL);
-    vkDestroyPipeline(device, pipelineRaster, NULL);
-    vkDestroyPipeline(device, pipelineRayTrace, NULL);
-    vkDestroyPipeline(device, pipelineSelect, NULL);
-    vkDestroyPipeline(device, pipelinePost, NULL);
-    //vkDestroySampler(device, offscreenFrameBuffer.colorAttachment.sampler, NULL);
-    //vkDestroyImageView(device, offscreenFrameBuffer.colorAttachment.view, NULL);
-    //vkDestroyImage(device, offscreenFrameBuffer.colorAttachment.handle, NULL);
-    //vkDestroyImageView(device, offscreenFrameBuffer.depthAttachment.view, NULL);
-    //vkDestroyImage(device, offscreenFrameBuffer.depthAttachment.handle, NULL);
-    tanto_v_DestroyImage(colorAttachment);
-    tanto_v_DestroyImage(depthAttachment);
-    //vkDestroySampler(device, paintImage.sampler, NULL);
-    //vkDestroyImage(device, paintImage.handle, NULL);
-    //vkDestroyImageView(device, paintImage.view, NULL);
+    cleanUpSwapchainDependent();
+    tanto_v_DestroyImage(paintImage);
 }
 
 const Tanto_R_Mesh* r_GetMesh(void)

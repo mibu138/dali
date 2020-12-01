@@ -75,7 +75,7 @@ void painter_StartLoop(void)
     // initialize matrices
     Mat4* xformProj    = r_GetXform(R_XFORM_PROJ);
     Mat4* xformProjInv = r_GetXform(R_XFORM_PROJ_INV);
-    *xformProj    = m_BuildPerspective(0.1, 30);
+    *xformProj    = m_BuildPerspective(0.01, 30);
     *xformProjInv = m_Invert4x4(xformProj);
 
     parms.shouldRun = true;

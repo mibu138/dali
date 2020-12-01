@@ -3,11 +3,11 @@ GLC = glslc
 
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
 LDFLAGS = -L/opt/hfs18.0/dsolib -L/home/michaelb/lib
-INFLAGS = -I/opt/hfs18.0/toolkit/include/HAPI -I/home/michaelb/dev
-LIBS = -lm -ltanto -lvulkan -lxcb -lxcb-keysyms -lHAPIL
+INFLAGS = -I$(HOME)/dev
+LIBS = -lm -ltanto -lvulkan -lxcb -lxcb-keysyms -lfreetype
 GLFLAGS = --target-env=vulkan1.2
 BIN = bin
-LIB = /home/michaelb/lib
+LIB = $(HOME)/lib
 LIBNAME = painter
 
 O = build
@@ -15,7 +15,6 @@ GLSL = shaders
 SPV  = shaders/spv
 
 NAME = painter
-
 
 DEPS =  \
 		game.h \
