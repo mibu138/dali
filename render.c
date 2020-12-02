@@ -43,6 +43,12 @@ static VkFramebuffer        swapchainFrameBuffers[TANTO_FRAME_COUNT];
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
+static VkFormat depthFormat;
+static VkFormat offscreenColorFormat;
+
+static VkRenderPass swapchainRenderPass;
+static VkRenderPass offscreenRenderPass;
+
 #define PAINT_IMG_SIZE 0x1000 // 0x1000 = 4096
 #define BRUSH_IMG_SIZE 0x1000
 
@@ -369,7 +375,8 @@ static void initPipelines(void)
         .layoutId = R_PIPE_LAYOUT_RASTER,
         .payload.rasterInfo = {
             .renderPass = offscreenRenderPass, 
-            .vertexDescription = tanto_r_GetVertexDescription3D_Default(),
+            .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
+            .frontFace = VK_FRONT_FACE_CLOCKWISE,
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
             .vertShader = SPVDIR"/raster-vert.spv", 
             .fragShader = SPVDIR"/raster-frag.spv"
@@ -398,7 +405,7 @@ static void initPipelines(void)
         .layoutId = R_PIPE_LAYOUT_POST,
         .payload.rasterInfo = {
             .renderPass = swapchainRenderPass,
-            .vertexDescription = tanto_r_GetVertexDescription3D_Default(),
+            .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
             .vertShader = "",
             .fragShader = SPVDIR"/post-frag.spv"
@@ -710,12 +717,17 @@ static void cleanUpSwapchainDependent(void)
     //vkDestroyImage(device, offscreenFrameBuffer.colorAttachment.handle, NULL);
     //vkDestroyImageView(device, offscreenFrameBuffer.depthAttachment.view, NULL);
     //vkDestroyImage(device, offscreenFrameBuffer.depthAttachment.handle, NULL);
-    tanto_v_DestroyImage(colorAttachment);
-    tanto_v_DestroyImage(depthAttachment);
+    tanto_v_FreeImage(&colorAttachment);
+    tanto_v_FreeImage(&depthAttachment);
 }
 
 void r_InitRenderer(void)
 {
+    depthFormat = tanto_r_GetDepthFormat();
+    offscreenColorFormat = tanto_r_GetOffscreenColorFormat();
+    swapchainRenderPass = tanto_r_GetSwapchainRenderPass();
+    offscreenRenderPass = tanto_r_GetOffscreenRenderPass();
+
     initDescSetsAndPipeLayouts();
     initPipelines();
 
@@ -866,7 +878,7 @@ void r_ClearPaintImage(void)
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
-    tanto_v_DestroyImage(paintImage);
+    tanto_v_FreeImage(&paintImage);
 }
 
 const Tanto_R_Mesh* r_GetMesh(void)
