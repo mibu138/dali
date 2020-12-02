@@ -22,7 +22,7 @@ layout(set = 1, binding = 2) buffer Selection {
     int   hit;
 } selection;
 
-layout(set = 2, binding = 1) uniform Brush {
+layout(set = 2, binding = 0) uniform Brush {
     float x;
     float y;
     float radius;

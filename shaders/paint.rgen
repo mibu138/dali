@@ -16,7 +16,7 @@ layout(binding = 0, set = 0) uniform Camera {
 layout(binding = 0, set = 1) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 1, rgba32f) uniform image2D image;
 
-layout(set = 2, binding = 1) uniform Brush {
+layout(set = 2, binding = 0) uniform Brush {
     float x;
     float y;
     float radius;
