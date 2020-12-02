@@ -401,13 +401,14 @@ static void initPipelines(void)
         }};
 
     const Tanto_R_PipelineInfo pipeInfoPost = {
-        .type     = TANTO_R_PIPELINE_POSTPROC_TYPE,
+        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_POST,
         .payload.rasterInfo = {
             .renderPass = swapchainRenderPass,
             .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-            .vertShader = "",
+            .frontFace   = VK_FRONT_FACE_CLOCKWISE,
+            .vertShader = tanto_r_FullscreenTriVertShader(),
             .fragShader = SPVDIR"/post-frag.spv"
         }};
 
