@@ -47,9 +47,13 @@ debug: all
 release: CFLAGS += -DNDEBUG -O3
 release: all
 
-all: bin lib tags
+all: tanto bin lib tags
 
 shaders: $(SHADERS)
+
+.PHONY: tanto
+tanto:
+	make -C tanto/
 
 clean: 
 	rm -f $(O)/* $(LIB)/$(LIBNAME) $(BIN)/* $(SPV)/*

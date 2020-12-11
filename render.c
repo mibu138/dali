@@ -42,7 +42,8 @@ static VkFramebuffer        swapchainFrameBuffers[TANTO_FRAME_COUNT];
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
-static VkFormat depthFormat;
+static const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
+static const VkFormat paintFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
 static VkRenderPass swapchainRenderPass;
 
@@ -140,7 +141,7 @@ static void initPaintImage(void)
 {
     paintImageDim.x = PAINT_IMG_SIZE;
     paintImageDim.y = PAINT_IMG_SIZE;
-    paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, tanto_r_GetOffscreenColorFormat(), 
+    paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, paintFormat, 
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -725,8 +726,6 @@ static void cleanUpSwapchainDependent(void)
 
 void r_InitRenderer(void)
 {
-    depthFormat = tanto_r_GetDepthFormat();
-
     initRenderPass();
     initDescSetsAndPipeLayouts();
     initPipelines();
