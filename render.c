@@ -851,7 +851,27 @@ void r_RecreateSwapchain(void)
 
 void r_SavePaintImage(void)
 {
-    tanto_v_SaveImage(&paintImage, TANTO_V_IMAGE_FILE_PNG_TYPE);
+    printf("Please enter a file name with extension.\n");
+    char strbuf[32];
+    fgets(strbuf, 32, stdin);
+    uint8_t len = strlen(strbuf);
+    if (len < 5)
+    {
+        printf("Filename too small. Must include extension.\n");
+        return;
+    }
+    if (strbuf[len] == '\n')  strbuf[len--] = '\0'; 
+    const char* ext = strbuf + len - 4;
+    TANTO_DEBUG_PRINT("%s", ext);
+    Tanto_V_ImageFileType fileType;
+    if (strncmp(ext, "png", 3) == 0) fileType = TANTO_V_IMAGE_FILE_TYPE_PNG;
+    else if (strncmp(ext, "jpg", 3) == 0) fileType = TANTO_V_IMAGE_FILE_TYPE_JPG;
+    else 
+    {
+        printf("Bad extension.\n");
+        return;
+    }
+    tanto_v_SaveImage(&paintImage, fileType, strbuf);
 }
 
 void r_ClearPaintImage(void)

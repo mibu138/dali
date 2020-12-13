@@ -1,7 +1,6 @@
 #include "game.h"
 #include "render.h"
 #include "common.h"
-#include "tanto/m_math.h"
 #include "tanto/t_utils.h"
 #include <assert.h>
 #include <string.h>
