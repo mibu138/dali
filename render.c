@@ -39,6 +39,7 @@ static Tanto_V_Image        depthAttachment;
 static Tanto_V_Image        textureImage;
 static Tanto_V_Image        paintImage;
 
+static VkFramebuffer        framebufferTextureComp;
 static VkFramebuffer        swapchainFrameBuffers[TANTO_FRAME_COUNT];
 
 static Vec2                 paintImageDim;
@@ -192,21 +193,19 @@ static void initPaintAndTextureImage(void)
     paintImageDim.x = PAINT_IMG_SIZE;
     paintImageDim.y = PAINT_IMG_SIZE;
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, paintFormat, 
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
             1);
 
     textureImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, textureFormat, 
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
             1);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &paintImage);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &textureImage);
 }
 
 static void updateMeshDescriptors(void)
@@ -654,6 +653,24 @@ static void paint(const VkCommandBuffer* cmdBuf)
     printf("Raytrace recorded!\n");
 }
 
+static void applyPaint(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
+{
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineTextureComp);
+
+    vkCmdBindDescriptorSets(
+        *cmdBuf, 
+        VK_PIPELINE_BIND_POINT_GRAPHICS, 
+        pipelineLayouts[R_PIPE_LAYOUT_RASTER], 
+        0, 1, &descriptorSets[R_DESC_SET_RASTER], 
+        0, NULL);
+
+    vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(*cmdBuf);
+}
+
 static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
 {
     vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineRaster);
@@ -778,6 +795,23 @@ static void updatePushConstants(void)
     pushConstants.uvwOffset    = renderMesh.uvwOffset / sizeof(Vec3);
 }
 
+static void initTextureCompFramebuffer(void)
+{
+    const VkImageView attachment = textureImage.view;
+
+    const VkFramebufferCreateInfo framebufferInfo = {
+        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+        .layers = 1,
+        .height = BRUSH_IMG_SIZE,
+        .width  = BRUSH_IMG_SIZE,
+        .renderPass = textureCompRenderPass,
+        .attachmentCount = 1,
+        .pAttachments = &attachment 
+    };
+
+    V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &framebufferTextureComp) );
+}
+
 static void initFramebuffers(void)
 {
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
@@ -830,6 +864,7 @@ void r_InitRenderer(void)
     brushDim.x = BRUSH_IMG_SIZE;
     brushDim.y = BRUSH_IMG_SIZE;
 
+    initTextureCompFramebuffer();
     initFramebuffers();
 }
 
@@ -860,7 +895,10 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
     Tanto_R_Frame* frame = tanto_r_GetFrame(frameIndex);
     vkResetCommandPool(device, frame->commandPool, 0);
     VkCommandBufferBeginInfo cbbi = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
-    V_ASSERT( vkBeginCommandBuffer(frame->commandBuffer, &cbbi) );
+
+    VkCommandBuffer* pCmdBuf = &frame->commandBuffer; 
+
+    V_ASSERT( vkBeginCommandBuffer(*pCmdBuf, &cbbi) );
 
     VkClearValue clearValueColor = {0.002f, 0.003f, 0.009f, 1.0f};
     VkClearValue clearValueDepth = {1.0, 0};
@@ -876,10 +914,34 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
         .framebuffer = swapchainFrameBuffers[frameIndex]
     };
 
-    paint(&frame->commandBuffer);
-    rasterize(&frame->commandBuffer, &rpassSwap);
+    const VkRenderPassBeginInfo rpassComp = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .clearValueCount = 1,
+        .pClearValues = &clearValueColor,
+        .renderArea = {{0, 0}, {BRUSH_IMG_SIZE, BRUSH_IMG_SIZE}},
+        .renderPass =  textureCompRenderPass,
+        .framebuffer = framebufferTextureComp
+    };
 
-    V_ASSERT( vkEndCommandBuffer(frame->commandBuffer) );
+    paint(pCmdBuf);
+
+    VkMemoryBarrier memBarrier = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+    };
+
+    vkCmdPipelineBarrier(*pCmdBuf, 
+            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+            VK_DEPENDENCY_BY_REGION_BIT, 1, &memBarrier, 
+            0, NULL, 0, NULL);
+
+    applyPaint(pCmdBuf, &rpassComp);
+
+    rasterize(pCmdBuf, &rpassSwap);
+
+    V_ASSERT( vkEndCommandBuffer(*pCmdBuf) );
 }
 
 Mat4* r_GetXform(r_XformType type)
