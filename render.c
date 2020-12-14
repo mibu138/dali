@@ -29,12 +29,14 @@ static Tanto_R_Mesh          renderMesh;
 
 static RtPushConstants pushConstants;
 
+static VkPipeline      pipelineTextureComp;
 static VkPipeline      pipelineRaster;
 static VkPipeline      pipelineRayTrace;
 static VkPipeline      pipelinePost;
 static VkPipeline      pipelineSelect;
 
 static Tanto_V_Image        depthAttachment;
+static Tanto_V_Image        textureImage;
 static Tanto_V_Image        paintImage;
 
 static VkFramebuffer        swapchainFrameBuffers[TANTO_FRAME_COUNT];
@@ -42,9 +44,11 @@ static VkFramebuffer        swapchainFrameBuffers[TANTO_FRAME_COUNT];
 static Vec2                 paintImageDim;
 static Vec2                 brushDim;
 
-static const VkFormat depthFormat = VK_FORMAT_D32_SFLOAT;
-static const VkFormat paintFormat = VK_FORMAT_R8G8B8A8_UNORM;
+static const VkFormat depthFormat   = VK_FORMAT_D32_SFLOAT;
+static const VkFormat paintFormat   = VK_FORMAT_R8G8B8A8_UNORM;
+static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
+static VkRenderPass textureCompRenderPass;
 static VkRenderPass swapchainRenderPass;
 
 #define PAINT_IMG_SIZE 0x1000 // 0x1000 = 4096
@@ -74,7 +78,53 @@ static void initOffscreenAttachments(void)
             VK_SAMPLE_COUNT_1_BIT);
 }
 
-static void initRenderPass(void)
+static void initCompRenderPass(void)
+{
+    const VkAttachmentDescription attachmentColor = {
+        .flags = 0,
+        .format = textureFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+    };
+
+    const VkAttachmentDescription attachments[] = {
+        attachmentColor 
+    };
+
+    VkAttachmentReference colorReference = {
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
+    const VkSubpassDescription subpass = {
+        .flags                   = 0,
+        .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .inputAttachmentCount    = 0,
+        .pInputAttachments       = NULL,
+        .colorAttachmentCount    = 1,
+        .pColorAttachments       = &colorReference,
+        .pResolveAttachments     = NULL,
+        .pDepthStencilAttachment = NULL,
+        .preserveAttachmentCount = 0,
+        .pPreserveAttachments    = NULL,
+    };
+
+    Tanto_R_RenderPassInfo rpi = {
+        .attachmentCount = 1,
+        .pAttachments = attachments,
+        .subpassCount = 1,
+        .pSubpasses = &subpass,
+    };
+
+    tanto_r_CreateRenderPass(&rpi, &textureCompRenderPass);
+}
+
+static void initSwapRenderPass(void)
 {
     const VkAttachmentDescription attachmentColor = {
         .flags = 0,
@@ -137,7 +187,7 @@ static void initRenderPass(void)
     tanto_r_CreateRenderPass(&rpi, &swapchainRenderPass);
 }
 
-static void initPaintImage(void)
+static void initPaintAndTextureImage(void)
 {
     paintImageDim.x = PAINT_IMG_SIZE;
     paintImageDim.y = PAINT_IMG_SIZE;
@@ -148,7 +198,15 @@ static void initPaintImage(void)
             VK_FILTER_LINEAR, 
             1);
 
+    textureImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, textureFormat, 
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_FILTER_LINEAR, 
+            1);
+
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &paintImage);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &textureImage);
 }
 
 static void updateMeshDescriptors(void)
@@ -254,6 +312,12 @@ static void initNonMeshDescriptors(void)
         .sampler     = paintImage.sampler
     };
 
+    VkDescriptorImageInfo imageInfoTexture = {
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageView   = textureImage.view,
+        .sampler     = textureImage.sampler
+    };
+
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -278,6 +342,14 @@ static void initNonMeshDescriptors(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &uniformInfoPlayer
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstBinding = 5,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &imageInfoTexture
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -311,7 +383,7 @@ static void initDescSetsAndPipeLayouts(void)
 {
     const Tanto_R_DescriptorSet descSets[] = {{
             .id = R_DESC_SET_RASTER,
-            .bindingCount = 5, 
+            .bindingCount = 6, 
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -324,13 +396,17 @@ static void initDescSetsAndPipeLayouts(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{
+            },{ // paint image
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             },{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            },{ // texture image
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         },{
@@ -451,10 +527,23 @@ static void initPipelines(void)
             }
         }};
 
+    const Tanto_R_PipelineInfo pipeInfoTextureComp = {
+        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+        .layoutId = R_PIPE_LAYOUT_RASTER,
+        .payload.rasterInfo = {
+            .renderPass = textureCompRenderPass, 
+            .frontFace = VK_FRONT_FACE_CLOCKWISE,
+            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+            .blendMode   = TANTO_R_BLEND_MODE_OVER,
+            .vertShader = tanto_r_FullscreenTriVertShader(),
+            .fragShader = SPVDIR"/applyPaint-frag.spv"
+        }};
+
     tanto_r_CreatePipeline(&pipeInfoRaster, &pipelineRaster);
     tanto_r_CreatePipeline(&pipeInfoRayTrace, &pipelineRayTrace);
     tanto_r_CreatePipeline(&pipeInfoPost, &pipelinePost);
     tanto_r_CreatePipeline(&pipeInfoSelect, &pipelineSelect);
+    tanto_r_CreatePipeline(&pipeInfoTextureComp, &pipelineTextureComp);
 }
 
 static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
@@ -509,7 +598,7 @@ static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
             1, 1);
 }
 
-static void rayTrace(const VkCommandBuffer* cmdBuf)
+static void paint(const VkCommandBuffer* cmdBuf)
 {
     vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineRayTrace);
 
@@ -726,12 +815,13 @@ static void cleanUpSwapchainDependent(void)
 
 void r_InitRenderer(void)
 {
-    initRenderPass();
+    initSwapRenderPass();
+    initCompRenderPass();
     initDescSetsAndPipeLayouts();
     initPipelines();
 
     initOffscreenAttachments();
-    initPaintImage();
+    initPaintAndTextureImage();
 
     createShaderBindingTablePaint();
     createShaderBindingTableSelect();
@@ -786,7 +876,7 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
         .framebuffer = swapchainFrameBuffers[frameIndex]
     };
 
-    rayTrace(&frame->commandBuffer);
+    paint(&frame->commandBuffer);
     rasterize(&frame->commandBuffer, &rpassSwap);
 
     V_ASSERT( vkEndCommandBuffer(frame->commandBuffer) );
