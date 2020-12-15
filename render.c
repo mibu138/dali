@@ -85,12 +85,12 @@ static void initCompRenderPass(void)
         .flags = 0,
         .format = textureFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
         .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
     };
 
     const VkAttachmentDescription attachments[] = {
@@ -193,7 +193,7 @@ static void initPaintAndTextureImage(void)
     paintImageDim.x = PAINT_IMG_SIZE;
     paintImageDim.y = PAINT_IMG_SIZE;
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, paintFormat, 
-            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,  
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
             1);
@@ -206,6 +206,8 @@ static void initPaintAndTextureImage(void)
             1);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &paintImage);
+
+    tanto_v_ClearColorImage(&textureImage);
 }
 
 static void updateMeshDescriptors(void)
@@ -312,7 +314,7 @@ static void initNonMeshDescriptors(void)
     };
 
     VkDescriptorImageInfo imageInfoTexture = {
-        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView   = textureImage.view,
         .sampler     = textureImage.sampler
     };
@@ -533,6 +535,7 @@ static void initPipelines(void)
             .renderPass = textureCompRenderPass, 
             .frontFace = VK_FRONT_FACE_CLOCKWISE,
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+            .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
             .blendMode   = TANTO_R_BLEND_MODE_OVER,
             .vertShader = tanto_r_FullscreenTriVertShader(),
             .fragShader = SPVDIR"/applyPaint-frag.spv"
@@ -802,8 +805,8 @@ static void initTextureCompFramebuffer(void)
     const VkFramebufferCreateInfo framebufferInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .layers = 1,
-        .height = BRUSH_IMG_SIZE,
-        .width  = BRUSH_IMG_SIZE,
+        .height = paintImageDim.x,
+        .width  = paintImageDim.y,
         .renderPass = textureCompRenderPass,
         .attachmentCount = 1,
         .pAttachments = &attachment 
@@ -900,7 +903,8 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
 
     V_ASSERT( vkBeginCommandBuffer(*pCmdBuf, &cbbi) );
 
-    VkClearValue clearValueColor = {0.002f, 0.003f, 0.009f, 1.0f};
+    VkClearValue clearValueColor =     {0.002f, 0.003f, 0.009f, 1.0f};
+    VkClearValue clearValueColorComp = {0.000f, 0.000f, 0.000f, 0.0f};
     VkClearValue clearValueDepth = {1.0, 0};
 
     VkClearValue clears[] = {clearValueColor, clearValueDepth};
@@ -917,15 +921,44 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
     const VkRenderPassBeginInfo rpassComp = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .clearValueCount = 1,
-        .pClearValues = &clearValueColor,
-        .renderArea = {{0, 0}, {BRUSH_IMG_SIZE, BRUSH_IMG_SIZE}},
+        .pClearValues = &clearValueColorComp,
+        .renderArea = {{0, 0}, {PAINT_IMG_SIZE, PAINT_IMG_SIZE}},
         .renderPass =  textureCompRenderPass,
         .framebuffer = framebufferTextureComp
     };
 
+    VkClearColorValue clearColor = {
+        .float32[0] = 0,
+        .float32[1] = 0,
+        .float32[2] = 0,
+        .float32[3] = 0,
+    };
+
+    VkImageSubresourceRange range = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseArrayLayer = 0,
+        .baseMipLevel = 0,
+        .layerCount = 1,
+        .levelCount = 1
+    };
+
+    vkCmdClearColorImage(*pCmdBuf, paintImage.handle, paintImage.layout, &clearColor, 1, &range);
+
+    VkMemoryBarrier memBarrier1 = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT
+    };
+
+    vkCmdPipelineBarrier(*pCmdBuf, 
+            VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+            0, 1, &memBarrier1, 
+            0, NULL, 0, NULL);
+
     paint(pCmdBuf);
 
-    VkMemoryBarrier memBarrier = {
+    VkMemoryBarrier memBarrier2 = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
         .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
         .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
@@ -934,7 +967,7 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
     vkCmdPipelineBarrier(*pCmdBuf, 
             VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 
             VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
-            VK_DEPENDENCY_BY_REGION_BIT, 1, &memBarrier, 
+            0, 1, &memBarrier2, 
             0, NULL, 0, NULL);
 
     applyPaint(pCmdBuf, &rpassComp);
@@ -1012,8 +1045,8 @@ void r_SavePaintImage(void)
         printf("Filename too small. Must include extension.\n");
         return;
     }
-    if (strbuf[len] == '\n')  strbuf[len--] = '\0'; 
-    const char* ext = strbuf + len - 4;
+    if (strbuf[len - 1] == '\n')  strbuf[--len] = '\0'; 
+    const char* ext = strbuf + len - 3;
     TANTO_DEBUG_PRINT("%s", ext);
     Tanto_V_ImageFileType fileType;
     if (strncmp(ext, "png", 3) == 0) fileType = TANTO_V_IMAGE_FILE_TYPE_PNG;
@@ -1023,7 +1056,7 @@ void r_SavePaintImage(void)
         printf("Bad extension.\n");
         return;
     }
-    tanto_v_SaveImage(&paintImage, fileType, strbuf);
+    tanto_v_SaveImage(&textureImage, fileType, strbuf);
 }
 
 void r_ClearPaintImage(void)
