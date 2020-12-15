@@ -263,8 +263,10 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_S: zoomOut = true; break;
             case TANTO_KEY_A: tumbleLeft = true; break;
             case TANTO_KEY_D: tumbleRight = true; break;
-            case TANTO_KEY_E: moveUp = true; break;
-            case TANTO_KEY_Q: moveDown = true; break;
+            //case TANTO_KEY_E: moveUp = true; break;
+            //case TANTO_KEY_Q: moveDown = true; break;
+            case TANTO_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
+            case TANTO_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
             case TANTO_KEY_P: r_SavePaintImage(); break;
             case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
             case TANTO_KEY_CTRL: tumbleDown = true; break;
