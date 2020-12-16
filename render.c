@@ -847,6 +847,7 @@ static void cleanUpSwapchainDependent(void)
     vkDestroyPipeline(device, pipelineRayTrace, NULL);
     vkDestroyPipeline(device, pipelineSelect, NULL);
     vkDestroyPipeline(device, pipelinePost, NULL);
+    vkDestroyPipeline(device, pipelineTextureComp, NULL);
     tanto_v_FreeImage(&depthAttachment);
 }
 
@@ -1068,7 +1069,10 @@ void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
     tanto_v_FreeImage(&paintImage);
+    tanto_v_FreeImage(&textureImage);
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
+    vkDestroyRenderPass(device, textureCompRenderPass, NULL);
+    vkDestroyFramebuffer(device, framebufferTextureComp, NULL);
 }
 
 const Tanto_R_Mesh* r_GetMesh(void)

@@ -6,6 +6,7 @@
 #include <string.h>
 #include <tanto/t_def.h>
 #include <tanto/i_input.h>
+#include <tanto/v_video.h>
 
 
 static bool zoomIn;
@@ -268,6 +269,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
             case TANTO_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
             case TANTO_KEY_P: r_SavePaintImage(); break;
+            case TANTO_KEY_F: vkDeviceWaitIdle(device); r_ClearMesh(); break;
             case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
