@@ -528,6 +528,16 @@ static void initPipelines(void)
             }
         }};
 
+    tanto_r_CreatePipeline(&pipeInfoRaster, &pipelineRaster);
+    tanto_r_CreatePipeline(&pipeInfoRayTrace, &pipelineRayTrace);
+    tanto_r_CreatePipeline(&pipeInfoPost, &pipelinePost);
+    tanto_r_CreatePipeline(&pipeInfoSelect, &pipelineSelect);
+}
+
+static void initCompPipeline(const Tanto_R_BlendMode blendMode)
+{
+    assert(blendMode != TANTO_R_BLEND_MODE_NONE);
+
     const Tanto_R_PipelineInfo pipeInfoTextureComp = {
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
         .layoutId = R_PIPE_LAYOUT_RASTER,
@@ -536,15 +546,11 @@ static void initPipelines(void)
             .frontFace = VK_FRONT_FACE_CLOCKWISE,
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
             .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
-            .blendMode   = TANTO_R_BLEND_MODE_OVER,
+            .blendMode   = blendMode,
             .vertShader = tanto_r_FullscreenTriVertShader(),
             .fragShader = SPVDIR"/applyPaint-frag.spv"
         }};
 
-    tanto_r_CreatePipeline(&pipeInfoRaster, &pipelineRaster);
-    tanto_r_CreatePipeline(&pipeInfoRayTrace, &pipelineRayTrace);
-    tanto_r_CreatePipeline(&pipeInfoPost, &pipelinePost);
-    tanto_r_CreatePipeline(&pipeInfoSelect, &pipelineSelect);
     tanto_r_CreatePipeline(&pipeInfoTextureComp, &pipelineTextureComp);
 }
 
@@ -847,7 +853,6 @@ static void cleanUpSwapchainDependent(void)
     vkDestroyPipeline(device, pipelineRayTrace, NULL);
     vkDestroyPipeline(device, pipelineSelect, NULL);
     vkDestroyPipeline(device, pipelinePost, NULL);
-    vkDestroyPipeline(device, pipelineTextureComp, NULL);
     tanto_v_FreeImage(&depthAttachment);
 }
 
@@ -857,6 +862,7 @@ void r_InitRenderer(void)
     initCompRenderPass();
     initDescSetsAndPipeLayouts();
     initPipelines();
+    initCompPipeline(TANTO_R_BLEND_MODE_OVER);
 
     initOffscreenAttachments();
     initPaintAndTextureImage();
@@ -978,32 +984,6 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
     V_ASSERT( vkEndCommandBuffer(*pCmdBuf) );
 }
 
-Mat4* r_GetXform(r_XformType type)
-{
-    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    switch (type) 
-    {
-        case R_XFORM_MODEL:    return &matrices->model;
-        case R_XFORM_VIEW:     return &matrices->view;
-        case R_XFORM_PROJ:     return &matrices->proj;
-        case R_XFORM_VIEW_INV: return &matrices->viewInv;
-        case R_XFORM_PROJ_INV: return &matrices->projInv;
-    }
-    return NULL;
-}
-
-Brush* r_GetBrush(void)
-{
-    assert (brushRegion.hostData);
-    return (Brush*)brushRegion.hostData;
-}
-
-UboPlayer* r_GetPlayer(void)
-{
-    assert(playerRegion.hostData);
-    return (UboPlayer*)playerRegion.hostData;
-}
-
 void r_LoadMesh(Tanto_R_Mesh mesh)
 {
     renderMesh = mesh;
@@ -1068,6 +1048,7 @@ void r_ClearPaintImage(void)
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
+    vkDestroyPipeline(device, pipelineTextureComp, NULL);
     tanto_v_FreeImage(&paintImage);
     tanto_v_FreeImage(&textureImage);
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
@@ -1080,3 +1061,47 @@ const Tanto_R_Mesh* r_GetMesh(void)
     return &renderMesh;
 }
 
+Mat4* r_GetXform(r_XformType type)
+{
+    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
+    switch (type) 
+    {
+        case R_XFORM_MODEL:    return &matrices->model;
+        case R_XFORM_VIEW:     return &matrices->view;
+        case R_XFORM_PROJ:     return &matrices->proj;
+        case R_XFORM_VIEW_INV: return &matrices->viewInv;
+        case R_XFORM_PROJ_INV: return &matrices->projInv;
+    }
+    return NULL;
+}
+
+Brush* r_GetBrush(void)
+{
+    assert (brushRegion.hostData);
+    return (Brush*)brushRegion.hostData;
+}
+
+UboPlayer* r_GetPlayer(void)
+{
+    assert(playerRegion.hostData);
+    return (UboPlayer*)playerRegion.hostData;
+}
+
+void r_SetPaintMode(const PaintMode mode)
+{
+    vkDeviceWaitIdle(device);
+    vkDestroyPipeline(device, pipelineTextureComp, NULL);
+
+    Tanto_R_BlendMode blendMode;
+    switch (mode)
+    {
+        case PAINT_MODE_OVER:  blendMode = TANTO_R_BLEND_MODE_OVER;  break;
+        case PAINT_MODE_ERASE: blendMode = TANTO_R_BLEND_MODE_ERASE; break;
+    }
+
+    initCompPipeline(blendMode);
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        r_UpdateRenderCommands(i);
+    }
+}

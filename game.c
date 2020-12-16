@@ -261,15 +261,17 @@ void g_Responder(const Tanto_I_Event *event)
         case TANTO_I_KEYDOWN: switch (event->data.keyCode)
         {
             case TANTO_KEY_W: zoomIn = true; break;
-            case TANTO_KEY_S: zoomOut = true; break;
+            //case TANTO_KEY_S: zoomOut = true; break;
+            case TANTO_KEY_S: brushColor = (Vec3){1, 1, 1}; r_SetPaintMode(PAINT_MODE_ERASE); break;
             case TANTO_KEY_A: tumbleLeft = true; break;
-            case TANTO_KEY_D: tumbleRight = true; break;
+            //case TANTO_KEY_D: tumbleRight = true; break;
+            case TANTO_KEY_D: r_SetPaintMode(PAINT_MODE_OVER); break;
             //case TANTO_KEY_E: moveUp = true; break;
             //case TANTO_KEY_Q: moveDown = true; break;
             case TANTO_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
             case TANTO_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
             case TANTO_KEY_P: r_SavePaintImage(); break;
-            case TANTO_KEY_F: vkDeviceWaitIdle(device); r_ClearMesh(); break;
+            case TANTO_KEY_F: break;
             case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
