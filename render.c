@@ -12,7 +12,6 @@
 #include <tanto/r_raytrace.h>
 #include <tanto/v_command.h>
 #include <tanto/r_renderpass.h>
-#include <vulkan/vulkan_core.h>
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
@@ -35,15 +34,15 @@ static VkPipeline      pipelineRayTrace;
 static VkPipeline      pipelinePost;
 static VkPipeline      pipelineSelect;
 
-static Tanto_V_Image        depthAttachment;
-static Tanto_V_Image        textureImage;
-static Tanto_V_Image        paintImage;
+static Tanto_V_Image   depthAttachment;
+static Tanto_V_Image   paintImage;
+static Tanto_V_Image   textureImage;
 
-static VkFramebuffer        framebufferTextureComp;
-static VkFramebuffer        swapchainFrameBuffers[TANTO_FRAME_COUNT];
+static VkFramebuffer   framebufferTextureComp;
+static VkFramebuffer   swapchainFrameBuffers[TANTO_FRAME_COUNT];
 
-static Vec2                 paintImageDim;
-static Vec2                 brushDim;
+static Vec2            paintImageDim;
+static Vec2            brushDim;
 
 static const VkFormat depthFormat   = VK_FORMAT_D32_SFLOAT;
 static const VkFormat paintFormat   = VK_FORMAT_R8G8B8A8_UNORM;
@@ -811,8 +810,8 @@ static void initTextureCompFramebuffer(void)
     const VkFramebufferCreateInfo framebufferInfo = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .layers = 1,
-        .height = paintImageDim.x,
-        .width  = paintImageDim.y,
+        .width  = PAINT_IMG_SIZE,
+        .height = PAINT_IMG_SIZE,
         .renderPass = textureCompRenderPass,
         .attachmentCount = 1,
         .pAttachments = &attachment 
