@@ -3,6 +3,7 @@
 #include <tanto/r_renderpass.h>
 #include <tanto/v_video.h>
 #include <tanto/v_image.h>
+#include <tanto/t_def.h>
 #include <string.h>
 #include <vulkan/vulkan_core.h>
 
@@ -19,7 +20,7 @@ struct {
 
 static VkExtent2D   imageDimensions;
 static VkFormat     imageFormat;
-static VkRenderPass compRenderPass;
+static VkRenderPass applyRenderPass;
 
 CreateLayerCallbackFn onCreateLayer;
 
@@ -66,7 +67,7 @@ static void initCompRenderPass(void)
         .pSubpasses = &subpass,
     };
 
-    tanto_r_CreateRenderPass(&rpi, &compRenderPass);
+    tanto_r_CreateRenderPass(&rpi, &applyRenderPass);
 }
 
 void l_Init(const VkExtent2D dim, const VkFormat format)
@@ -89,7 +90,7 @@ void l_CleanUp()
         tanto_v_FreeImage(&layerStack.layers[i].image);
         vkDestroyFramebuffer(device, layerStack.layers[i].frameBuffer, NULL);
     }
-    vkDestroyRenderPass(device, compRenderPass, NULL);
+    vkDestroyRenderPass(device, applyRenderPass, NULL);
     memset(&layerStack, 0, sizeof(layerStack));
     onCreateLayer = NULL;
 }
@@ -110,6 +111,8 @@ int l_CreateLayer(void)
             VK_FILTER_LINEAR, 
             1);
 
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            &layerStack.layers[curId].image);
     // may be necesary will have to check the spec to see if images are empty by default
     //tanto_v_ClearColorImage(&textureImage);
 
@@ -118,7 +121,7 @@ int l_CreateLayer(void)
         .layers = 1,
         .width  = imageDimensions.width,
         .height = imageDimensions.height,
-        .renderPass = compRenderPass,
+        .renderPass = applyRenderPass,
         .attachmentCount = 1,
         .pAttachments = &layerStack.layers[curId].image.view
     };
@@ -127,6 +130,7 @@ int l_CreateLayer(void)
     
     if (onCreateLayer)
         onCreateLayer();
+    TANTO_DEBUG_PRINT("Layer created!");
     return curId;
 }
 
@@ -134,6 +138,7 @@ void l_SetActiveLayer(uint16_t id)
 {
     assert(id < layerStack.layerCount);
     layerStack.activeLayer = id;
+    onCreateLayer(); // should get its own call back but this should work for now
 }
 
 int l_GetLayerCount(void)
@@ -149,6 +154,11 @@ uint16_t l_GetActiveLayer(void)
 VkFramebuffer l_GetActiveFramebuffer(void)
 {
     return layerStack.layers[layerStack.activeLayer].frameBuffer;
+}
+
+VkRenderPass l_GetRenderPass(void)
+{
+    return applyRenderPass;
 }
 
 VkSampler l_GetSampler(uint16_t layerId)

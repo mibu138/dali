@@ -19,6 +19,21 @@
 
 typedef Brush UboBrush;
 
+typedef struct {
+    Vec4 clearColor;
+    Vec3 lightDir;
+    float lightIntensity;
+    int   lightType;
+    uint32_t posOffset;
+    uint32_t colorOffset;
+    uint32_t normalOffset;
+    uint32_t uvwOffset;
+} RtPushConstants;
+
+typedef struct {
+    uint32_t index;
+} RasterPushConstants;
+
 static Tanto_V_BufferRegion  matrixRegion;
 static Tanto_V_BufferRegion  brushRegion;
 static Tanto_V_BufferRegion  stbPaintRegion;
@@ -28,9 +43,11 @@ static Tanto_V_BufferRegion  selectionRegion;
 
 static Tanto_R_Mesh          renderMesh;
 
-static RtPushConstants pushConstants;
+static RtPushConstants     rtPushConstants;
+static RasterPushConstants rasterPushConstants;
 
-static VkPipeline      pipelineTextureComp;
+static VkPipeline      pipelineLayerStack;
+static VkPipeline      pipelineApplyPaint;
 static VkPipeline      pipelineRaster;
 static VkPipeline      pipelineRayTrace;
 static VkPipeline      pipelinePost;
@@ -86,7 +103,7 @@ static void initCompRenderPass(void)
         .flags = 0,
         .format = textureFormat,
         .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
         .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
         .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
         .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -480,10 +497,18 @@ static void initDescSetsAndPipeLayouts(void)
         .size = sizeof(RtPushConstants)
     };
 
+    const VkPushConstantRange pushConstantRaster = {
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset = 0,
+        .size = sizeof(RtPushConstants)
+    };
+
     const Tanto_R_PipelineLayout pipelayouts[] = {{
         .id = R_PIPE_LAYOUT_RASTER, 
         .descriptorSetCount = 1, 
-        .descriptorSetIds = {R_DESC_SET_RASTER}
+        .descriptorSetIds = {R_DESC_SET_RASTER},
+        .pushConstantCount = 1,
+        .pushConstantsRanges = {pushConstantRaster}
     },{
         .id = R_PIPE_LAYOUT_RAYTRACE, 
         .descriptorSetCount = 3, 
@@ -568,7 +593,7 @@ static void initPipelines(void)
     tanto_r_CreatePipeline(&pipeInfoSelect, &pipelineSelect);
 }
 
-static void initCompPipeline(const Tanto_R_BlendMode blendMode)
+static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode)
 {
     assert(blendMode != TANTO_R_BLEND_MODE_NONE);
 
@@ -585,7 +610,25 @@ static void initCompPipeline(const Tanto_R_BlendMode blendMode)
             .fragShader = SPVDIR"/applyPaint-frag.spv"
         }};
 
-    tanto_r_CreatePipeline(&pipeInfoTextureComp, &pipelineTextureComp);
+    tanto_r_CreatePipeline(&pipeInfoTextureComp, &pipelineApplyPaint);
+}
+
+static void initLayerStackPipeline(void)
+{
+    const Tanto_R_PipelineInfo pipeInfoTextureComp = {
+        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+        .layoutId = R_PIPE_LAYOUT_RASTER,
+        .payload.rasterInfo = {
+            .renderPass = textureCompRenderPass, 
+            .frontFace = VK_FRONT_FACE_CLOCKWISE,
+            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+            .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
+            .blendMode   = TANTO_R_BLEND_MODE_OVER,
+            .vertShader = tanto_r_FullscreenTriVertShader(),
+            .fragShader = SPVDIR"/layerStack-frag.spv"
+        }};
+
+    tanto_r_CreatePipeline(&pipeInfoTextureComp, &pipelineLayerStack);
 }
 
 static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
@@ -598,7 +641,7 @@ static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
     vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-        VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &pushConstants);
+        VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
 
     const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
@@ -650,7 +693,7 @@ static void paint(const VkCommandBuffer* cmdBuf)
     vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-        VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &pushConstants);
+        VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
 
     const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
@@ -698,7 +741,7 @@ static void paint(const VkCommandBuffer* cmdBuf)
 
 static void applyPaint(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
 {
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineTextureComp);
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineApplyPaint);
 
     vkCmdBindDescriptorSets(
         *cmdBuf, 
@@ -710,6 +753,34 @@ static void applyPaint(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
         vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
+
+    vkCmdEndRenderPass(*cmdBuf);
+}
+
+static void compLayerStack(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
+{
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayerStack);
+
+    vkCmdBindDescriptorSets(
+        *cmdBuf, 
+        VK_PIPELINE_BIND_POINT_GRAPHICS, 
+        pipelineLayouts[R_PIPE_LAYOUT_RASTER], 
+        0, 1, &descriptorSets[R_DESC_SET_RASTER], 
+        0, NULL);
+
+    vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+        const int layerCount = l_GetLayerCount();
+
+        for (int i = 0; i < layerCount; i++) 
+        {
+            rasterPushConstants.index = i;
+
+            vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RASTER], VK_SHADER_STAGE_FRAGMENT_BIT, 
+                    0, sizeof(RasterPushConstants), &rasterPushConstants);
+
+            vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
+        }
 
     vkCmdEndRenderPass(*cmdBuf);
 }
@@ -828,14 +899,14 @@ static void createShaderBindingTablePaint(void)
 
 static void updatePushConstants(void)
 {
-    pushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
-    pushConstants.lightIntensity = 1.0;
-    pushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
-    pushConstants.lightType = 0;
-    pushConstants.posOffset =    renderMesh.posOffset / sizeof(Vec3);
-    pushConstants.colorOffset =  renderMesh.colOffset / sizeof(Vec3);
-    pushConstants.normalOffset = renderMesh.norOffset / sizeof(Vec3);
-    pushConstants.uvwOffset    = renderMesh.uvwOffset / sizeof(Vec3);
+    rtPushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
+    rtPushConstants.lightIntensity = 1.0;
+    rtPushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
+    rtPushConstants.lightType = 0;
+    rtPushConstants.posOffset =    renderMesh.posOffset / sizeof(Vec3);
+    rtPushConstants.colorOffset =  renderMesh.colOffset / sizeof(Vec3);
+    rtPushConstants.normalOffset = renderMesh.norOffset / sizeof(Vec3);
+    rtPushConstants.uvwOffset    = renderMesh.uvwOffset / sizeof(Vec3);
 }
 
 static void initTextureCompFramebuffer(void)
@@ -892,7 +963,12 @@ static void cleanUpSwapchainDependent(void)
 
 static void onCreateLayer(void)
 {
+    vkDeviceWaitIdle(device);
     updateLayerDescriptors();
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        r_UpdateRenderCommands(i);
+    }
 }
 
 void r_InitRenderer(void)
@@ -905,7 +981,8 @@ void r_InitRenderer(void)
     initCompRenderPass();
     initDescSetsAndPipeLayouts();
     initPipelines();
-    initCompPipeline(TANTO_R_BLEND_MODE_OVER);
+    initApplyPaintPipeline(TANTO_R_BLEND_MODE_OVER);
+    initLayerStackPipeline();
 
     initOffscreenAttachments();
     initPaintAndTextureImage();
@@ -971,6 +1048,15 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
         .framebuffer = swapchainFrameBuffers[frameIndex]
     };
 
+    const VkRenderPassBeginInfo rpassApply = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+        .clearValueCount = 1,
+        .pClearValues = &clearValueColorComp,
+        .renderArea = {{0, 0}, {PAINT_IMG_SIZE, PAINT_IMG_SIZE}},
+        .renderPass =  l_GetRenderPass(),
+        .framebuffer = l_GetActiveFramebuffer() 
+    };
+
     const VkRenderPassBeginInfo rpassComp = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .clearValueCount = 1,
@@ -1023,7 +1109,9 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
             0, 1, &memBarrier2, 
             0, NULL, 0, NULL);
 
-    applyPaint(pCmdBuf, &rpassComp);
+    applyPaint(pCmdBuf, &rpassApply);
+
+    compLayerStack(pCmdBuf, &rpassComp);
 
     rasterize(pCmdBuf, &rpassSwap);
 
@@ -1094,7 +1182,8 @@ void r_ClearPaintImage(void)
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
-    vkDestroyPipeline(device, pipelineTextureComp, NULL);
+    vkDestroyPipeline(device, pipelineApplyPaint, NULL);
+    vkDestroyPipeline(device, pipelineLayerStack, NULL);
     tanto_v_FreeImage(&paintImage);
     tanto_v_FreeImage(&textureImage);
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
@@ -1137,7 +1226,7 @@ UboPlayer* r_GetPlayer(void)
 void r_SetPaintMode(const PaintMode mode)
 {
     vkDeviceWaitIdle(device);
-    vkDestroyPipeline(device, pipelineTextureComp, NULL);
+    vkDestroyPipeline(device, pipelineApplyPaint, NULL);
 
     Tanto_R_BlendMode blendMode;
     switch (mode)
@@ -1146,7 +1235,7 @@ void r_SetPaintMode(const PaintMode mode)
         case PAINT_MODE_ERASE: blendMode = TANTO_R_BLEND_MODE_ERASE; break;
     }
 
-    initCompPipeline(blendMode);
+    initApplyPaintPipeline(blendMode);
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
     {
         r_UpdateRenderCommands(i);

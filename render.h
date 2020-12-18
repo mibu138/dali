@@ -13,17 +13,6 @@ typedef enum {
 } r_XformType;
 
 typedef struct {
-    Vec4 clearColor;
-    Vec3 lightDir;
-    float lightIntensity;
-    int   lightType;
-    uint32_t posOffset;
-    uint32_t colorOffset;
-    uint32_t normalOffset;
-    uint32_t uvwOffset;
-} RtPushConstants;
-
-typedef struct {
     Mat4 model;
     Mat4 view;
     Mat4 proj;

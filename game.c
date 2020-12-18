@@ -1,5 +1,6 @@
 #include "game.h"
 #include "render.h"
+#include "layer.h"
 #include "common.h"
 #include "tanto/t_utils.h"
 #include <assert.h>
@@ -271,11 +272,13 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
             case TANTO_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
             case TANTO_KEY_P: r_SavePaintImage(); break;
-            case TANTO_KEY_F: break;
+            case TANTO_KEY_F: l_SetActiveLayer(0);
+            case TANTO_KEY_U: l_CreateLayer(); break;
             case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
-            case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
+            //case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
+            case TANTO_KEY_R: l_SetActiveLayer(1);
             case TANTO_KEY_C: r_ClearPaintImage(); break;
             case TANTO_KEY_I: break;
             default: return;
