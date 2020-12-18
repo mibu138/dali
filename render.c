@@ -1,4 +1,5 @@
 #include "render.h"
+#include "layer.h"
 #include "tanto/v_image.h"
 #include "tanto/v_memory.h"
 #include <memory.h>
@@ -12,6 +13,7 @@
 #include <tanto/r_raytrace.h>
 #include <tanto/v_command.h>
 #include <tanto/r_renderpass.h>
+#include <vulkan/vulkan_core.h>
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
@@ -379,11 +381,40 @@ static void initNonMeshDescriptors(void)
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
 }
 
+static void updateLayerDescriptors(void)
+{
+    const int layerCount = l_GetLayerCount();
+
+    VkDescriptorImageInfo infos[layerCount];
+    VkWriteDescriptorSet  writes[layerCount];
+
+    for (int i = 0; i < layerCount; i++) 
+    {
+        infos[i] = (VkDescriptorImageInfo){
+            .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .imageView   = l_GetImageView(i),
+            .sampler     = l_GetSampler(i)
+        };
+
+        writes[i] = (VkWriteDescriptorSet){
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = i,
+            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstBinding = 6,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &infos[i]
+        };
+    }
+
+    vkUpdateDescriptorSets(device, layerCount, writes, 0, NULL);
+}
+
 static void initDescSetsAndPipeLayouts(void)
 {
     const Tanto_R_DescriptorSet descSets[] = {{
             .id = R_DESC_SET_RASTER,
-            .bindingCount = 6, 
+            .bindingCount = 7, 
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -406,6 +437,10 @@ static void initDescSetsAndPipeLayouts(void)
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             },{ // texture image
                 .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            },{ // layers 
+                .descriptorCount = MAX_LAYERS,
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
@@ -857,6 +892,8 @@ static void cleanUpSwapchainDependent(void)
 
 void r_InitRenderer(void)
 {
+    l_Init((VkExtent2D){PAINT_IMG_SIZE, PAINT_IMG_SIZE}, paintFormat); // eventually will move this out
+
     initSwapRenderPass();
     initCompRenderPass();
     initDescSetsAndPipeLayouts();
@@ -869,6 +906,7 @@ void r_InitRenderer(void)
     createShaderBindingTablePaint();
     createShaderBindingTableSelect();
     initNonMeshDescriptors();
+    updateLayerDescriptors();
 
     brushDim.x = BRUSH_IMG_SIZE;
     brushDim.y = BRUSH_IMG_SIZE;
@@ -1053,6 +1091,7 @@ void r_CleanUp(void)
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
     vkDestroyRenderPass(device, textureCompRenderPass, NULL);
     vkDestroyFramebuffer(device, framebufferTextureComp, NULL);
+    l_CleanUp();
 }
 
 const Tanto_R_Mesh* r_GetMesh(void)
