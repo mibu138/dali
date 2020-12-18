@@ -890,9 +890,16 @@ static void cleanUpSwapchainDependent(void)
     tanto_v_FreeImage(&depthAttachment);
 }
 
+static void onCreateLayer(void)
+{
+    updateLayerDescriptors();
+}
+
 void r_InitRenderer(void)
 {
     l_Init((VkExtent2D){PAINT_IMG_SIZE, PAINT_IMG_SIZE}, paintFormat); // eventually will move this out
+
+    l_SetCreateLayerCallback(onCreateLayer);
 
     initSwapRenderPass();
     initCompRenderPass();
@@ -952,6 +959,8 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
     VkClearValue clearValueDepth = {1.0, 0};
 
     VkClearValue clears[] = {clearValueColor, clearValueDepth};
+
+    // create apply paint frame buffer
 
     const VkRenderPassBeginInfo rpassSwap = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
