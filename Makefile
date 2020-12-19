@@ -57,7 +57,7 @@ shaders: $(SHADERS)
 
 .PHONY: tanto
 tanto:
-	make -C tanto/
+	make -C tanto/ 
 
 clean: 
 	rm -f $(O)/* $(LIB)/$(LIBNAME) $(BIN)/* $(SPV)/*
