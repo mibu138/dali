@@ -225,6 +225,8 @@ static void initPaintAndTextureImage(void)
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &paintImage);
 
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &textureImage);
+
     tanto_v_ClearColorImage(&textureImage);
 }
 
@@ -233,7 +235,7 @@ static void updateMeshDescriptors(void)
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
         .accelerationStructureCount = 1,
-        .pAccelerationStructures    = &topLevelAS
+        .pAccelerationStructures    = &topLevelAS.handle
     };
 
     VkDescriptorBufferInfo vertBufInfo = {
@@ -407,6 +409,7 @@ static void updateLayerDescriptors(void)
 
     for (int i = 0; i < layerCount; i++) 
     {
+        TANTO_DEBUG_PRINT("Writing descriptor for layer: %d", i);
         infos[i] = (VkDescriptorImageInfo){
             .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
             .imageView   = l_GetImageView(i),
@@ -643,38 +646,41 @@ static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
 
-    const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
+    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
-    const VkDeviceSize sbtSize = rtprops.shaderGroupBaseAlignment * 3;
     const VkDeviceSize baseAlignment = stbSelectRegion.offset;
-    const VkDeviceSize rayGenOffset   = baseAlignment;
+    const VkDeviceSize rayGenOffset   = baseAlignment + 0;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
 
     assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
 
-    const VkStridedBufferRegionKHR raygenShaderBindingTable = {
+    VkBufferDeviceAddressInfo addrInfo = {
+        .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
         .buffer = stbSelectRegion.buffer,
-        .offset = rayGenOffset,
-        .stride = progSize,
-        .size   = sbtSize,
     };
 
-    const VkStridedBufferRegionKHR missShaderBindingTable = {
-        .buffer = stbSelectRegion.buffer,
-        .offset = missOffset,
-        .stride = progSize,
-        .size   = sbtSize,
+    VkDeviceAddress address = vkGetBufferDeviceAddress(device, &addrInfo);
+
+    const VkStridedDeviceAddressRegionKHR raygenShaderBindingTable = {
+        .deviceAddress = address + rayGenOffset,
+        .size          = progSize,
+        .stride        = progSize 
     };
 
-    const VkStridedBufferRegionKHR hitShaderBindingTable = {
-        .buffer = stbSelectRegion.buffer,
-        .offset = hitGroupOffset,
-        .stride = progSize,
-        .size   = sbtSize,
+    const VkStridedDeviceAddressRegionKHR missShaderBindingTable = {
+        .deviceAddress = address + missOffset,
+        .size          = progSize,
+        .stride        = progSize
     };
 
-    const VkStridedBufferRegionKHR callableShaderBindingTable = {
+    const VkStridedDeviceAddressRegionKHR hitShaderBindingTable = {
+        .deviceAddress = address + hitGroupOffset,
+        .size          = progSize,
+        .stride        = progSize 
+    };
+
+    const VkStridedDeviceAddressRegionKHR callableShaderBindingTable = {
     };
 
     vkCmdTraceRaysKHR(*cmdBuf, &raygenShaderBindingTable,
@@ -695,40 +701,41 @@ static void paint(const VkCommandBuffer* cmdBuf)
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
 
-    const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
+    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
-    const VkDeviceSize sbtSize = rtprops.shaderGroupBaseAlignment * 3;
     const VkDeviceSize baseAlignment = stbPaintRegion.offset;
-    const VkDeviceSize rayGenOffset   = baseAlignment;
+    const VkDeviceSize rayGenOffset   = baseAlignment + 0;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
 
-    printf("Prog\n");
-
     assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
 
-    const VkStridedBufferRegionKHR raygenShaderBindingTable = {
+    VkBufferDeviceAddressInfo addrInfo = {
+        .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
         .buffer = stbPaintRegion.buffer,
-        .offset = rayGenOffset,
-        .stride = progSize,
-        .size   = sbtSize,
     };
 
-    const VkStridedBufferRegionKHR missShaderBindingTable = {
-        .buffer = stbPaintRegion.buffer,
-        .offset = missOffset,
-        .stride = progSize,
-        .size   = sbtSize,
+    VkDeviceAddress address = vkGetBufferDeviceAddress(device, &addrInfo);
+
+    const VkStridedDeviceAddressRegionKHR raygenShaderBindingTable = {
+        .deviceAddress = address + rayGenOffset,
+        .size          = progSize,
+        .stride        = progSize 
     };
 
-    const VkStridedBufferRegionKHR hitShaderBindingTable = {
-        .buffer = stbPaintRegion.buffer,
-        .offset = hitGroupOffset,
-        .stride = progSize,
-        .size   = sbtSize,
+    const VkStridedDeviceAddressRegionKHR missShaderBindingTable = {
+        .deviceAddress = address + missOffset,
+        .size          = progSize,
+        .stride        = progSize
     };
 
-    const VkStridedBufferRegionKHR callableShaderBindingTable = {
+    const VkStridedDeviceAddressRegionKHR hitShaderBindingTable = {
+        .deviceAddress = address + hitGroupOffset,
+        .size          = progSize,
+        .stride        = progSize 
+    };
+
+    const VkStridedDeviceAddressRegionKHR callableShaderBindingTable = {
     };
 
     vkCmdTraceRaysKHR(*cmdBuf, &raygenShaderBindingTable,
@@ -774,6 +781,7 @@ static void compLayerStack(const VkCommandBuffer* cmdBuf, const VkRenderPassBegi
 
         for (int i = 0; i < layerCount; i++) 
         {
+            TANTO_DEBUG_PRINT("Recording draw for layer: %d", i);
             rasterPushConstants.index = i;
 
             vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RASTER], VK_SHADER_STAGE_FRAGMENT_BIT, 
@@ -841,7 +849,7 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
 static void createShaderBindingTableSelect(void)
 {
-    const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
+    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const uint32_t groupCount = 3;
     const uint32_t groupHandleSize = rtprops.shaderGroupHandleSize;
     const uint32_t baseAlignment = rtprops.shaderGroupBaseAlignment;
@@ -849,6 +857,7 @@ static void createShaderBindingTableSelect(void)
 
     uint8_t shaderHandleData[sbtSize];
 
+    printf("ShaderGroup handle size: %d\n", groupHandleSize);
     printf("ShaderGroup base alignment: %d\n", baseAlignment);
     printf("ShaderGroups total size   : %d\n", sbtSize);
 
@@ -871,7 +880,7 @@ static void createShaderBindingTableSelect(void)
 
 static void createShaderBindingTablePaint(void)
 {
-    const VkPhysicalDeviceRayTracingPropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
+    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const uint32_t groupCount = 3;
     const uint32_t groupHandleSize = rtprops.shaderGroupHandleSize;
     const uint32_t baseAlignment = rtprops.shaderGroupBaseAlignment;
