@@ -131,6 +131,7 @@ int l_CreateLayer(void)
     if (onCreateLayer)
         onCreateLayer();
     TANTO_DEBUG_PRINT("Layer created!");
+    printf("Adding layer. There are now %d layers. Active layer is %d\n", layerStack.layerCount, layerStack.activeLayer);
     return curId;
 }
 
@@ -139,6 +140,7 @@ void l_SetActiveLayer(uint16_t id)
     assert(id < layerStack.layerCount);
     layerStack.activeLayer = id;
     onCreateLayer(); // should get its own call back but this should work for now
+    printf("Setting layer to: %d\n", id);
 }
 
 int l_GetLayerCount(void)
