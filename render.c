@@ -461,8 +461,9 @@ static void initDescSetsAndPipeLayouts(void)
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             },{ // layers 
                 .descriptorCount = MAX_LAYERS,
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+                .bindingFlags    = VK_DESCRIPTOR_BINDING_PARTIALLY_BOUND_BIT, //optional
+                .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         },{
             .id = R_DESC_SET_RAYTRACE,
