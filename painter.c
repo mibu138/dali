@@ -126,6 +126,7 @@ void painter_StartLoop(void)
         tanto_LoopStatsUpdate(&timer, &stats);
 
         //printf("Delta ns: %ld\n", stats.nsDelta);
+        printf("FPS:      %f\n",  1000000000.0 / stats.nsDelta);
 
         tanto_LoopSleep(&stats, NS_TARGET);
     }

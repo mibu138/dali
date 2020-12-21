@@ -70,8 +70,8 @@ static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 static VkRenderPass textureCompRenderPass;
 static VkRenderPass swapchainRenderPass;
 
-#define PAINT_IMG_SIZE 0x1000 // 0x1000 = 4096
-#define BRUSH_IMG_SIZE 0x1000
+#define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
+#define BRUSH_IMG_SIZE 0x2000
 
 typedef enum {
     R_PIPE_LAYOUT_RASTER,
