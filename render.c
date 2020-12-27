@@ -537,66 +537,6 @@ static void initDescSetsAndPipeLayouts(void)
 
 static void initPipelines(void)
 {
-    //const Tanto_R_PipelineInfo pipeInfoRaster = {
-    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-    //    .payload.rasterInfo = {
-    //        .layout     = pipelineLayouts[LAYOUT_RASTER],
-    //        .renderPass = swapchainRenderPass, 
-    //        .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
-    //        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-    //        .vertShader = SPVDIR"/raster-vert.spv", 
-    //        .fragShader = SPVDIR"/raster-frag.spv"
-    //    }};
-
-    const Tanto_R_PipelineInfo pipeInfoRayTrace = {
-        .type     = TANTO_R_PIPELINE_RAYTRACE_TYPE,
-        .payload.rayTraceInfo = {
-            .layout = pipelineLayouts[LAYOUT_RAYTRACE],
-            .raygenCount = 1,
-            .raygenShaders = (char*[]){
-                SPVDIR"/paint-rgen.spv",
-            },
-            .missCount = 1,
-            .missShaders = (char*[]){
-                SPVDIR"/paint-rmiss.spv",
-            },
-            .chitCount = 1,
-            .chitShaders = (char*[]){
-                SPVDIR"/paint-rchit.spv"
-            }
-        }};
-
-    //const Tanto_R_PipelineInfo pipeInfoPost = {
-    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-    //    .payload.rasterInfo = {
-    //        .layout     = pipelineLayouts[LAYOUT_RASTER],
-    //        .renderPass = swapchainRenderPass,
-    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-    //        .frontFace   = VK_FRONT_FACE_CLOCKWISE,
-    //        .blendMode   = TANTO_R_BLEND_MODE_OVER,
-    //        .vertShader = tanto_r_FullscreenTriVertShader(),
-    //        .fragShader = SPVDIR"/post-frag.spv"
-    //    }};
-
-    const Tanto_R_PipelineInfo pipeInfoSelect = {
-        .type     = TANTO_R_PIPELINE_RAYTRACE_TYPE,
-        .payload.rayTraceInfo = {
-            .layout = pipelineLayouts[LAYOUT_RAYTRACE],
-            .raygenCount = 1,
-            .raygenShaders = (char*[]){
-                SPVDIR"/select-rgen.spv",
-            },
-            .missCount = 1,
-            .missShaders = (char*[]){
-                SPVDIR"/select-rmiss.spv",
-            },
-            .chitCount = 1,
-            .chitShaders = (char*[]){
-                SPVDIR"/select-rchit.spv"
-            }
-        }};
-
     const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
         // raster
         .renderPass = swapchainRenderPass, 
@@ -650,10 +590,7 @@ static void initPipelines(void)
     }};
 
     tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
-    //tanto_r_CreateRayTracePipelines(TANTO_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines);
-
-    tanto_r_CreatePipeline(&pipeInfoRayTrace, &raytracePipelines[PIPELINE_RAY_TRACE]);
-    tanto_r_CreatePipeline(&pipeInfoSelect, &raytracePipelines[PIPELINE_SELECT]);
+    tanto_r_CreateRayTracePipelines(TANTO_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines);
 }
 
 static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode)
@@ -1023,10 +960,14 @@ static void cleanUpSwapchainDependent(void)
     {
         vkDestroyFramebuffer(device, swapchainFrameBuffers[i], NULL);
     }
-    //vkDestroyPipeline(device, pipelineRaster, NULL);
-    //vkDestroyPipeline(device, pipelineRayTrace, NULL);
-    //vkDestroyPipeline(device, pipelineSelect, NULL);
-    //vkDestroyPipeline(device, pipelinePost, NULL);
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_RASTER], NULL);
+    graphicsPipelines[PIPELINE_RASTER] = VK_NULL_HANDLE;
+    vkDestroyPipeline(device, raytracePipelines[PIPELINE_RAY_TRACE], NULL);
+    raytracePipelines[PIPELINE_RAY_TRACE] = VK_NULL_HANDLE;
+    vkDestroyPipeline(device, raytracePipelines[PIPELINE_SELECT], NULL);
+    raytracePipelines[PIPELINE_SELECT] = VK_NULL_HANDLE;
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_POST], NULL);
+    graphicsPipelines[PIPELINE_POST] = VK_NULL_HANDLE;
     tanto_v_FreeImage(&depthAttachment);
 }
 
@@ -1251,10 +1192,30 @@ void r_ClearPaintImage(void)
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
-    //vkDestroyPipeline(device, pipelineApplyPaint, NULL);
-    //vkDestroyPipeline(device, pipelineLayerStack, NULL);
+    for (int i = 0; i < TANTO_MAX_PIPELINES; i++) 
+    {
+        if (graphicsPipelines[i] != VK_NULL_HANDLE)
+            vkDestroyPipeline(device, graphicsPipelines[i], NULL);
+        if (raytracePipelines[i] != VK_NULL_HANDLE)
+            vkDestroyPipeline(device, raytracePipelines[i], NULL);
+    }
+    memset(graphicsPipelines, 0, sizeof(graphicsPipelines));
+    memset(raytracePipelines, 0, sizeof(raytracePipelines));
     tanto_v_FreeImage(&paintImage);
     tanto_v_FreeImage(&textureImage);
+    vkDestroyDescriptorPool(device, description.descriptorPool, NULL);
+    for (int i = 0; i < description.descriptorSetCount; i++) 
+    {
+        if (description.descriptorSetLayouts[i])
+            vkDestroyDescriptorSetLayout(device, description.descriptorSetLayouts[i], NULL);
+    }
+    memset(&description, 0, sizeof(description));
+    for (int i = 0; i < TANTO_MAX_PIPELINES; i++) 
+    {
+        if (pipelineLayouts[i])
+            vkDestroyPipelineLayout(device, pipelineLayouts[i], NULL);
+    }
+    memset(&pipelineLayouts, 0, sizeof(pipelineLayouts));
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
     vkDestroyRenderPass(device, textureCompRenderPass, NULL);
     vkDestroyFramebuffer(device, framebufferTextureComp, NULL);
@@ -1295,7 +1256,7 @@ UboPlayer* r_GetPlayer(void)
 void r_SetPaintMode(const PaintMode mode)
 {
     vkDeviceWaitIdle(device);
-    //vkDestroyPipeline(device, pipelineApplyPaint, NULL);
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_APPLY_PAINT], NULL);
 
     Tanto_R_BlendMode blendMode;
     switch (mode)
