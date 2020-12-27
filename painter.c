@@ -31,7 +31,7 @@ void painter_Init(void)
 #else
     tanto_v_config.validationEnabled = false;
 #endif
-    tanto_d_Init();
+    tanto_d_Init(NULL);
     printf("Display initialized\n");
     tanto_v_Init();
     printf("Video initialized\n");
@@ -126,7 +126,7 @@ void painter_StartLoop(void)
         tanto_LoopStatsUpdate(&timer, &stats);
 
         //printf("Delta ns: %ld\n", stats.nsDelta);
-        printf("FPS:      %f\n",  1000000000.0 / stats.nsDelta);
+        //printf("FPS:      %f\n",  1000000000.0 / stats.nsDelta);
 
         tanto_LoopSleep(&stats, NS_TARGET);
     }
