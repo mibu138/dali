@@ -46,12 +46,11 @@ static Tanto_R_Mesh          renderMesh;
 static RtPushConstants     rtPushConstants;
 static RasterPushConstants rasterPushConstants;
 
-static VkPipeline      pipelineLayerStack;
-static VkPipeline      pipelineApplyPaint;
-static VkPipeline      pipelineRaster;
-static VkPipeline      pipelineRayTrace;
-static VkPipeline      pipelinePost;
-static VkPipeline      pipelineSelect;
+static VkPipelineLayout pipelineLayouts[TANTO_MAX_PIPELINES];
+static VkPipeline       graphicsPipelines[TANTO_MAX_PIPELINES];
+static VkPipeline       raytracePipelines[TANTO_MAX_PIPELINES];
+
+static Tanto_R_Description description;
 
 static Tanto_V_Image   depthAttachment;
 static Tanto_V_Image   paintImage;
@@ -73,17 +72,29 @@ static VkRenderPass swapchainRenderPass;
 #define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
 #define BRUSH_IMG_SIZE 0x2000
 
-typedef enum {
-    R_PIPE_LAYOUT_RASTER,
-    R_PIPE_LAYOUT_RAYTRACE,
-    R_PIPE_LAYOUT_POST,
-} R_PipelineLayoutId;
+enum {
+    LAYOUT_RASTER,
+    LAYOUT_RAYTRACE,
+    LAYOUT_POST,
+};
 
-typedef enum {
-    R_DESC_SET_RASTER,
-    R_DESC_SET_RAYTRACE,
-    R_DESC_SET_POST,
-} R_DescriptorSetId;
+enum {
+    DESC_SET_RASTER,
+    DESC_SET_RAYTRACE,
+    DESC_SET_POST,
+};
+
+enum {
+    PIPELINE_RASTER,
+    PIPELINE_POST,
+    PIPELINE_LAYER_STACK,
+    PIPELINE_APPLY_PAINT,
+};
+
+enum {
+    PIPELINE_RAY_TRACE,
+    PIPELINE_SELECT,
+};
 
 static void initOffscreenAttachments(void)
 {
@@ -253,7 +264,7 @@ static void updateMeshDescriptors(void)
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER],
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -261,7 +272,7 @@ static void updateMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER],
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -269,7 +280,7 @@ static void updateMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
+            .dstSet = description.descriptorSets[DESC_SET_RAYTRACE],
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
@@ -342,7 +353,7 @@ static void initNonMeshDescriptors(void)
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER],
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -350,7 +361,7 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER],
             .dstBinding = 3,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -358,7 +369,7 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER],
             .dstBinding = 4,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -366,7 +377,7 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER],
             .dstBinding = 5,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -374,7 +385,7 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
+            .dstSet = description.descriptorSets[DESC_SET_RAYTRACE],
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -382,7 +393,7 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_RAYTRACE],
+            .dstSet = description.descriptorSets[DESC_SET_RAYTRACE],
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -390,7 +401,7 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = descriptorSets[R_DESC_SET_POST],
+            .dstSet = description.descriptorSets[DESC_SET_POST],
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -419,7 +430,7 @@ static void updateLayerDescriptors(void)
         writes[i] = (VkWriteDescriptorSet){
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = i,
-            .dstSet = descriptorSets[R_DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER],
             .dstBinding = 6,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
@@ -432,8 +443,7 @@ static void updateLayerDescriptors(void)
 
 static void initDescSetsAndPipeLayouts(void)
 {
-    const Tanto_R_DescriptorSet descSets[] = {{
-            .id = R_DESC_SET_RASTER,
+    const Tanto_R_DescriptorSetInfo descSets[] = {{
             .bindingCount = 7, 
             .bindings = {{
                 .descriptorCount = 1,
@@ -466,7 +476,6 @@ static void initDescSetsAndPipeLayouts(void)
                 .stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         },{
-            .id = R_DESC_SET_RAYTRACE,
             .bindingCount = 3,
             .bindings = {{
                 .descriptorCount = 1,
@@ -482,7 +491,6 @@ static void initDescSetsAndPipeLayouts(void)
                 .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
             }}
         },{
-            .id = R_DESC_SET_POST,
             .bindingCount = 1,
             .bindings = {{
                 .descriptorCount = 1,
@@ -491,6 +499,8 @@ static void initDescSetsAndPipeLayouts(void)
             }}
         }
     };
+
+    tanto_r_CreateDescriptorSets(TANTO_ARRAY_SIZE(descSets), descSets, &description);
 
     const VkPushConstantRange pushConstantRt = {
         .stageFlags = 
@@ -507,46 +517,42 @@ static void initDescSetsAndPipeLayouts(void)
         .size = sizeof(RtPushConstants)
     };
 
-    const Tanto_R_PipelineLayout pipelayouts[] = {{
-        .id = R_PIPE_LAYOUT_RASTER, 
+    const Tanto_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = 1, 
-        .descriptorSetIds = {R_DESC_SET_RASTER},
+        .descriptorSetLayouts = description.descriptorSetLayouts,
         .pushConstantCount = 1,
-        .pushConstantsRanges = {pushConstantRaster}
+        .pushConstantsRanges = &pushConstantRaster
     },{
-        .id = R_PIPE_LAYOUT_RAYTRACE, 
         .descriptorSetCount = 3, 
-        .descriptorSetIds = {R_DESC_SET_RASTER, R_DESC_SET_RAYTRACE, R_DESC_SET_POST}, 
+        .descriptorSetLayouts = description.descriptorSetLayouts,
         .pushConstantCount = 1, 
-        .pushConstantsRanges = {pushConstantRt}
+        .pushConstantsRanges = &pushConstantRt,
     },{
-        .id = R_PIPE_LAYOUT_POST, 
         .descriptorSetCount = 1, 
-        .descriptorSetIds = {R_DESC_SET_POST}
+        .descriptorSetLayouts = &description.descriptorSetLayouts[DESC_SET_POST]
     }};
 
-    tanto_r_InitDescriptorSets(descSets, TANTO_ARRAY_SIZE(descSets));
-    tanto_r_InitPipelineLayouts(pipelayouts, TANTO_ARRAY_SIZE(pipelayouts));
+    tanto_r_CreatePipelineLayouts(TANTO_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
 }
 
 static void initPipelines(void)
 {
-    const Tanto_R_PipelineInfo pipeInfoRaster = {
-        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-        .layoutId = R_PIPE_LAYOUT_RASTER,
-        .payload.rasterInfo = {
-            .renderPass = swapchainRenderPass, 
-            .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
-            .frontFace = VK_FRONT_FACE_CLOCKWISE,
-            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-            .vertShader = SPVDIR"/raster-vert.spv", 
-            .fragShader = SPVDIR"/raster-frag.spv"
-        }};
+    //const Tanto_R_PipelineInfo pipeInfoRaster = {
+    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+    //    .payload.rasterInfo = {
+    //        .layout     = pipelineLayouts[LAYOUT_RASTER],
+    //        .renderPass = swapchainRenderPass, 
+    //        .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
+    //        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+    //        .vertShader = SPVDIR"/raster-vert.spv", 
+    //        .fragShader = SPVDIR"/raster-frag.spv"
+    //    }};
 
     const Tanto_R_PipelineInfo pipeInfoRayTrace = {
         .type     = TANTO_R_PIPELINE_RAYTRACE_TYPE,
-        .layoutId = R_PIPE_LAYOUT_RAYTRACE,
         .payload.rayTraceInfo = {
+            .layout = pipelineLayouts[LAYOUT_RAYTRACE],
             .raygenCount = 1,
             .raygenShaders = (char*[]){
                 SPVDIR"/paint-rgen.spv",
@@ -561,22 +567,22 @@ static void initPipelines(void)
             }
         }};
 
-    const Tanto_R_PipelineInfo pipeInfoPost = {
-        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-        .layoutId = R_PIPE_LAYOUT_POST,
-        .payload.rasterInfo = {
-            .renderPass = swapchainRenderPass,
-            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-            .frontFace   = VK_FRONT_FACE_CLOCKWISE,
-            .blendMode   = TANTO_R_BLEND_MODE_OVER,
-            .vertShader = tanto_r_FullscreenTriVertShader(),
-            .fragShader = SPVDIR"/post-frag.spv"
-        }};
+    //const Tanto_R_PipelineInfo pipeInfoPost = {
+    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+    //    .payload.rasterInfo = {
+    //        .layout     = pipelineLayouts[LAYOUT_RASTER],
+    //        .renderPass = swapchainRenderPass,
+    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+    //        .frontFace   = VK_FRONT_FACE_CLOCKWISE,
+    //        .blendMode   = TANTO_R_BLEND_MODE_OVER,
+    //        .vertShader = tanto_r_FullscreenTriVertShader(),
+    //        .fragShader = SPVDIR"/post-frag.spv"
+    //    }};
 
     const Tanto_R_PipelineInfo pipeInfoSelect = {
         .type     = TANTO_R_PIPELINE_RAYTRACE_TYPE,
-        .layoutId = R_PIPE_LAYOUT_RAYTRACE,
         .payload.rayTraceInfo = {
+            .layout = pipelineLayouts[LAYOUT_RAYTRACE],
             .raygenCount = 1,
             .raygenShaders = (char*[]){
                 SPVDIR"/select-rgen.spv",
@@ -591,10 +597,63 @@ static void initPipelines(void)
             }
         }};
 
-    tanto_r_CreatePipeline(&pipeInfoRaster, &pipelineRaster);
-    tanto_r_CreatePipeline(&pipeInfoRayTrace, &pipelineRayTrace);
-    tanto_r_CreatePipeline(&pipeInfoPost, &pipelinePost);
-    tanto_r_CreatePipeline(&pipeInfoSelect, &pipelineSelect);
+    const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
+        // raster
+        .renderPass = swapchainRenderPass, 
+        .layout     = pipelineLayouts[LAYOUT_RASTER],
+        .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .vertShader = SPVDIR"/raster-vert.spv", 
+        .fragShader = SPVDIR"/raster-frag.spv"
+    },{
+        // post
+        .renderPass = swapchainRenderPass,
+        .layout     = pipelineLayouts[LAYOUT_POST],
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .frontFace   = VK_FRONT_FACE_CLOCKWISE,
+        .blendMode   = TANTO_R_BLEND_MODE_OVER,
+        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .fragShader = SPVDIR"/post-frag.spv"
+    }};
+
+    const Tanto_R_RayTracePipelineInfo pipeInfosRT[] = {{
+        // ray trace
+        .layout = pipelineLayouts[LAYOUT_RAYTRACE],
+        .raygenCount = 1,
+        .raygenShaders = (char*[]){
+            SPVDIR"/paint-rgen.spv",
+        },
+        .missCount = 1,
+        .missShaders = (char*[]){
+            SPVDIR"/paint-rmiss.spv",
+        },
+        .chitCount = 1,
+        .chitShaders = (char*[]){
+            SPVDIR"/paint-rchit.spv"
+        }
+    },{
+        // select
+        .layout = pipelineLayouts[LAYOUT_RAYTRACE],
+        .raygenCount = 1,
+        .raygenShaders = (char*[]){
+            SPVDIR"/select-rgen.spv",
+        },
+        .missCount = 1,
+        .missShaders = (char*[]){
+            SPVDIR"/select-rmiss.spv",
+        },
+        .chitCount = 1,
+        .chitShaders = (char*[]){
+            SPVDIR"/select-rchit.spv"
+        }
+    }};
+
+    tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
+    //tanto_r_CreateRayTracePipelines(TANTO_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines);
+
+    tanto_r_CreatePipeline(&pipeInfoRayTrace, &raytracePipelines[PIPELINE_RAY_TRACE]);
+    tanto_r_CreatePipeline(&pipeInfoSelect, &raytracePipelines[PIPELINE_SELECT]);
 }
 
 static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode)
@@ -603,8 +662,8 @@ static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode)
 
     const Tanto_R_PipelineInfo pipeInfoTextureComp = {
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-        .layoutId = R_PIPE_LAYOUT_RASTER,
         .payload.rasterInfo = {
+            .layout  = pipelineLayouts[LAYOUT_RASTER],
             .renderPass = textureCompRenderPass, 
             .frontFace = VK_FRONT_FACE_CLOCKWISE,
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
@@ -614,15 +673,15 @@ static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode)
             .fragShader = SPVDIR"/applyPaint-frag.spv"
         }};
 
-    tanto_r_CreatePipeline(&pipeInfoTextureComp, &pipelineApplyPaint);
+    tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_APPLY_PAINT]);
 }
 
 static void initLayerStackPipeline(void)
 {
     const Tanto_R_PipelineInfo pipeInfoTextureComp = {
         .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-        .layoutId = R_PIPE_LAYOUT_RASTER,
         .payload.rasterInfo = {
+            .layout = pipelineLayouts[LAYOUT_RASTER],
             .renderPass = textureCompRenderPass, 
             .frontFace = VK_FRONT_FACE_CLOCKWISE,
             .sampleCount = VK_SAMPLE_COUNT_1_BIT,
@@ -632,17 +691,17 @@ static void initLayerStackPipeline(void)
             .fragShader = SPVDIR"/layerStack-frag.spv"
         }};
 
-    tanto_r_CreatePipeline(&pipeInfoTextureComp, &pipelineLayerStack);
+    tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_LAYER_STACK]);
 }
 
 static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
 {
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineSelect); 
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_SELECT]); 
 
     vkCmdBindDescriptorSets(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
-            pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 0, 3, descriptorSets, 0, NULL);
+            pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 
+    vkCmdPushConstants(*cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], 
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
@@ -692,12 +751,12 @@ static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
 
 static void paint(const VkCommandBuffer* cmdBuf)
 {
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, pipelineRayTrace);
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_RAY_TRACE]);
 
     vkCmdBindDescriptorSets(*cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
-            pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 0, 3, descriptorSets, 0, NULL);
+            pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RAYTRACE], 
+    vkCmdPushConstants(*cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], 
         VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
         VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
         VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
@@ -749,13 +808,13 @@ static void paint(const VkCommandBuffer* cmdBuf)
 
 static void applyPaint(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
 {
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineApplyPaint);
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_APPLY_PAINT]);
 
     vkCmdBindDescriptorSets(
         *cmdBuf, 
         VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        pipelineLayouts[R_PIPE_LAYOUT_RASTER], 
-        0, 1, &descriptorSets[R_DESC_SET_RASTER], 
+        pipelineLayouts[LAYOUT_RASTER], 
+        0, 1, &description.descriptorSets[DESC_SET_RASTER], 
         0, NULL);
 
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -767,13 +826,13 @@ static void applyPaint(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInf
 
 static void compLayerStack(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
 {
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayerStack);
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_LAYER_STACK]);
 
     vkCmdBindDescriptorSets(
         *cmdBuf, 
         VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        pipelineLayouts[R_PIPE_LAYOUT_RASTER], 
-        0, 1, &descriptorSets[R_DESC_SET_RASTER], 
+        pipelineLayouts[LAYOUT_RASTER], 
+        0, 1, &description.descriptorSets[DESC_SET_RASTER], 
         0, NULL);
 
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -785,7 +844,7 @@ static void compLayerStack(const VkCommandBuffer* cmdBuf, const VkRenderPassBegi
             TANTO_DEBUG_PRINT("Recording draw for layer: %d", i);
             rasterPushConstants.index = i;
 
-            vkCmdPushConstants(*cmdBuf, pipelineLayouts[R_PIPE_LAYOUT_RASTER], VK_SHADER_STAGE_FRAGMENT_BIT, 
+            vkCmdPushConstants(*cmdBuf, pipelineLayouts[LAYOUT_RASTER], VK_SHADER_STAGE_FRAGMENT_BIT, 
                     0, sizeof(RasterPushConstants), &rasterPushConstants);
 
             vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
@@ -796,13 +855,13 @@ static void compLayerStack(const VkCommandBuffer* cmdBuf, const VkRenderPassBegi
 
 static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo)
 {
-    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineRaster);
+    vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_RASTER]);
 
     vkCmdBindDescriptorSets(
         *cmdBuf, 
         VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        pipelineLayouts[R_PIPE_LAYOUT_RASTER], 
-        0, 1, &descriptorSets[R_DESC_SET_RASTER], 
+        pipelineLayouts[LAYOUT_RASTER], 
+        0, 1, &description.descriptorSets[DESC_SET_RASTER], 
         0, NULL);
 
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
@@ -834,13 +893,13 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
             renderMesh.indexCount, 1, 0, 
             0, 0);
 
-        vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelinePost);
+        vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_POST]);
 
         vkCmdBindDescriptorSets(
             *cmdBuf, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            pipelineLayouts[R_PIPE_LAYOUT_POST], 
-            0, 1, &descriptorSets[R_DESC_SET_POST],
+            pipelineLayouts[LAYOUT_POST], 
+            0, 1, &description.descriptorSets[DESC_SET_POST],
             0, NULL);
 
         vkCmdDraw(*cmdBuf, 3, 1, 0, 0);
@@ -863,7 +922,7 @@ static void createShaderBindingTableSelect(void)
     printf("ShaderGroups total size   : %d\n", sbtSize);
 
     VkResult r;
-    r = vkGetRayTracingShaderGroupHandlesKHR(device, pipelineSelect, 0, groupCount, sbtSize, shaderHandleData);
+    r = vkGetRayTracingShaderGroupHandlesKHR(device, raytracePipelines[PIPELINE_SELECT], 0, groupCount, sbtSize, shaderHandleData);
     assert( VK_SUCCESS == r );
     stbSelectRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
@@ -892,7 +951,7 @@ static void createShaderBindingTablePaint(void)
     printf("ShaderGroup base alignment: %d\n", baseAlignment);
     printf("ShaderGroups total size   : %d\n", sbtSize);
 
-    V_ASSERT( vkGetRayTracingShaderGroupHandlesKHR(device, pipelineRayTrace, 0, groupCount, sbtSize, shaderHandleData) );
+    V_ASSERT( vkGetRayTracingShaderGroupHandlesKHR(device, raytracePipelines[PIPELINE_RAY_TRACE], 0, groupCount, sbtSize, shaderHandleData) );
     stbPaintRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
@@ -964,10 +1023,10 @@ static void cleanUpSwapchainDependent(void)
     {
         vkDestroyFramebuffer(device, swapchainFrameBuffers[i], NULL);
     }
-    vkDestroyPipeline(device, pipelineRaster, NULL);
-    vkDestroyPipeline(device, pipelineRayTrace, NULL);
-    vkDestroyPipeline(device, pipelineSelect, NULL);
-    vkDestroyPipeline(device, pipelinePost, NULL);
+    //vkDestroyPipeline(device, pipelineRaster, NULL);
+    //vkDestroyPipeline(device, pipelineRayTrace, NULL);
+    //vkDestroyPipeline(device, pipelineSelect, NULL);
+    //vkDestroyPipeline(device, pipelinePost, NULL);
     tanto_v_FreeImage(&depthAttachment);
 }
 
@@ -1192,8 +1251,8 @@ void r_ClearPaintImage(void)
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
-    vkDestroyPipeline(device, pipelineApplyPaint, NULL);
-    vkDestroyPipeline(device, pipelineLayerStack, NULL);
+    //vkDestroyPipeline(device, pipelineApplyPaint, NULL);
+    //vkDestroyPipeline(device, pipelineLayerStack, NULL);
     tanto_v_FreeImage(&paintImage);
     tanto_v_FreeImage(&textureImage);
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
@@ -1236,7 +1295,7 @@ UboPlayer* r_GetPlayer(void)
 void r_SetPaintMode(const PaintMode mode)
 {
     vkDeviceWaitIdle(device);
-    vkDestroyPipeline(device, pipelineApplyPaint, NULL);
+    //vkDestroyPipeline(device, pipelineApplyPaint, NULL);
 
     Tanto_R_BlendMode blendMode;
     switch (mode)
