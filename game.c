@@ -255,7 +255,7 @@ void g_BindToPlayer(UboPlayer* ubo)
     uboPlayer = ubo;
 }
 
-void g_Responder(const Tanto_I_Event *event)
+bool g_Responder(const Tanto_I_Event *event)
 {
     switch (event->type) 
     {
@@ -281,7 +281,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_K: l_SetActiveLayer(1);
             case TANTO_KEY_C: r_ClearPaintImage(); break;
             case TANTO_KEY_I: break;
-            default: return;
+            default: return true;
         } break;
         case TANTO_I_KEYUP:   switch (event->data.keyCode)
         {
@@ -293,7 +293,7 @@ void g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_Q: moveDown = false; break;
             case TANTO_KEY_SPACE: mode = MODE_DO_NOTHING; break;
             case TANTO_KEY_CTRL: tumbleDown = false; break;
-            default: return;
+            default: return true;
         } break;
         case TANTO_I_MOTION: 
         {
@@ -339,6 +339,7 @@ void g_Responder(const Tanto_I_Event *event)
         } break;
         default: break;
     }
+    return true;
 }
 
 void g_Update(void)

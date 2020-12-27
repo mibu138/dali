@@ -12,7 +12,7 @@ struct Tanto_I_Event;
 extern G_GameState gameState;
 
 void g_Init(void);
-void g_Responder(const struct Tanto_I_Event *event);
+bool g_Responder(const struct Tanto_I_Event *event);
 void g_Update(void);
 void g_SetColor(const float r, const float g, const float b);
 void g_SetRadius(const float r);
