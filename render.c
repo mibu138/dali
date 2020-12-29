@@ -597,38 +597,60 @@ static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode)
 {
     assert(blendMode != TANTO_R_BLEND_MODE_NONE);
 
-    const Tanto_R_PipelineInfo pipeInfoTextureComp = {
-        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-        .payload.rasterInfo = {
-            .layout  = pipelineLayouts[LAYOUT_RASTER],
-            .renderPass = textureCompRenderPass, 
-            .frontFace = VK_FRONT_FACE_CLOCKWISE,
-            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-            .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
-            .blendMode   = blendMode,
-            .vertShader = tanto_r_FullscreenTriVertShader(),
-            .fragShader = SPVDIR"/applyPaint-frag.spv"
-        }};
+    const Tanto_R_GraphicsPipelineInfo pipeInfo = {
+        .layout  = pipelineLayouts[LAYOUT_RASTER],
+        .renderPass = textureCompRenderPass, 
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
+        .blendMode   = blendMode,
+        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .fragShader = SPVDIR"/applyPaint-frag.spv"
+    };
+    //const Tanto_R_PipelineInfo pipeInfoTextureComp = {
+    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+    //    .payload.rasterInfo = {
+    //        .layout  = pipelineLayouts[LAYOUT_RASTER],
+    //        .renderPass = textureCompRenderPass, 
+    //        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+    //        .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
+    //        .blendMode   = blendMode,
+    //        .vertShader = tanto_r_FullscreenTriVertShader(),
+    //        .fragShader = SPVDIR"/applyPaint-frag.spv"
+    //    }};
 
-    tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_APPLY_PAINT]);
+    //tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_APPLY_PAINT]);
+    tanto_r_CreateGraphicsPipelines(1, &pipeInfo, &graphicsPipelines[PIPELINE_APPLY_PAINT]);
 }
 
 static void initLayerStackPipeline(void)
 {
-    const Tanto_R_PipelineInfo pipeInfoTextureComp = {
-        .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-        .payload.rasterInfo = {
-            .layout = pipelineLayouts[LAYOUT_RASTER],
-            .renderPass = textureCompRenderPass, 
-            .frontFace = VK_FRONT_FACE_CLOCKWISE,
-            .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-            .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
-            .blendMode   = TANTO_R_BLEND_MODE_OVER,
-            .vertShader = tanto_r_FullscreenTriVertShader(),
-            .fragShader = SPVDIR"/layerStack-frag.spv"
-        }};
+    const Tanto_R_GraphicsPipelineInfo pipeInfo = {
+        .layout = pipelineLayouts[LAYOUT_RASTER],
+        .renderPass = textureCompRenderPass, 
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
+        .blendMode   = TANTO_R_BLEND_MODE_OVER,
+        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .fragShader = SPVDIR"/layerStack-frag.spv"
+    };
+    //const Tanto_R_PipelineInfo pipeInfoTextureComp = {
+    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
+    //    .payload.rasterInfo = {
+    //        .layout = pipelineLayouts[LAYOUT_RASTER],
+    //        .renderPass = textureCompRenderPass, 
+    //        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+    //        .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
+    //        .blendMode   = TANTO_R_BLEND_MODE_OVER,
+    //        .vertShader = tanto_r_FullscreenTriVertShader(),
+    //        .fragShader = SPVDIR"/layerStack-frag.spv"
+    //    }};
 
-    tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_LAYER_STACK]);
+    //tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_LAYER_STACK]);
+    tanto_r_CreateGraphicsPipelines(1, &pipeInfo, &graphicsPipelines[PIPELINE_LAYER_STACK]);
 }
 
 static void rayTraceSelect(const VkCommandBuffer* cmdBuf)
