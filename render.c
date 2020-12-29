@@ -50,7 +50,8 @@ static VkPipelineLayout pipelineLayouts[TANTO_MAX_PIPELINES];
 static VkPipeline       graphicsPipelines[TANTO_MAX_PIPELINES];
 static VkPipeline       raytracePipelines[TANTO_MAX_PIPELINES];
 
-static Tanto_R_Description description;
+static VkDescriptorSetLayout descriptorSetLayouts[TANTO_MAX_DESCRIPTOR_SETS];
+static Tanto_R_Description   description;
 
 static Tanto_V_Image   depthAttachment;
 static Tanto_V_Image   paintImage;
@@ -500,7 +501,9 @@ static void initDescSetsAndPipeLayouts(void)
         }
     };
 
-    tanto_r_CreateDescriptorSets(TANTO_ARRAY_SIZE(descSets), descSets, &description);
+    tanto_r_CreateDescriptorSetLayouts(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts);
+
+    tanto_r_CreateDescriptorSets(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
 
     const VkPushConstantRange pushConstantRt = {
         .stageFlags = 
@@ -519,17 +522,17 @@ static void initDescSetsAndPipeLayouts(void)
 
     const Tanto_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = 1, 
-        .descriptorSetLayouts = description.descriptorSetLayouts,
+        .descriptorSetLayouts = descriptorSetLayouts,
         .pushConstantCount = 1,
         .pushConstantsRanges = &pushConstantRaster
     },{
         .descriptorSetCount = 3, 
-        .descriptorSetLayouts = description.descriptorSetLayouts,
+        .descriptorSetLayouts = descriptorSetLayouts,
         .pushConstantCount = 1, 
         .pushConstantsRanges = &pushConstantRt,
     },{
         .descriptorSetCount = 1, 
-        .descriptorSetLayouts = &description.descriptorSetLayouts[DESC_SET_POST]
+        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
     }};
 
     tanto_r_CreatePipelineLayouts(TANTO_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
@@ -1003,6 +1006,20 @@ static void onCreateLayer(void)
     }
 }
 
+static void onRecreateSwapchain(void)
+{
+    cleanUpSwapchainDependent();
+
+    initOffscreenAttachments();
+    initPipelines();
+    initFramebuffers();
+
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        r_UpdateRenderCommands(i);
+    }
+}
+
 void r_InitRenderer(void)
 {
     l_Init((VkExtent2D){PAINT_IMG_SIZE, PAINT_IMG_SIZE}, paintFormat); // eventually will move this out
@@ -1029,6 +1046,8 @@ void r_InitRenderer(void)
 
     initTextureCompFramebuffer();
     initFramebuffers();
+
+    tanto_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
 }
 
 int r_GetSelectionPos(Vec3* v)
@@ -1165,22 +1184,6 @@ void r_ClearMesh(void)
     tanto_r_FreeMesh(renderMesh);
 }
 
-void r_RecreateSwapchain(void)
-{
-    vkDeviceWaitIdle(device);
-    cleanUpSwapchainDependent();
-
-    tanto_r_RecreateSwapchain();
-    initOffscreenAttachments();
-    initPipelines();
-    initFramebuffers();
-
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
-    {
-        r_UpdateRenderCommands(i);
-    }
-}
-
 void r_SavePaintImage(void)
 {
     printf("Please enter a file name with extension.\n");
@@ -1228,8 +1231,8 @@ void r_CleanUp(void)
     vkDestroyDescriptorPool(device, description.descriptorPool, NULL);
     for (int i = 0; i < description.descriptorSetCount; i++) 
     {
-        if (description.descriptorSetLayouts[i])
-            vkDestroyDescriptorSetLayout(device, description.descriptorSetLayouts[i], NULL);
+        if (descriptorSetLayouts[i])
+            vkDestroyDescriptorSetLayout(device, descriptorSetLayouts[i], NULL);
     }
     memset(&description, 0, sizeof(description));
     for (int i = 0; i < TANTO_MAX_PIPELINES; i++) 

@@ -118,9 +118,6 @@ void painter_StartLoop(void)
             }
         }
 
-        if (!presentationSuccess)
-            r_RecreateSwapchain();
-
         tanto_TimerStop(&timer);
 
         tanto_LoopStatsUpdate(&timer, &stats);
