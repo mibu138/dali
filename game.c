@@ -8,6 +8,7 @@
 #include <tanto/t_def.h>
 #include <tanto/i_input.h>
 #include <tanto/v_video.h>
+#include <tanto/u_ui.h>
 
 
 static bool zoomIn;
@@ -70,6 +71,8 @@ Brush* brush;
 UboPlayer* uboPlayer;
 
 const Vec3 UP_VEC = {0, 1, 0};
+
+static Tanto_U_Widget* slider0;
 
 static void setViewerPivotByIntersection(void)
 {
@@ -218,7 +221,6 @@ static void handleMouseMovement(void)
     }
 }
 
-
 void g_Init(void)
 {
     player.pos = (Vec3){0, 0., 3};
@@ -235,6 +237,9 @@ void g_Init(void)
     projInvMat = r_GetXform(R_XFORM_PROJ_INV);
     brush = r_GetBrush();
     uboPlayer = r_GetPlayer();
+
+    slider0 = tanto_u_CreateSlider(0, 40, NULL);
+
 }
 
 void g_BindToView(Mat4* view, Mat4* viewInv)

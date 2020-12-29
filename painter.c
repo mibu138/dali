@@ -18,6 +18,7 @@
 #include <tanto/r_raytrace.h>
 #include <tanto/t_utils.h>
 #include <tanto/i_input.h>
+#include <tanto/u_ui.h>
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
 //#define NS_TARGET 500000000
@@ -32,15 +33,11 @@ void painter_Init(void)
     tanto_v_config.validationEnabled = false;
 #endif
     tanto_d_Init(NULL);
-    printf("Display initialized\n");
     tanto_v_Init();
-    printf("Video initialized\n");
     tanto_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
-    printf("Swapchain initialized\n");
     tanto_r_Init();
-    printf("Renderer initialized\n");
     tanto_i_Init();
-    printf("Input initialized\n");
+    tanto_u_Init();
     tanto_i_Subscribe(g_Responder);
     r_InitRenderer();
     g_Init();
