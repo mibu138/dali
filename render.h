@@ -42,7 +42,7 @@ typedef enum {
 } PaintMode;
 
 void  r_InitRenderer(void);
-void  r_UpdateRenderCommands(const int8_t frameIndex);
+void  r_Render(void);
 int   r_GetSelectionPos(Vec3* v);
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);

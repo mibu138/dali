@@ -71,6 +71,8 @@ static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 static VkRenderPass textureCompRenderPass;
 static VkRenderPass swapchainRenderPass;
 
+static void updateRenderCommands(const int8_t frameIndex);
+
 #define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
 #define BRUSH_IMG_SIZE 0x2000
 
@@ -1003,83 +1005,19 @@ static void onCreateLayer(void)
     updateLayerDescriptors();
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
     {
-        r_UpdateRenderCommands(i);
+        updateRenderCommands(i);
     }
 }
 
-static void onRecreateSwapchain(void)
-{
-    cleanUpSwapchainDependent();
-
-    initOffscreenAttachments();
-    initPipelines();
-    initFramebuffers();
-
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
-    {
-        r_UpdateRenderCommands(i);
-    }
-}
-
-void r_InitRenderer(void)
-{
-    l_Init((VkExtent2D){PAINT_IMG_SIZE, PAINT_IMG_SIZE}, paintFormat); // eventually will move this out
-
-    l_SetCreateLayerCallback(onCreateLayer);
-
-    initSwapRenderPass();
-    initCompRenderPass();
-    initDescSetsAndPipeLayouts();
-    initPipelines();
-    initApplyPaintPipeline(TANTO_R_BLEND_MODE_OVER);
-    initLayerStackPipeline();
-
-    initOffscreenAttachments();
-    initPaintAndTextureImage();
-
-    createShaderBindingTablePaint();
-    createShaderBindingTableSelect();
-    initNonMeshDescriptors();
-    updateLayerDescriptors();
-
-    brushDim.x = BRUSH_IMG_SIZE;
-    brushDim.y = BRUSH_IMG_SIZE;
-
-    initTextureCompFramebuffer();
-    initFramebuffers();
-
-    tanto_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
-}
-
-int r_GetSelectionPos(Vec3* v)
-{
-    Tanto_V_CommandPool pool = tanto_v_RequestOneTimeUseCommand();
-
-    rayTraceSelect(&pool.buffer);
-
-    tanto_v_SubmitOneTimeCommandAndWait(&pool, 0);
-
-    Selection* sel = (Selection*)selectionRegion.hostData;
-    if (sel->hit)
-    {
-        v->x[0] = sel->x;
-        v->x[1] = sel->y;
-        v->x[2] = sel->z;
-        return 1;
-    }
-    else
-        return 0;
-}
-
-void r_UpdateRenderCommands(const int8_t frameIndex)
+static void updateRenderCommands(const int8_t frameIndex)
 {
     updatePushConstants();
 
     Tanto_R_Frame* frame = tanto_r_GetFrame(frameIndex);
-    vkResetCommandPool(device, frame->commandPool, 0);
+    vkResetCommandPool(device, frame->command.commandPool, 0);
     VkCommandBufferBeginInfo cbbi = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
 
-    VkCommandBuffer* pCmdBuf = &frame->commandBuffer; 
+    VkCommandBuffer* pCmdBuf = &frame->command.commandBuffer; 
 
     V_ASSERT( vkBeginCommandBuffer(*pCmdBuf, &cbbi) );
 
@@ -1167,9 +1105,83 @@ void r_UpdateRenderCommands(const int8_t frameIndex)
 
     rasterize(pCmdBuf, &rpassSwap);
 
-    tanto_u_render(*pCmdBuf, frameIndex);
-
     V_ASSERT( vkEndCommandBuffer(*pCmdBuf) );
+}
+
+static void onRecreateSwapchain(void)
+{
+    cleanUpSwapchainDependent();
+
+    initOffscreenAttachments();
+    initPipelines();
+    initFramebuffers();
+
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        updateRenderCommands(i);
+    }
+}
+
+void r_InitRenderer(void)
+{
+    l_Init((VkExtent2D){PAINT_IMG_SIZE, PAINT_IMG_SIZE}, paintFormat); // eventually will move this out
+
+    l_SetCreateLayerCallback(onCreateLayer);
+
+    initSwapRenderPass();
+    initCompRenderPass();
+    initDescSetsAndPipeLayouts();
+    initPipelines();
+    initApplyPaintPipeline(TANTO_R_BLEND_MODE_OVER);
+    initLayerStackPipeline();
+
+    initOffscreenAttachments();
+    initPaintAndTextureImage();
+
+    createShaderBindingTablePaint();
+    createShaderBindingTableSelect();
+    initNonMeshDescriptors();
+    updateLayerDescriptors();
+
+    brushDim.x = BRUSH_IMG_SIZE;
+    brushDim.y = BRUSH_IMG_SIZE;
+
+    initTextureCompFramebuffer();
+    initFramebuffers();
+
+    tanto_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
+}
+
+void r_Render(void)
+{
+    if (tanto_r_FramesNeedingUpdate)
+    {
+        uint32_t i = tanto_r_GetCurrentFrameIndex();
+        tanto_r_WaitOnFrame(i);
+        updateRenderCommands(i);
+        tanto_r_FramesNeedingUpdate--;
+    }
+    tanto_r_SubmitFrame();
+}
+
+int r_GetSelectionPos(Vec3* v)
+{
+    Tanto_V_CommandPool pool = tanto_v_RequestOneTimeUseCommand();
+
+    rayTraceSelect(&pool.buffer);
+
+    tanto_v_SubmitOneTimeCommandAndWait(&pool, 0);
+
+    Selection* sel = (Selection*)selectionRegion.hostData;
+    if (sel->hit)
+    {
+        v->x[0] = sel->x;
+        v->x[1] = sel->y;
+        v->x[2] = sel->z;
+        return 1;
+    }
+    else
+        return 0;
 }
 
 void r_LoadMesh(Tanto_R_Mesh mesh)
@@ -1296,6 +1308,6 @@ void r_SetPaintMode(const PaintMode mode)
     initApplyPaintPipeline(blendMode);
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
     {
-        r_UpdateRenderCommands(i);
+        updateRenderCommands(i);
     }
 }

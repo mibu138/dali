@@ -37,7 +37,7 @@ void painter_Init(void)
     tanto_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
     tanto_r_Init();
     tanto_i_Init();
-    tanto_u_Init();
+    tanto_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
     tanto_i_Subscribe(g_Responder);
     r_InitRenderer();
     g_Init();
@@ -62,11 +62,7 @@ void painter_LoadPreMesh(Tanto_R_PreMesh m)
 
 void painter_StartLoop(void)
 {
-    Tanto_Timer     timer;
-    Tanto_LoopStats stats;
-
-    tanto_TimerInit(&timer);
-    tanto_LoopStatsInit(&stats);
+    Tanto_LoopData loopData = tanto_CreateLoopData(NS_TARGET, 0, 0);
 
     // initialize matrices
     Mat4* xformProj    = r_GetXform(R_XFORM_PROJ);
@@ -75,54 +71,23 @@ void painter_StartLoop(void)
     *xformProjInv = m_Invert4x4(xformProj);
 
     parms.shouldRun = true;
-    parms.renderNeedsUpdate = false;
-    bool presentationSuccess = true;
-
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
-    {
-        r_UpdateRenderCommands(i);
-    }
 
     while( parms.shouldRun ) 
     {
-        tanto_TimerStart(&timer);
+        tanto_FrameStart(&loopData);
+
+        tanto_r_RequestFrame();
 
         tanto_i_GetEvents();
         tanto_i_ProcessEvents();
 
-        //r_WaitOnQueueSubmit(); // possibly don't need this due to render pass
-
         g_Update();
+        r_Render();
 
-        if (parms.renderNeedsUpdate)
-        {
-            tanto_r_WaitOnQueueSubmit();
-            for (int8_t i = 0; i < TANTO_FRAME_COUNT; i++) 
-            {
-                r_UpdateRenderCommands(i);
-            }
-            parms.renderNeedsUpdate = false;
-        }
-        else
-        {
-            int8_t frameIndex = tanto_r_RequestFrame();
-            if (frameIndex >= 0) // success
-                presentationSuccess = tanto_r_PresentFrame();
-            else
-            {
-                presentationSuccess = false;
-                printf("Failed to retrieve frame. Likely window resized\n");
-            }
-        }
+        tanto_u_Render();
+        tanto_r_PresentFrame();
 
-        tanto_TimerStop(&timer);
-
-        tanto_LoopStatsUpdate(&timer, &stats);
-
-        //printf("Delta ns: %ld\n", stats.nsDelta);
-        //printf("FPS:      %f\n",  1000000000.0 / stats.nsDelta);
-
-        tanto_LoopSleep(&stats, NS_TARGET);
+        tanto_FrameEnd(&loopData);
     }
 
     if (parms.reload)
@@ -158,8 +123,9 @@ void painter_ShutDown(void)
     r_CleanUp();
     tanto_i_CleanUp();
     tanto_r_CleanUp();
-    tanto_v_CleanUp();
     tanto_d_CleanUp();
+    tanto_u_CleanUp();
+    tanto_v_CleanUp();
 }
 
 bool painter_ShouldRun(void)

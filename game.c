@@ -354,6 +354,8 @@ void g_Update(void)
     assert(uboPlayer);
     //assert(sizeof(struct Player) == sizeof(UboPlayer));
     //handleKeyMovement();
+    brushRadius = slider0->data.slider.sliderPos * 0.1; // TODO: find a better way
+    //
     brush->x = mousePos.x;
     brush->y = mousePos.y;
     if (pivotChanged)
