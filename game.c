@@ -1,4 +1,5 @@
 #include "game.h"
+#include "coal/m_math.h"
 #include "render.h"
 #include "layer.h"
 #include "common.h"
@@ -99,7 +100,8 @@ static void lerpTargetToPivot(void)
 
 static Mat4 generatePlayerView(void)
 {
-    return m_LookAt(&player.pos, &player.target, &UP_VEC);
+    Mat4 m = m_LookAt(&player.pos, &player.target, &UP_VEC);
+    return m_Invert4x4(&m);
 }
 
 static void handleKeyMovement(void)

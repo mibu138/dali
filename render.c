@@ -71,6 +71,8 @@ static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 static VkRenderPass textureCompRenderPass;
 static VkRenderPass swapchainRenderPass;
 
+static uint8_t framesNeedUpdate;
+
 static void updateRenderCommands(const int8_t frameIndex);
 
 #define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
@@ -1116,14 +1118,13 @@ static void onRecreateSwapchain(void)
     initPipelines();
     initFramebuffers();
 
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
-    {
-        updateRenderCommands(i);
-    }
+    framesNeedUpdate = TANTO_FRAME_COUNT;
 }
 
 void r_InitRenderer(void)
 {
+    framesNeedUpdate = TANTO_FRAME_COUNT;
+
     l_Init((VkExtent2D){PAINT_IMG_SIZE, PAINT_IMG_SIZE}, paintFormat); // eventually will move this out
 
     l_SetCreateLayerCallback(onCreateLayer);
@@ -1154,12 +1155,12 @@ void r_InitRenderer(void)
 
 void r_Render(void)
 {
-    if (tanto_r_FramesNeedingUpdate)
+    if (framesNeedUpdate)
     {
         uint32_t i = tanto_r_GetCurrentFrameIndex();
         tanto_r_WaitOnFrame(i);
         updateRenderCommands(i);
-        tanto_r_FramesNeedingUpdate--;
+        framesNeedUpdate--;
     }
     tanto_r_SubmitFrame();
 }

@@ -4,7 +4,7 @@ GLC = glslc
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
 LDFLAGS = -L/opt/hfs18.0/dsolib -L/home/michaelb/lib
 INFLAGS = -I$(HOME)/dev
-LIBS = -lm -lcarbon -ltanto -lvulkan -lxcb -lxcb-keysyms -lfreetype
+LIBS = -lm -lcoal -ltanto -lvulkan -lxcb -lxcb-keysyms -lfreetype
 GLFLAGS = --target-env=vulkan1.2
 BIN = bin
 LIB = $(HOME)/lib
