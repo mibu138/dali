@@ -102,6 +102,7 @@ static Mat4 generatePlayerView(void)
 {
     Mat4 m = m_LookAt(&player.pos, &player.target, &UP_VEC);
     return m_Invert4x4(&m);
+    //return m;
 }
 
 static void handleKeyMovement(void)
@@ -241,7 +242,6 @@ void g_Init(void)
     uboPlayer = r_GetPlayer();
 
     slider0 = tanto_u_CreateSlider(0, 40, NULL);
-
 }
 
 void g_BindToView(Mat4* view, Mat4* viewInv)

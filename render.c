@@ -75,8 +75,8 @@ static uint8_t framesNeedUpdate;
 
 static void updateRenderCommands(const int8_t frameIndex);
 
-#define PAINT_IMG_SIZE 0x2000 // 0x1000 = 4096
-#define BRUSH_IMG_SIZE 0x2000
+#define PAINT_IMG_SIZE 0x1000 // 0x1000 = 4096
+#define BRUSH_IMG_SIZE 0x1000
 
 enum {
     LAYOUT_RASTER,
@@ -116,117 +116,23 @@ static void initOffscreenAttachments(void)
 
 static void initCompRenderPass(void)
 {
-    const VkAttachmentDescription attachmentColor = {
-        .flags = 0,
-        .format = textureFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
-
-    const VkAttachmentDescription attachments[] = {
-        attachmentColor 
-    };
-
-    VkAttachmentReference colorReference = {
-        .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    const VkSubpassDescription subpass = {
-        .flags                   = 0,
-        .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .inputAttachmentCount    = 0,
-        .pInputAttachments       = NULL,
-        .colorAttachmentCount    = 1,
-        .pColorAttachments       = &colorReference,
-        .pResolveAttachments     = NULL,
-        .pDepthStencilAttachment = NULL,
-        .preserveAttachmentCount = 0,
-        .pPreserveAttachments    = NULL,
-    };
-
-    Tanto_R_RenderPassInfo rpi = {
-        .attachmentCount = 1,
-        .pAttachments = attachments,
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-    };
-
-    tanto_r_CreateRenderPass(&rpi, &textureCompRenderPass);
+    tanto_r_CreateRenderPass_Color(VK_ATTACHMENT_LOAD_OP_CLEAR, 
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            textureFormat, &textureCompRenderPass);
 }
 
 static void initSwapRenderPass(void)
 {
-    const VkAttachmentDescription attachmentColor = {
-        .flags = 0,
-        .format = tanto_r_GetSwapFormat(),
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    const VkAttachmentDescription attachmentDepth = {
-        .flags = 0,
-        .format = depthFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT,
-        .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .stencilStoreOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
-
-    const VkAttachmentDescription attachments[] = {
-        attachmentColor, attachmentDepth
-    };
-
-    VkAttachmentReference colorReference = {
-        .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
-
-    VkAttachmentReference depthReference = {
-        .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-    };
-
-    const VkSubpassDescription subpass = {
-        .flags                   = 0,
-        .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .inputAttachmentCount    = 0,
-        .pInputAttachments       = NULL,
-        .colorAttachmentCount    = 1,
-        .pColorAttachments       = &colorReference,
-        .pResolveAttachments     = NULL,
-        .pDepthStencilAttachment = &depthReference,
-        .preserveAttachmentCount = 0,
-        .pPreserveAttachments    = NULL,
-    };
-
-    Tanto_R_RenderPassInfo rpi = {
-        .attachmentCount = 2,
-        .pAttachments = attachments,
-        .subpassCount = 1,
-        .pSubpasses = &subpass,
-    };
-
-    tanto_r_CreateRenderPass(&rpi, &swapchainRenderPass);
+    tanto_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+            tanto_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
 }
 
 static void initPaintAndTextureImage(void)
 {
     paintImageDim.x = PAINT_IMG_SIZE;
     paintImageDim.y = PAINT_IMG_SIZE;
+
     paintImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, paintFormat, 
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,  
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -615,20 +521,7 @@ static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode)
         .vertShader = tanto_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/applyPaint-frag.spv"
     };
-    //const Tanto_R_PipelineInfo pipeInfoTextureComp = {
-    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-    //    .payload.rasterInfo = {
-    //        .layout  = pipelineLayouts[LAYOUT_RASTER],
-    //        .renderPass = textureCompRenderPass, 
-    //        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-    //        .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
-    //        .blendMode   = blendMode,
-    //        .vertShader = tanto_r_FullscreenTriVertShader(),
-    //        .fragShader = SPVDIR"/applyPaint-frag.spv"
-    //    }};
 
-    //tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_APPLY_PAINT]);
     tanto_r_CreateGraphicsPipelines(1, &pipeInfo, &graphicsPipelines[PIPELINE_APPLY_PAINT]);
 }
 
@@ -644,20 +537,7 @@ static void initLayerStackPipeline(void)
         .vertShader = tanto_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/layerStack-frag.spv"
     };
-    //const Tanto_R_PipelineInfo pipeInfoTextureComp = {
-    //    .type     = TANTO_R_PIPELINE_RASTER_TYPE,
-    //    .payload.rasterInfo = {
-    //        .layout = pipelineLayouts[LAYOUT_RASTER],
-    //        .renderPass = textureCompRenderPass, 
-    //        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-    //        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-    //        .viewportDim = {PAINT_IMG_SIZE, PAINT_IMG_SIZE},
-    //        .blendMode   = TANTO_R_BLEND_MODE_OVER,
-    //        .vertShader = tanto_r_FullscreenTriVertShader(),
-    //        .fragShader = SPVDIR"/layerStack-frag.spv"
-    //    }};
 
-    //tanto_r_CreatePipeline(&pipeInfoTextureComp, &graphicsPipelines[PIPELINE_LAYER_STACK]);
     tanto_r_CreateGraphicsPipelines(1, &pipeInfo, &graphicsPipelines[PIPELINE_LAYER_STACK]);
 }
 
@@ -1192,6 +1072,10 @@ void r_LoadMesh(Tanto_R_Mesh mesh)
     tanto_r_BuildTlas();
 
     updateMeshDescriptors();
+}
+
+void r_LoadPrim(Tanto_R_Primitive prim)
+{
 }
 
 void r_ClearMesh(void)

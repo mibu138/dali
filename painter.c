@@ -24,6 +24,29 @@
 //#define NS_TARGET 500000000
 #define NS_PER_S  1000000000
 
+static Tanto_R_Primitive houMeshToPrim(const Painter_HouMesh pm)
+{
+    size_t nverts = pm.vertexCount;
+    Tanto_R_Primitive prim = tanto_r_CreatePrimitive(nverts, nverts, 3);
+
+    Tanto_R_Attribute* pos = tanto_r_GetPrimAttribute(&prim, 0);
+    Tanto_R_Attribute* nor = tanto_r_GetPrimAttribute(&prim, 1);
+    Tanto_R_Attribute* uvw = tanto_r_GetPrimAttribute(&prim, 2);
+    Tanto_R_Index* indices = tanto_r_GetPrimIndices(&prim);
+
+    memcpy(pos,     pm.posData,   sizeof(Tanto_R_Attribute) * nverts);
+    memcpy(nor,     pm.norData,   sizeof(Tanto_R_Attribute) * nverts);
+    memcpy(uvw,     pm.uvwData,   sizeof(Tanto_R_Attribute) * nverts);
+    memcpy(indices, pm.indexData, sizeof(Tanto_R_Index) * nverts);
+
+    // the new stuff
+
+    tanto_v_TransferToDevice(&prim.vertexRegion);
+    tanto_v_TransferToDevice(&prim.indexRegion);
+
+    return prim;
+}
+
 void painter_Init(void)
 {
     tanto_v_config.rayTraceEnabled = true;
@@ -41,6 +64,21 @@ void painter_Init(void)
     tanto_i_Subscribe(g_Responder);
     r_InitRenderer();
     g_Init();
+}
+
+void painter_LoadHouMesh(Painter_HouMesh m)
+{
+    Tanto_R_Primitive prim = houMeshToPrim(m);
+    free(m.posData);
+    free(m.norData);
+    free(m.uvwData);
+    free(m.indexData);
+
+    r_LoadPrim(prim);
+}
+
+void painter_ReloadHouMesh(Painter_HouMesh houMesh)
+{
 }
 
 void painter_LoadMesh(Tanto_R_Mesh m)
