@@ -2,6 +2,7 @@
 #define PAINTER_H
 
 #include <tanto/r_geo.h>
+#include <tanto/f_file.h>
 
 typedef struct {
     uint32_t           vertexCount;
@@ -14,10 +15,7 @@ typedef struct {
 void painter_Init(void);
 void painter_LoadHouMesh(Painter_HouMesh houMesh);
 void painter_ReloadHouMesh(Painter_HouMesh houMesh);
-void painter_LoadPreMesh(Tanto_R_PreMesh mesh);
-void painter_LoadMesh(Tanto_R_Mesh mesh);
 void painter_StartLoop(void);
-void painter_ReloadMesh(Tanto_R_PreMesh mesh);
 void painter_StopLoop(void);
 bool painter_ShouldRun(void);
 void painter_ShutDown(void);

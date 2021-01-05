@@ -77,25 +77,13 @@ void painter_LoadHouMesh(Painter_HouMesh m)
     r_LoadPrim(prim);
 }
 
-void painter_ReloadHouMesh(Painter_HouMesh houMesh)
+void painter_ReloadHouMesh(Painter_HouMesh pm)
 {
-}
+    vkDeviceWaitIdle(device);
+    r_ClearPrim();
 
-void painter_LoadMesh(Tanto_R_Mesh m)
-{
-    r_LoadMesh(m);
-}
-
-void painter_LoadPreMesh(Tanto_R_PreMesh m)
-{
-    Tanto_R_Mesh mesh = tanto_r_PreMeshToMesh(m);
-    free(m.posData);
-    free(m.colData);
-    free(m.norData);
-    free(m.uvwData);
-    free(m.indexData);
-
-    r_LoadMesh(mesh);
+    painter_LoadHouMesh(pm);
+    painter_StartLoop();
 }
 
 void painter_StartLoop(void)
@@ -133,21 +121,12 @@ void painter_StartLoop(void)
         parms.reload = false;
         vkDeviceWaitIdle(device);
 
-        r_ClearMesh();
-        Tanto_R_Mesh cube = tanto_r_CreateCube();
-        r_LoadMesh(cube);
+        r_ClearPrim();
+        Tanto_R_Primitive cube = tanto_r_CreateCubePrim(true);
+        r_LoadPrim(cube);
 
         painter_StartLoop();
     }
-}
-
-void painter_ReloadMesh(Tanto_R_PreMesh pm)
-{
-    vkDeviceWaitIdle(device);
-    r_ClearMesh();
-
-    painter_LoadPreMesh(pm);
-    painter_StartLoop();
 }
 
 void painter_StopLoop(void)

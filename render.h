@@ -47,13 +47,11 @@ int   r_GetSelectionPos(Vec3* v);
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
 UboPlayer* r_GetPlayer(void);
-void  r_LoadMesh(Tanto_R_Mesh mesh);
 void  r_LoadPrim(Tanto_R_Primitive prim);
-void  r_ClearMesh(void);
+void  r_ClearPrim(void);
 void  r_ClearPaintImage(void);
 void  r_SetPaintMode(const PaintMode mode);
 void  r_SavePaintImage(void);
 void  r_CleanUp(void);
-const Tanto_R_Mesh* r_GetMesh(void);
 
 #endif /* end of include guard: R_COMMANDS_H */

@@ -1,5 +1,6 @@
 #include "render.h"
 #include "layer.h"
+#include "tanto/r_geo.h"
 #include "tanto/u_ui.h"
 #include "tanto/v_image.h"
 #include "tanto/v_memory.h"
@@ -42,7 +43,7 @@ static Tanto_V_BufferRegion  stbSelectRegion;
 static Tanto_V_BufferRegion  playerRegion;
 static Tanto_V_BufferRegion  selectionRegion;
 
-static Tanto_R_Mesh          renderMesh;
+static Tanto_R_Primitive     renderPrim;
 
 static RtPushConstants     rtPushConstants;
 static RasterPushConstants rasterPushConstants;
@@ -74,6 +75,43 @@ static VkRenderPass swapchainRenderPass;
 static uint8_t framesNeedUpdate;
 
 static void updateRenderCommands(const int8_t frameIndex);
+static void initOffscreenAttachments(void);
+static void initCompRenderPass(void);
+static void initSwapRenderPass(void);
+static void initPaintAndTextureImage(void);
+static void updatePrimDescriptors(void);
+static void initNonMeshDescriptors(void);
+static void updateLayerDescriptors(void);
+static void initDescSetsAndPipeLayouts(void);
+static void initPipelines(void);
+static void initApplyPaintPipeline(const Tanto_R_BlendMode blendMode);
+static void initLayerStackPipeline(void);
+static void rayTraceSelect(const VkCommandBuffer* cmdBuf);
+static void paint(const VkCommandBuffer* cmdBuf);
+static void applyPaint(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo);
+static void compLayerStack(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo);
+static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo* rpassInfo);
+static void createShaderBindingTableSelect(void);
+static void createShaderBindingTablePaint(void);
+static void updatePushConstants(void);
+static void initTextureCompFramebuffer(void);
+static void initFramebuffers(void);
+static void cleanUpSwapchainDependent(void);
+static void onCreateLayer(void);
+static void updateRenderCommands(const int8_t frameIndex);
+static void onRecreateSwapchain(void);
+void        r_InitRenderer(void);
+void        r_Render(void);
+int         r_GetSelectionPos(Vec3* v);
+void        r_LoadPrim(Tanto_R_Primitive prim);
+void        r_ClearPrim(void);
+void        r_SavePaintImage(void);
+void        r_ClearPaintImage(void);
+void        r_CleanUp(void);
+Mat4*       r_GetXform(r_XformType type);
+Brush*      r_GetBrush(void);
+UboPlayer*  r_GetPlayer(void);
+void        r_SetPaintMode(const PaintMode mode);
 
 #define PAINT_IMG_SIZE 0x1000 // 0x1000 = 4096
 #define BRUSH_IMG_SIZE 0x1000
@@ -153,7 +191,7 @@ static void initPaintAndTextureImage(void)
     tanto_v_ClearColorImage(&textureImage);
 }
 
-static void updateMeshDescriptors(void)
+static void updatePrimDescriptors(void)
 {
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
@@ -162,15 +200,15 @@ static void updateMeshDescriptors(void)
     };
 
     VkDescriptorBufferInfo vertBufInfo = {
-        .offset = renderMesh.vertexBlock.offset,
-        .range  = renderMesh.vertexBlock.size,
-        .buffer = renderMesh.vertexBlock.buffer,
+        .offset = renderPrim.vertexRegion.offset,
+        .range  = renderPrim.vertexRegion.size,
+        .buffer = renderPrim.vertexRegion.buffer,
     };
 
     VkDescriptorBufferInfo indexBufInfo = {
-        .offset = renderMesh.indexBlock.offset,
-        .range  = renderMesh.indexBlock.size,
-        .buffer = renderMesh.indexBlock.buffer,
+        .offset = renderPrim.indexRegion.offset,
+        .range  = renderPrim.indexRegion.size,
+        .buffer = renderPrim.indexRegion.buffer,
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -455,7 +493,7 @@ static void initPipelines(void)
         // raster
         .renderPass = swapchainRenderPass, 
         .layout     = pipelineLayouts[LAYOUT_RASTER],
-        .vertexDescription = tanto_r_GetVertexDescription3D_4Vec3(),
+        .vertexDescription = tanto_r_GetVertexDescription3D_3Vec3(),
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .vertShader = SPVDIR"/raster-vert.spv", 
@@ -713,32 +751,7 @@ static void rasterize(const VkCommandBuffer* cmdBuf, const VkRenderPassBeginInfo
 
     vkCmdBeginRenderPass(*cmdBuf, rpassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        VkBuffer vertBuffers[4] = {
-            renderMesh.vertexBlock.buffer,
-            renderMesh.vertexBlock.buffer,
-            renderMesh.vertexBlock.buffer,
-            renderMesh.vertexBlock.buffer
-        };
-
-        const VkDeviceSize vertOffsets[4] = {
-            renderMesh.posOffset + renderMesh.vertexBlock.offset, 
-            renderMesh.colOffset + renderMesh.vertexBlock.offset,
-            renderMesh.norOffset + renderMesh.vertexBlock.offset,
-            renderMesh.uvwOffset + renderMesh.vertexBlock.offset
-        };
-
-        vkCmdBindVertexBuffers(
-            *cmdBuf, 0, TANTO_ARRAY_SIZE(vertOffsets), 
-            vertBuffers, vertOffsets);
-
-        vkCmdBindIndexBuffer(
-            *cmdBuf, 
-            renderMesh.indexBlock.buffer, 
-            renderMesh.indexBlock.offset, TANTO_VERT_INDEX_TYPE);
-
-        vkCmdDrawIndexed(*cmdBuf, 
-            renderMesh.indexCount, 1, 0, 
-            0, 0);
+        tanto_r_DrawPrim(*cmdBuf, &renderPrim);
 
         vkCmdBindPipeline(*cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_POST]);
 
@@ -819,10 +832,9 @@ static void updatePushConstants(void)
     rtPushConstants.lightIntensity = 1.0;
     rtPushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
     rtPushConstants.lightType = 0;
-    rtPushConstants.posOffset =    renderMesh.posOffset / sizeof(Vec3);
-    rtPushConstants.colorOffset =  renderMesh.colOffset / sizeof(Vec3);
-    rtPushConstants.normalOffset = renderMesh.norOffset / sizeof(Vec3);
-    rtPushConstants.uvwOffset    = renderMesh.uvwOffset / sizeof(Vec3);
+    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(Vec3);
+    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(Vec3);
+    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(Vec3);
 }
 
 static void initTextureCompFramebuffer(void)
@@ -1065,23 +1077,19 @@ int r_GetSelectionPos(Vec3* v)
         return 0;
 }
 
-void r_LoadMesh(Tanto_R_Mesh mesh)
-{
-    renderMesh = mesh;
-    tanto_r_BuildBlas(&renderMesh);
-    tanto_r_BuildTlas();
-
-    updateMeshDescriptors();
-}
-
 void r_LoadPrim(Tanto_R_Primitive prim)
 {
+    renderPrim = prim;
+    tanto_r_BuildBlas(&renderPrim);
+    tanto_r_BuildTlas();
+
+    updatePrimDescriptors();
 }
 
-void r_ClearMesh(void)
+void r_ClearPrim(void)
 {
     tanto_r_RayTraceDestroyAccelStructs();
-    tanto_r_FreeMesh(renderMesh);
+    tanto_r_FreePrim(&renderPrim);
 }
 
 void r_SavePaintImage(void)
@@ -1145,11 +1153,6 @@ void r_CleanUp(void)
     vkDestroyRenderPass(device, textureCompRenderPass, NULL);
     vkDestroyFramebuffer(device, framebufferTextureComp, NULL);
     l_CleanUp();
-}
-
-const Tanto_R_Mesh* r_GetMesh(void)
-{
-    return &renderMesh;
 }
 
 Mat4* r_GetXform(r_XformType type)
