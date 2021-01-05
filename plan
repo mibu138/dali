@@ -7,3 +7,9 @@ gets passed in to provide not only the image to paint through but also the "carr
 Fri Dec 18 14:38:03 EST 2020
 Want to see if push constants can be set entirely in the draw function.
 So I can remove them as static globals.
+ 
+Tue 05 Jan 2021 12:21:16 PM EST
+Features from substance painter to add:
+    Triplanar projection.
+    Substance like brush?
+    Bake maps? Curvature, position, etc.
