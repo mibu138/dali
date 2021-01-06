@@ -56,6 +56,7 @@ static VkDescriptorSetLayout descriptorSetLayouts[TANTO_MAX_DESCRIPTOR_SETS];
 static Tanto_R_Description   description;
 
 static Tanto_V_Image   depthAttachment;
+
 static Tanto_V_Image   paintImage;
 static Tanto_V_Image   textureImage;
 
@@ -243,7 +244,7 @@ static void updatePrimDescriptors(void)
 static void initNonMeshDescriptors(void)
 {
     matrixRegion = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+            TANTO_V_MEMORY_HOST_TYPE);
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
@@ -252,16 +253,16 @@ static void initNonMeshDescriptors(void)
     matrices->projInv = m_Ident_Mat4();
 
     brushRegion = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+            TANTO_V_MEMORY_HOST_TYPE);
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
     memset(brush, 0, sizeof(Brush));
     brush->radius = 0.01;
     brush->mode = 1;
 
-    playerRegion = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    playerRegion = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_TYPE);
     memset(playerRegion.hostData, 0, sizeof(UboPlayer));
 
-    selectionRegion = tanto_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    selectionRegion = tanto_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, TANTO_V_MEMORY_HOST_TYPE);
 
 
     VkDescriptorBufferInfo uniformInfoMatrices = {
@@ -784,7 +785,7 @@ static void createShaderBindingTableSelect(void)
     VkResult r;
     r = vkGetRayTracingShaderGroupHandlesKHR(device, raytracePipelines[PIPELINE_SELECT], 0, groupCount, sbtSize, shaderHandleData);
     assert( VK_SUCCESS == r );
-    stbSelectRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    stbSelectRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
     uint8_t* pTarget = stbSelectRegion.hostData;
@@ -812,7 +813,7 @@ static void createShaderBindingTablePaint(void)
     printf("ShaderGroups total size   : %d\n", sbtSize);
 
     V_ASSERT( vkGetRayTracingShaderGroupHandlesKHR(device, raytracePipelines[PIPELINE_RAY_TRACE], 0, groupCount, sbtSize, shaderHandleData) );
-    stbPaintRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    stbPaintRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_TYPE);
 
     uint8_t* pSrc    = shaderHandleData;
     uint8_t* pTarget = stbPaintRegion.hostData;

@@ -113,6 +113,7 @@ int l_CreateLayer(void)
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
             &layerStack.layers[curId].image);
+
     // may be necesary will have to check the spec to see if images are empty by default
     //tanto_v_ClearColorImage(&textureImage);
 
