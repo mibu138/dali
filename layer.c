@@ -109,7 +109,8 @@ int l_CreateLayer(void)
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
-            1);
+            1,
+            TANTO_V_MEMORY_DEVICE_TYPE);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
             &layerStack.layers[curId].image);
