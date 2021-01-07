@@ -143,15 +143,13 @@ enum {
 
 static void initOffscreenAttachments(void)
 {
-    //initDepthAttachment();
     depthAttachment = tanto_v_CreateImage(
             TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT,
             depthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_DEPTH_BIT, 
-            VK_SAMPLE_COUNT_1_BIT,
-            TANTO_V_MEMORY_DEVICE_TYPE);
+            VK_SAMPLE_COUNT_1_BIT);
 }
 
 static void initCompRenderPass(void)
@@ -177,16 +175,14 @@ static void initPaintAndTextureImage(void)
             VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,  
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
-            1,
-            TANTO_V_MEMORY_DEVICE_TYPE);
+            1);
 
     textureImage = tanto_v_CreateImageAndSampler(paintImageDim.x, paintImageDim.y, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
-            1,
-            TANTO_V_MEMORY_DEVICE_TYPE);
+            1);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL, &paintImage);
 
