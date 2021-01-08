@@ -7,9 +7,9 @@ layout(location = 0) in  vec2 inUv;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 0) uniform sampler2D image;
+layout (input_attachment_index = 0, set = 0, binding = 0) uniform subpassInput inputA;
 
 void main()
 {
-    outColor = texture(image, inUv);
+    outColor = subpassLoad(inputA);
 }

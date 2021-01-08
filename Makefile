@@ -34,6 +34,7 @@ OBJS =  \
 
 SHADERS =  $(SPV)/post-frag.spv \
 		   $(SPV)/comp-frag.spv \
+		   $(SPV)/comp2-frag.spv \
 		   $(SPV)/raster-vert.spv \
 		   $(SPV)/raster-frag.spv \
 		   $(SPV)/raytraceShadow-rmiss.spv \

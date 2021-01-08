@@ -36,6 +36,38 @@ typedef struct {
     uint32_t index;
 } RasterPushConstants;
 
+enum {
+    LAYOUT_RASTER,
+    LAYOUT_RAYTRACE,
+    LAYOUT_POST,
+    LAYOUT_COMP
+};
+
+enum {
+    DESC_SET_RASTER,
+    DESC_SET_RAYTRACE,
+    DESC_SET_POST,
+    DESC_SET_APPLY_PAINT,
+    DESC_SET_COMP
+};
+
+enum {
+    PIPELINE_RASTER,
+    PIPELINE_POST,
+    PIPELINE_COMP_1,
+    PIPELINE_COMP_2,
+};
+
+enum {
+    PIPELINE_RAY_TRACE,
+    PIPELINE_SELECT,
+};
+
+typedef enum {
+    IMAGE_A,
+    IMAGE_B
+} Image;
+
 static Tanto_V_BufferRegion  matrixRegion;
 static Tanto_V_BufferRegion  brushRegion;
 static Tanto_V_BufferRegion  stbPaintRegion;
@@ -56,27 +88,27 @@ static Tanto_R_Description   description;
 
 static Tanto_V_Image   depthAttachment;
 
-static Tanto_V_Image   imageA;
-static Tanto_V_Image   imageB;
+#define TEXTURE_SIZE 0x4000 // 0x1000 = 4096
 
-static VkFramebuffer   frameBufferA;
-static VkFramebuffer   frameBufferB;
+static Tanto_V_Image   imageA; // will use for brush and then as final frambuffer target
+static Tanto_V_Image   imageB;
+static Tanto_V_Image   imageC; // primarily background layers
+static Tanto_V_Image   imageD; // primarily foreground layers
+
+static VkFramebuffer   compositeFrameBuffer;
 
 static VkFramebuffer   swapchainFrameBuffers[TANTO_FRAME_COUNT];
 
 static const VkFormat depthFormat   = VK_FORMAT_D32_SFLOAT;
 static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-static VkRenderPass textureCompRenderPass;
+static VkRenderPass compositeRenderPass;
 static VkRenderPass swapchainRenderPass;
 
 static uint8_t framesNeedUpdate;
 
 static void updateRenderCommands(const int8_t frameIndex);
 static void initOffscreenAttachments(void);
-static void initCompRenderPass(void);
-static void initSwapRenderPass(void);
-static void initPaintAndTextureImage(void);
 static void updatePrimDescriptors(void);
 static void initNonMeshDescriptors(void);
 static void initDescSetsAndPipeLayouts(void);
@@ -106,39 +138,6 @@ Brush*       r_GetBrush(void);
 UboPlayer*   r_GetPlayer(void);
 void         r_SetPaintMode(const PaintMode mode);
 
-#define TEXTURE_SIZE 0x2000 // 0x1000 = 4096
-
-enum {
-    LAYOUT_RASTER,
-    LAYOUT_RAYTRACE,
-    LAYOUT_POST,
-    LAYOUT_COMP
-};
-
-enum {
-    DESC_SET_RASTER,
-    DESC_SET_RAYTRACE,
-    DESC_SET_POST,
-    DESC_SET_IMAGE_A,
-    DESC_SET_IMAGE_B
-};
-
-enum {
-    PIPELINE_RASTER,
-    PIPELINE_POST,
-    PIPELINE_COMP,
-};
-
-enum {
-    PIPELINE_RAY_TRACE,
-    PIPELINE_SELECT,
-};
-
-typedef enum {
-    IMAGE_A,
-    IMAGE_B
-} Image;
-
 static void initOffscreenAttachments(void)
 {
     depthAttachment = tanto_v_CreateImage(
@@ -150,42 +149,320 @@ static void initOffscreenAttachments(void)
             VK_SAMPLE_COUNT_1_BIT);
 }
 
-static void initCompRenderPass(void)
-{
-    tanto_r_CreateRenderPass_Color(VK_ATTACHMENT_LOAD_OP_LOAD, 
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
-            textureFormat, &textureCompRenderPass);
-}
-
-static void initSwapRenderPass(void)
-{
-    tanto_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-            tanto_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
-}
-
-static void initPaintAndTextureImage(void)
+static void initPaintImages(void)
 {
     imageA = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
+            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
             1);
 
     imageB = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_STORAGE_BIT |
+            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
             1);
 
-    // must be transfer dst optimal to clear
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageA);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageB);
+    imageC = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_FILTER_LINEAR, 
+            1);
+    
+    imageD = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
+            VK_IMAGE_ASPECT_COLOR_BIT,
+            VK_FILTER_LINEAR, 
+            1);
+
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageB);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageC);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageD);
 
     tanto_v_ClearColorImage(&imageA);
     tanto_v_ClearColorImage(&imageB);
+    tanto_v_ClearColorImage(&imageC);
+    tanto_v_ClearColorImage(&imageD);
+
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageA);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageB);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageC);
+    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageD);
+}
+
+static void initRenderPasses(void)
+{
+    tanto_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+            tanto_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
+
+    const VkAttachmentDescription attachmentA = {
+        .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+        .format = textureFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+        .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+    };
+
+    const VkAttachmentDescription attachmentB = {
+        .format = textureFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+    const VkAttachmentDescription attachmentC = {
+        .format = textureFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+    const VkAttachmentDescription attachmentD = {
+        .format = textureFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+    const VkAttachmentDescription attachmentA2 = {
+        .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+        .format = textureFormat,
+        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+    };
+
+    const VkAttachmentReference referenceA1 = {
+        .attachment = 0,
+        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    const VkAttachmentReference referenceB1 = {
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
+
+    VkSubpassDescription subpass1 = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments    = &referenceB1,
+        .pDepthStencilAttachment = NULL,
+        .inputAttachmentCount = 1,
+        .pInputAttachments = &referenceA1,
+        .preserveAttachmentCount = 0,
+    };
+
+    const VkAttachmentReference referenceA2 = {
+        .attachment = 4,
+        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+    };
+
+    const VkAttachmentReference referenceB2 = {
+        .attachment = 1,
+        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    const VkAttachmentReference referenceC2 = {
+        .attachment = 2,
+        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    const VkAttachmentReference referenceD2 = {
+        .attachment = 3,
+        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+    };
+
+    const VkAttachmentReference inputAttachments[] = {
+        referenceB2, referenceC2, referenceD2
+    };
+
+    VkSubpassDescription subpass2 = {
+        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+        .colorAttachmentCount = 1,
+        .pColorAttachments    = &referenceA2,
+        .pDepthStencilAttachment = NULL,
+        .inputAttachmentCount = TANTO_ARRAY_SIZE(inputAttachments),
+        .pInputAttachments = inputAttachments,
+        .preserveAttachmentCount = 0,
+    };
+
+    const VkSubpassDependency dependency1 = {
+        .srcSubpass = VK_SUBPASS_EXTERNAL,
+        .dstSubpass = 0,
+        .srcStageMask = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    };
+
+    const VkSubpassDependency dependency2 = {
+        .srcSubpass = 0,
+        .dstSubpass = 1,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+    };
+
+    const VkSubpassDependency dependency3 = {
+        .srcSubpass = 1,
+        .dstSubpass = VK_SUBPASS_EXTERNAL,
+        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+    };
+
+    VkSubpassDescription subpasses[] = {
+        subpass1, subpass2
+    };
+
+    VkSubpassDependency dependencies[] = {
+        dependency1, dependency2, dependency3
+    };
+
+    VkAttachmentDescription attachments[] = {
+        attachmentA, attachmentB, attachmentC, attachmentD, attachmentA2
+    };
+
+    VkRenderPassCreateInfo ci = {
+        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+        .subpassCount = TANTO_ARRAY_SIZE(subpasses),
+        .pSubpasses = subpasses,
+        .attachmentCount = TANTO_ARRAY_SIZE(attachments),
+        .pAttachments = attachments,
+        .dependencyCount = TANTO_ARRAY_SIZE(dependencies),
+        .pDependencies = dependencies,
+    };
+
+    V_ASSERT( vkCreateRenderPass(device, &ci, NULL, &compositeRenderPass) );
+}
+
+static void initDescSetsAndPipeLayouts(void)
+{
+    const Tanto_R_DescriptorSetInfo descSets[] = {{
+        //   raster
+            .bindingCount = 5, 
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            },{ // paint image
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
+            }}
+        },{ // ray trace
+            .bindingCount = 3,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            }}
+        },{ // post
+            .bindingCount = 1,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            }}
+        },{ // apply
+            .bindingCount = 1,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            }}
+        },{ // comp
+            .bindingCount = 3,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            }}
+        }
+    };
+
+    tanto_r_CreateDescriptorSetLayouts(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts);
+
+    tanto_r_CreateDescriptorSets(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
+
+    const VkPushConstantRange pushConstantRt = {
+        .stageFlags = 
+            VK_SHADER_STAGE_RAYGEN_BIT_KHR |
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
+            VK_SHADER_STAGE_MISS_BIT_KHR,
+        .offset = 0,
+        .size = sizeof(RtPushConstants)
+    };
+
+    const VkPushConstantRange pushConstantRaster = {
+        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+        .offset = 0,
+        .size = sizeof(RtPushConstants)
+    };
+
+    const Tanto_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
+        .descriptorSetCount = 1, 
+        .descriptorSetLayouts = descriptorSetLayouts,
+        .pushConstantCount = 1,
+        .pushConstantsRanges = &pushConstantRaster
+    },{
+        .descriptorSetCount = 3, 
+        .descriptorSetLayouts = descriptorSetLayouts,
+        .pushConstantCount = 1, 
+        .pushConstantsRanges = &pushConstantRt,
+    },{
+        .descriptorSetCount = 1, 
+        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
+    },{
+        .descriptorSetCount = 2, 
+        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_APPLY_PAINT]
+    }};
+
+    tanto_r_CreatePipelineLayouts(TANTO_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
 }
 
 static void updatePrimDescriptors(void)
@@ -285,7 +562,7 @@ static void initNonMeshDescriptors(void)
         .buffer = selectionRegion.buffer,
     };
 
-    VkDescriptorImageInfo imageInfoPaint = {
+    VkDescriptorImageInfo imageInfoAStorage = {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         .imageView   = imageA.view,
         .sampler     = imageA.sampler
@@ -298,6 +575,18 @@ static void initNonMeshDescriptors(void)
     };
 
     VkDescriptorImageInfo imageInfoB = {
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView   = imageB.view,
+        .sampler     = imageB.sampler
+    };
+
+    VkDescriptorImageInfo imageInfoC = {
+        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .imageView   = imageB.view,
+        .sampler     = imageB.sampler
+    };
+
+    VkDescriptorImageInfo imageInfoD = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .imageView   = imageB.view,
         .sampler     = imageB.sampler
@@ -318,7 +607,7 @@ static void initNonMeshDescriptors(void)
             .dstBinding = 3,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfoPaint
+            .pImageInfo = &imageInfoA
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -330,35 +619,11 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_RASTER], // desc set label refers to the dst image for that comp pass
-            .dstBinding = 5,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfoB
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_IMAGE_B], // desc set label refers to the dst image for that comp pass
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfoA 
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_IMAGE_A], // desc set label refers to the dst image for that comp pass
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfoB
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
             .dstSet = description.descriptorSets[DESC_SET_RAYTRACE],
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo = &imageInfoPaint
+            .pImageInfo = &imageInfoAStorage
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -375,117 +640,41 @@ static void initNonMeshDescriptors(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &uniformInfoBrush,
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+            .pImageInfo = &imageInfoA 
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_COMP], 
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+            .pImageInfo = &imageInfoC
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_COMP], 
+            .dstBinding = 1,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+            .pImageInfo = &imageInfoB
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_COMP], 
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+            .pImageInfo = &imageInfoD
     }};
 
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
-}
-
-static void initDescSetsAndPipeLayouts(void)
-{
-    const Tanto_R_DescriptorSetInfo descSets[] = {{
-            .bindingCount = 6, 
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{ // paint image
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            }}
-        },{
-            .bindingCount = 3,
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            }}
-        },{
-            .bindingCount = 1,
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            }}
-        },{ // IMAGE_A
-            .bindingCount = 1,
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            }}
-        },{ // IMAGE_B
-            .bindingCount = 1,
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            }}
-        }
-    };
-
-    tanto_r_CreateDescriptorSetLayouts(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts);
-
-    tanto_r_CreateDescriptorSets(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
-
-    const VkPushConstantRange pushConstantRt = {
-        .stageFlags = 
-            VK_SHADER_STAGE_RAYGEN_BIT_KHR |
-            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-            VK_SHADER_STAGE_MISS_BIT_KHR,
-        .offset = 0,
-        .size = sizeof(RtPushConstants)
-    };
-
-    const VkPushConstantRange pushConstantRaster = {
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .offset = 0,
-        .size = sizeof(RtPushConstants)
-    };
-
-    const Tanto_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
-        .descriptorSetCount = 1, 
-        .descriptorSetLayouts = descriptorSetLayouts,
-        .pushConstantCount = 1,
-        .pushConstantsRanges = &pushConstantRaster
-    },{
-        .descriptorSetCount = 3, 
-        .descriptorSetLayouts = descriptorSetLayouts,
-        .pushConstantCount = 1, 
-        .pushConstantsRanges = &pushConstantRt,
-    },{
-        .descriptorSetCount = 1, 
-        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
-    },{
-        .descriptorSetCount = 2, 
-        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_IMAGE_A]
-    }};
-
-    tanto_r_CreatePipelineLayouts(TANTO_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
 }
 
 static void initPipelines(void)
@@ -546,13 +735,14 @@ static void initPipelines(void)
     tanto_r_CreateRayTracePipelines(TANTO_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines);
 }
 
-static void initCompPipeline(const Tanto_R_BlendMode blendMode)
+static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
 {
     assert(blendMode != TANTO_R_BLEND_MODE_NONE);
 
-    const Tanto_R_GraphicsPipelineInfo pipeInfo = {
+    const Tanto_R_GraphicsPipelineInfo pipeInfo1 = {
         .layout  = pipelineLayouts[LAYOUT_COMP],
-        .renderPass = textureCompRenderPass, 
+        .renderPass = compositeRenderPass, 
+        .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
@@ -561,7 +751,23 @@ static void initCompPipeline(const Tanto_R_BlendMode blendMode)
         .fragShader = SPVDIR"/comp-frag.spv"
     };
 
-    tanto_r_CreateGraphicsPipelines(1, &pipeInfo, &graphicsPipelines[PIPELINE_COMP]);
+    const Tanto_R_GraphicsPipelineInfo pipeInfo2 = {
+        .layout  = pipelineLayouts[LAYOUT_COMP],
+        .renderPass = compositeRenderPass, 
+        .subpass = 1,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
+        .blendMode   = blendMode,
+        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .fragShader = SPVDIR"/comp2-frag.spv"
+    };
+
+    const Tanto_R_GraphicsPipelineInfo infos[] = {
+        pipeInfo1, pipeInfo2
+    };
+
+    tanto_r_CreateGraphicsPipelines(2, infos, &graphicsPipelines[PIPELINE_COMP_1]);
 }
 
 static void createShaderBindingTableSelect(void)
@@ -655,21 +861,21 @@ static void initFramebuffers(void)
         V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapchainFrameBuffers[i]) );
     }
 
+    const VkImageView attachments[] = {
+        imageA.view, imageB.view, imageC.view, imageD.view, imageA.view
+    };
+
     VkFramebufferCreateInfo info = {
         .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
         .layers = 1,
         .height = TEXTURE_SIZE,
         .width  = TEXTURE_SIZE,
-        .renderPass = textureCompRenderPass,
-        .attachmentCount = 1,
-        .pAttachments = &imageA.view 
+        .renderPass = compositeRenderPass,
+        .attachmentCount = 5,
+        .pAttachments = attachments
     };
 
-    V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &frameBufferA) );
-
-    info.pAttachments = &imageB.view;
-
-    V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &frameBufferB) );
+    V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &compositeFrameBuffer) );
 }
 
 static void cleanUpSwapchainDependent(void)
@@ -831,22 +1037,26 @@ static void comp(const VkCommandBuffer cmdBuf, const Image destImage)
         .clearValueCount = 1,
         .pClearValues = &clear,
         .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
-        .renderPass =  textureCompRenderPass,
-        .framebuffer = destImage == IMAGE_A ? frameBufferA : frameBufferB,
+        .renderPass =  compositeRenderPass,
+        .framebuffer = compositeFrameBuffer
     };
 
-    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP]);
-
-    const int descSet = destImage == IMAGE_A ? DESC_SET_IMAGE_A : DESC_SET_IMAGE_B;
-
-    vkCmdBindDescriptorSets(
-        cmdBuf, 
-        VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        pipelineLayouts[LAYOUT_COMP], 
-        0, 1, &description.descriptorSets[descSet], 
-        0, NULL);
-
     vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindDescriptorSets(
+            cmdBuf, 
+            VK_PIPELINE_BIND_POINT_GRAPHICS, 
+            pipelineLayouts[LAYOUT_COMP], 
+            0, 2, &description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            0, NULL);
+
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_1]);
+
+        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
+
+        vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_2]);
 
         vkCmdDraw(cmdBuf, 3, 1, 0, 0);
 
@@ -923,13 +1133,6 @@ static void updateRenderCommands(const int8_t frameIndex)
         .layerCount = 1,
     };
 
-    VkImageSubresourceLayers imageSubresource = {
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .baseArrayLayer = 0,
-        .layerCount = 1,
-        .mipLevel = 0
-    };
-
     VkImageMemoryBarrier imgBarrier0 = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .image = imageA.handle,
@@ -954,76 +1157,19 @@ static void updateRenderCommands(const int8_t frameIndex)
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_GENERAL,
         .subresourceRange = imageRange,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT, 
         .dstAccessMask = VK_ACCESS_SHADER_WRITE_BIT
     };
 
     vkCmdPipelineBarrier(cmdBuf, 
             VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 
+            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
             0, 0, NULL, 
             0, NULL, 1, &imgBarrier1);
 
     paint(cmdBuf);
 
-    VkImageMemoryBarrier imgBarrier2 = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageA.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .subresourceRange = imageRange,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-    };
-
-    vkCmdPipelineBarrier(cmdBuf, 
-            VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR, 
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
-            0, 0, NULL, 
-            0, NULL, 1, &imgBarrier2);
-
     comp(cmdBuf, IMAGE_B);
-
-    //VkMemoryBarrier memBarrier3 = {
-    //    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    //    .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-    //    .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT 
-    //};
-
-    //vkCmdPipelineBarrier(cmdBuf, 
-    //        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-    //        VK_PIPELINE_STAGE_TRANSFER_BIT, 
-    //        0, 1, &memBarrier3, 
-    //        0, NULL, 0, NULL);
-
-    //Tanto_V_BufferRegion* curLayerBR = l_GetActiveLayerBufferRegion();
-
-    //VkBufferImageCopy imageBToHost = {
-    //    .bufferOffset = curLayerBR->offset,
-    //    .bufferRowLength = 0,
-    //    .bufferImageHeight = 0,
-    //    .imageSubresource = imageSubresource,
-    //    .imageOffset = {0, 0},
-    //    .imageExtent = {TEXTURE_SIZE, TEXTURE_SIZE, 1}
-    //};
-
-    //vkCmdCopyImageToBuffer(cmdBuf, imageB.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, curLayerBR->buffer, 1, &imageBToHost);
-
-    VkImageMemoryBarrier imgBarrier3 = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageB.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .subresourceRange = imageRange,
-        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-    };
-    
-    vkCmdPipelineBarrier(cmdBuf, 
-            VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
-            0, 0, NULL, 
-            0, NULL, 1, &imgBarrier3);
 
     rasterize(cmdBuf);
 
@@ -1035,18 +1181,17 @@ void r_InitRenderer(void)
     framesNeedUpdate = TANTO_FRAME_COUNT;
 
     initOffscreenAttachments();
-    initPaintAndTextureImage();
+    initPaintImages();
 
     assert(imageA.size > 0);
     l_Init(imageA.size); // eventually will move this out
 
     l_SetCreateLayerCallback(onCreateLayer);
 
-    initSwapRenderPass();
-    initCompRenderPass();
+    initRenderPasses();
     initDescSetsAndPipeLayouts();
     initPipelines();
-    initCompPipeline(TANTO_R_BLEND_MODE_OVER);
+    initPaintPipelines(TANTO_R_BLEND_MODE_OVER);
 
     createShaderBindingTablePaint();
     createShaderBindingTableSelect();
@@ -1163,9 +1308,8 @@ void r_CleanUp(void)
     }
     memset(&pipelineLayouts, 0, sizeof(pipelineLayouts));
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
-    vkDestroyRenderPass(device, textureCompRenderPass, NULL);
-    vkDestroyFramebuffer(device, frameBufferA, NULL);
-    vkDestroyFramebuffer(device, frameBufferB, NULL);
+    vkDestroyRenderPass(device, compositeRenderPass, NULL);
+    vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
     l_CleanUp();
 }
 
@@ -1198,7 +1342,8 @@ UboPlayer* r_GetPlayer(void)
 void r_SetPaintMode(const PaintMode mode)
 {
     vkDeviceWaitIdle(device);
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP], NULL);
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_1], NULL);
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_2], NULL);
 
     Tanto_R_BlendMode blendMode;
     switch (mode)
@@ -1207,7 +1352,7 @@ void r_SetPaintMode(const PaintMode mode)
         case PAINT_MODE_ERASE: blendMode = TANTO_R_BLEND_MODE_ERASE; break;
     }
 
-    initCompPipeline(blendMode);
+    initPaintPipelines(blendMode);
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
     {
         updateRenderCommands(i);
