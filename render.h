@@ -47,6 +47,7 @@ int   r_GetSelectionPos(Vec3* v);
 Mat4* r_GetXform(r_XformType);
 Brush* r_GetBrush(void);
 UboPlayer* r_GetPlayer(void);
+VkDeviceSize r_GetTextureSize(void);
 void  r_LoadPrim(Tanto_R_Primitive prim);
 void  r_ClearPrim(void);
 void  r_ClearPaintImage(void);
