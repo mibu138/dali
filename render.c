@@ -106,7 +106,7 @@ Brush*       r_GetBrush(void);
 UboPlayer*   r_GetPlayer(void);
 void         r_SetPaintMode(const PaintMode mode);
 
-#define TEXTURE_SIZE 0x1000 // 0x1000 = 4096
+#define TEXTURE_SIZE 0x2000 // 0x1000 = 4096
 
 enum {
     LAYOUT_RASTER,
@@ -153,7 +153,7 @@ static void initOffscreenAttachments(void)
 static void initCompRenderPass(void)
 {
     tanto_r_CreateRenderPass_Color(VK_ATTACHMENT_LOAD_OP_LOAD, 
-            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, 
+            VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
             textureFormat, &textureCompRenderPass);
 }
 
@@ -923,6 +923,13 @@ static void updateRenderCommands(const int8_t frameIndex)
         .layerCount = 1,
     };
 
+    VkImageSubresourceLayers imageSubresource = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseArrayLayer = 0,
+        .layerCount = 1,
+        .mipLevel = 0
+    };
+
     VkImageMemoryBarrier imgBarrier0 = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .image = imageA.handle,
@@ -977,27 +984,46 @@ static void updateRenderCommands(const int8_t frameIndex)
 
     comp(cmdBuf, IMAGE_B);
 
-    //VkImageMemoryBarrier imgBarrier3 = {
-    //    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-    //    .image = imageB.handle,
-    //    .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-    //    .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    //    .subresourceRange = imageRange,
-    //    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-    //    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
-    //};
-    
     //VkMemoryBarrier memBarrier3 = {
     //    .sType = VK_STRUCTURE_TYPE_MEMORY_BARRIER,
-    //    .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-    //    .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+    //    .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+    //    .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT 
     //};
 
     //vkCmdPipelineBarrier(cmdBuf, 
     //        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-    //        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+    //        VK_PIPELINE_STAGE_TRANSFER_BIT, 
     //        0, 1, &memBarrier3, 
     //        0, NULL, 0, NULL);
+
+    //Tanto_V_BufferRegion* curLayerBR = l_GetActiveLayerBufferRegion();
+
+    //VkBufferImageCopy imageBToHost = {
+    //    .bufferOffset = curLayerBR->offset,
+    //    .bufferRowLength = 0,
+    //    .bufferImageHeight = 0,
+    //    .imageSubresource = imageSubresource,
+    //    .imageOffset = {0, 0},
+    //    .imageExtent = {TEXTURE_SIZE, TEXTURE_SIZE, 1}
+    //};
+
+    //vkCmdCopyImageToBuffer(cmdBuf, imageB.handle, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, curLayerBR->buffer, 1, &imageBToHost);
+
+    VkImageMemoryBarrier imgBarrier3 = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageB.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .subresourceRange = imageRange,
+        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT
+    };
+    
+    vkCmdPipelineBarrier(cmdBuf, 
+            VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+            0, 0, NULL, 
+            0, NULL, 1, &imgBarrier3);
 
     rasterize(cmdBuf);
 

@@ -88,7 +88,7 @@ void painter_ReloadHouMesh(Painter_HouMesh pm)
 
 void painter_StartLoop(void)
 {
-    Tanto_LoopData loopData = tanto_CreateLoopData(NS_TARGET, 0, 0);
+    Tanto_LoopData loopData = tanto_CreateLoopData(NS_TARGET, 0, 1);
 
     // initialize matrices
     Mat4* xformProj    = r_GetXform(R_XFORM_PROJ);
