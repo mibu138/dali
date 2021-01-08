@@ -9,7 +9,7 @@ layout(location = 2) in  vec3 inUvw;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 5) uniform sampler2D image[2];
+layout(set = 0, binding = 5) uniform sampler2D image;
 
 layout(set = 0, binding = 4) uniform Player {
     float posx;
@@ -32,7 +32,7 @@ void main()
     const float b = float((texel.x + texel.y) % 2) * 0.2 + 0.3;
     const vec4 uvColor = vec4(b, b, b, 1.0);
     const vec4 inColor = vec4(inColor, 1.0);
-    vec4 tex = texture(image[1], inUvw.xy);
+    vec4 tex = texture(image, inUvw.xy);
     const vec4 albedo = over(tex, uvColor);
     outColor = vec4(albedo.rgb * illume, 1.0);
     //outColor = vec4(inUvw, 1);

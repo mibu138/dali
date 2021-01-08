@@ -7,14 +7,9 @@ layout(location = 0) in  vec2 inUv;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 5) uniform sampler2D image[2];
-
-layout(push_constant) uniform PER_OBJECT
-{
-	uint imgIdx;
-} pc;
+layout(set = 0, binding = 0) uniform sampler2D image;
 
 void main()
 {
-    outColor = texture(image[pc.imgIdx], inUv);
+    outColor = texture(image, inUv);
 }

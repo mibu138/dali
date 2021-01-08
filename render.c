@@ -112,13 +112,15 @@ enum {
     LAYOUT_RASTER,
     LAYOUT_RAYTRACE,
     LAYOUT_POST,
+    LAYOUT_COMP
 };
 
 enum {
     DESC_SET_RASTER,
     DESC_SET_RAYTRACE,
     DESC_SET_POST,
-    DESC_SET_COMP
+    DESC_SET_IMAGE_A,
+    DESC_SET_IMAGE_B
 };
 
 enum {
@@ -328,16 +330,24 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_RASTER],
+            .dstSet = description.descriptorSets[DESC_SET_RASTER], // desc set label refers to the dst image for that comp pass
             .dstBinding = 5,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfoA
+            .pImageInfo = &imageInfoB
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 1,
-            .dstSet = description.descriptorSets[DESC_SET_RASTER],
-            .dstBinding = 5,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_IMAGE_B], // desc set label refers to the dst image for that comp pass
+            .dstBinding = 0,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+            .pImageInfo = &imageInfoA 
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_IMAGE_A], // desc set label refers to the dst image for that comp pass
+            .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &imageInfoB
@@ -394,8 +404,8 @@ static void initDescSetsAndPipeLayouts(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            },{ // texture images
-                .descriptorCount = 2,
+            },{
+                .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
@@ -420,6 +430,20 @@ static void initDescSetsAndPipeLayouts(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            }}
+        },{ // IMAGE_A
+            .bindingCount = 1,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            }}
+        },{ // IMAGE_B
+            .bindingCount = 1,
+            .bindings = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
             }}
         }
     };
@@ -456,6 +480,9 @@ static void initDescSetsAndPipeLayouts(void)
     },{
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
+    },{
+        .descriptorSetCount = 2, 
+        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_IMAGE_A]
     }};
 
     tanto_r_CreatePipelineLayouts(TANTO_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
@@ -524,7 +551,7 @@ static void initCompPipeline(const Tanto_R_BlendMode blendMode)
     assert(blendMode != TANTO_R_BLEND_MODE_NONE);
 
     const Tanto_R_GraphicsPipelineInfo pipeInfo = {
-        .layout  = pipelineLayouts[LAYOUT_RASTER],
+        .layout  = pipelineLayouts[LAYOUT_COMP],
         .renderPass = textureCompRenderPass, 
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
@@ -810,17 +837,14 @@ static void comp(const VkCommandBuffer cmdBuf, const Image destImage)
 
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP]);
 
+    const int descSet = destImage == IMAGE_A ? DESC_SET_IMAGE_A : DESC_SET_IMAGE_B;
+
     vkCmdBindDescriptorSets(
         cmdBuf, 
         VK_PIPELINE_BIND_POINT_GRAPHICS, 
-        pipelineLayouts[LAYOUT_RASTER], 
-        0, 1, &description.descriptorSets[DESC_SET_RASTER], 
+        pipelineLayouts[LAYOUT_COMP], 
+        0, 1, &description.descriptorSets[descSet], 
         0, NULL);
-
-    const uint32_t textureIndex = (destImage + 1) % 2;
-
-    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RASTER], 
-            VK_SHADER_STAGE_FRAGMENT_BIT, 0, sizeof(uint32_t), &textureIndex);
 
     vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
 
