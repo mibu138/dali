@@ -241,7 +241,7 @@ static void initRenderPasses(void)
             .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
             .format = textureFormat,
             .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
             .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
@@ -657,14 +657,14 @@ static void initNonMeshDescriptors(void)
 
     VkDescriptorImageInfo imageInfoC = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageB.view,
-        .sampler     = imageB.sampler
+        .imageView   = imageC.view,
+        .sampler     = imageC.sampler
     };
 
     VkDescriptorImageInfo imageInfoD = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageB.view,
-        .sampler     = imageB.sampler
+        .imageView   = imageD.view,
+        .sampler     = imageD.sampler
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -1150,6 +1150,23 @@ static void onLayerChange(void)
         vkCmdEndRenderPass(cmd.buffer);
     }
 
+    VkImageMemoryBarrier barrier1 = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageB.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
+    };
+
+    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            0, 0, NULL, 0, NULL, 1, &barrier1);
+
+    BufferRegion* layerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
+
+    tanto_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageB);
+
     VkImageMemoryBarrier barriers2[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .image = imageA.handle,
@@ -1161,7 +1178,7 @@ static void onLayerChange(void)
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .image = imageB.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .subresourceRange = subResRange,
         .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
@@ -1172,7 +1189,7 @@ static void onLayerChange(void)
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
         .dstAccessMask = 0 
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -1180,7 +1197,7 @@ static void onLayerChange(void)
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
         .dstAccessMask = 0 
     }};
 
@@ -1317,12 +1334,16 @@ static void paint(const VkCommandBuffer cmdBuf)
 
 static void comp(const VkCommandBuffer cmdBuf)
 {
-    VkClearValue clear = {0.9f, 0.003f, 0.009f, 1.0f};
+    VkClearValue clear = {0, 0, 0, 0};
+
+    VkClearValue clears[] = {
+        clear, clear, clear, clear, clear
+    };
 
     const VkRenderPassBeginInfo rpass = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = 1,
-        .pClearValues = &clear,
+        .clearValueCount = TANTO_ARRAY_SIZE(clears),
+        .pClearValues = clears,
         .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
         .renderPass =  compositeRenderPass,
         .framebuffer = compositeFrameBuffer
@@ -1489,6 +1510,7 @@ void r_InitRenderer(void)
     assert(imageA.size > 0);
 
     l_Init(imageA.size, onLayerChange); // eventually will move this out
+    onLayerChange();
 }
 
 void r_Render(void)
