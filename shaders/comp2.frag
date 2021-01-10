@@ -13,5 +13,8 @@ layout (input_attachment_index = 3, set = 1, binding = 2) uniform subpassInput i
 
 void main()
 {
-    outColor = subpassLoad(inputB);
+    vec4 color = subpassLoad(inputC);
+    color = over(subpassLoad(inputB), color);
+    color = over(subpassLoad(inputD), color);
+    outColor = color;
 }

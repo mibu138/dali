@@ -51,7 +51,7 @@ void main()
     float tMin     = 0.001;
     float tMax     = 10000.0;
 
-    traceRayEXT(topLevelAS,     // acceleration structure
+    traceRayEXT(topLevelAS, // acceleration structure
             rayFlags,       // rayFlags
             0xFF,           // cullMask
             0,              // sbtRecordOffset
@@ -59,7 +59,7 @@ void main()
             0,              // missIndex
             origin.xyz,     // ray origin
             tMin,           // ray min range
-            dir.xyz,  // ray direction
+            dir.xyz,        // ray direction
             tMax,           // ray max range
             0               // payload (location = 0)
     );

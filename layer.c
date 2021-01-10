@@ -7,9 +7,8 @@
 #include <string.h>
 #include <vulkan/vulkan_core.h>
 
-typedef struct {
-    Tanto_V_BufferRegion bufferRegion;
-} Layer;
+typedef L_Layer   Layer;
+typedef L_LayerId LayerId;
 
 struct {
     uint16_t layerCount;
@@ -21,11 +20,12 @@ struct {
 
 static VkDeviceSize textureSize;
 
-CreateLayerCallbackFn onCreateLayer;
+L_LayerChangeFn onLayerChange;
 
-void l_Init(VkDeviceSize size)
+void l_Init(const VkDeviceSize size, L_LayerChangeFn const fn)
 {
     textureSize = size;
+    onLayerChange = fn;
 
     layerStack.backBuffer  = tanto_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
@@ -41,12 +41,7 @@ void l_Init(VkDeviceSize size)
 void l_CleanUp()
 {
     memset(&layerStack, 0, sizeof(layerStack));
-    onCreateLayer = NULL;
-}
-
-void l_SetCreateLayerCallback(CreateLayerCallbackFn fn)
-{
-    onCreateLayer = fn;
+    onLayerChange = NULL;
 }
 
 int l_CreateLayer(void)
@@ -58,8 +53,6 @@ int l_CreateLayer(void)
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
             TANTO_V_MEMORY_HOST_TYPE);
     
-    if (onCreateLayer)
-        onCreateLayer();
     TANTO_DEBUG_PRINT("Layer created!");
     printf("Adding layer. There are now %d layers. Active layer is %d\n", layerStack.layerCount, layerStack.activeLayer);
     return curId;
@@ -69,8 +62,8 @@ void l_SetActiveLayer(uint16_t id)
 {
     assert(id < layerStack.layerCount);
     layerStack.activeLayer = id;
-    onCreateLayer(); // should get its own call back but this should work for now
     printf("Setting layer to: %d\n", id);
+    onLayerChange();
 }
 
 int l_GetLayerCount(void)
@@ -78,13 +71,15 @@ int l_GetLayerCount(void)
     return layerStack.layerCount;
 }
 
-uint16_t l_GetActiveLayer(void)
+uint16_t l_GetActiveLayerId(void)
 {
     return layerStack.activeLayer;
 }
 
-Tanto_V_BufferRegion* l_GetActiveLayerBufferRegion(void)
+Layer* l_GetLayer(LayerId id)
 {
-    return &layerStack.layers[layerStack.activeLayer].bufferRegion;
+    assert(id < layerStack.layerCount);
+    return &layerStack.layers[id];
 }
+
 

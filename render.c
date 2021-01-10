@@ -56,6 +56,7 @@ enum {
     PIPELINE_POST,
     PIPELINE_COMP_1,
     PIPELINE_COMP_2,
+    PIPELINE_COMP_SINGLE
 };
 
 enum {
@@ -63,17 +64,14 @@ enum {
     PIPELINE_SELECT,
 };
 
-typedef enum {
-    IMAGE_A,
-    IMAGE_B
-} Image;
+typedef Tanto_V_BufferRegion BufferRegion;
 
-static Tanto_V_BufferRegion  matrixRegion;
-static Tanto_V_BufferRegion  brushRegion;
-static Tanto_V_BufferRegion  stbPaintRegion;
-static Tanto_V_BufferRegion  stbSelectRegion;
-static Tanto_V_BufferRegion  playerRegion;
-static Tanto_V_BufferRegion  selectionRegion;
+static BufferRegion  matrixRegion;
+static BufferRegion  brushRegion;
+static BufferRegion  stbPaintRegion;
+static BufferRegion  stbSelectRegion;
+static BufferRegion  playerRegion;
+static BufferRegion  selectionRegion;
 
 static Tanto_R_Primitive     renderPrim;
 
@@ -88,7 +86,7 @@ static Tanto_R_Description   description;
 
 static Tanto_V_Image   depthAttachment;
 
-#define TEXTURE_SIZE 0x4000 // 0x1000 = 4096
+#define TEXTURE_SIZE 0x1000 // 0x1000 = 4096
 
 static Tanto_V_Image   imageA; // will use for brush and then as final frambuffer target
 static Tanto_V_Image   imageB;
@@ -96,16 +94,18 @@ static Tanto_V_Image   imageC; // primarily background layers
 static Tanto_V_Image   imageD; // primarily foreground layers
 
 static VkFramebuffer   compositeFrameBuffer;
-
+static VkFramebuffer   backgroundFrameBuffer;
+static VkFramebuffer   foregroundFrameBuffer;
 static VkFramebuffer   swapchainFrameBuffers[TANTO_FRAME_COUNT];
 
 static const VkFormat depthFormat   = VK_FORMAT_D32_SFLOAT;
 static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
+static VkRenderPass singleCompositeRenderPass;
 static VkRenderPass compositeRenderPass;
 static VkRenderPass swapchainRenderPass;
 
-static uint8_t framesNeedUpdate;
+static L_LayerId curLayerId;
 
 static void updateRenderCommands(const int8_t frameIndex);
 static void initOffscreenAttachments(void);
@@ -121,7 +121,6 @@ static void createShaderBindingTablePaint(void);
 static void updatePushConstants(void);
 static void initFramebuffers(void);
 static void cleanUpSwapchainDependent(void);
-static void onCreateLayer(void);
 static void updateRenderCommands(const int8_t frameIndex);
 static void onRecreateSwapchain(void);
 VkDeviceSize r_GetTextureSize(void) { return imageA.size; }
@@ -166,13 +165,15 @@ static void initPaintImages(void)
             1);
 
     imageC = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
-            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
+            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
             1);
     
     imageD = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
-            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
+            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
+            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
             1);
@@ -198,158 +199,232 @@ static void initRenderPasses(void)
     tanto_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
             tanto_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
+    {
+        const VkAttachmentDescription attachmentA = {
+            .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+            .format = textureFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        };
 
-    const VkAttachmentDescription attachmentA = {
-        .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
-        .format = textureFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
-        .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-    };
+        const VkAttachmentDescription attachmentB = {
+            .format = textureFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
 
-    const VkAttachmentDescription attachmentB = {
-        .format = textureFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+        const VkAttachmentDescription attachmentC = {
+            .format = textureFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
 
-    const VkAttachmentDescription attachmentC = {
-        .format = textureFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+        const VkAttachmentDescription attachmentD = {
+            .format = textureFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
 
-    const VkAttachmentDescription attachmentD = {
-        .format = textureFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-        .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+        const VkAttachmentDescription attachmentA2 = {
+            .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+            .format = textureFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+            .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        };
 
-    const VkAttachmentDescription attachmentA2 = {
-        .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
-        .format = textureFormat,
-        .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-        .loadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE,
-        .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
-        .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-        .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-    };
+        const VkAttachmentReference referenceA1 = {
+            .attachment = 0,
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        };
 
-    const VkAttachmentReference referenceA1 = {
-        .attachment = 0,
-        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    };
+        const VkAttachmentReference referenceB1 = {
+            .attachment = 1,
+            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        };
 
-    const VkAttachmentReference referenceB1 = {
-        .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    };
+        VkSubpassDescription subpass1 = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments    = &referenceB1,
+            .pDepthStencilAttachment = NULL,
+            .inputAttachmentCount = 1,
+            .pInputAttachments = &referenceA1,
+            .preserveAttachmentCount = 0,
+        };
 
-    VkSubpassDescription subpass1 = {
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments    = &referenceB1,
-        .pDepthStencilAttachment = NULL,
-        .inputAttachmentCount = 1,
-        .pInputAttachments = &referenceA1,
-        .preserveAttachmentCount = 0,
-    };
+        const VkAttachmentReference referenceA2 = {
+            .attachment = 4,
+            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        };
 
-    const VkAttachmentReference referenceA2 = {
-        .attachment = 4,
-        .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
-    };
+        const VkAttachmentReference referenceB2 = {
+            .attachment = 1,
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        };
 
-    const VkAttachmentReference referenceB2 = {
-        .attachment = 1,
-        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    };
+        const VkAttachmentReference referenceC2 = {
+            .attachment = 2,
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        };
 
-    const VkAttachmentReference referenceC2 = {
-        .attachment = 2,
-        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    };
+        const VkAttachmentReference referenceD2 = {
+            .attachment = 3,
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        };
 
-    const VkAttachmentReference referenceD2 = {
-        .attachment = 3,
-        .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
-    };
+        const VkAttachmentReference inputAttachments[] = {
+            referenceB2, referenceC2, referenceD2
+        };
 
-    const VkAttachmentReference inputAttachments[] = {
-        referenceB2, referenceC2, referenceD2
-    };
+        VkSubpassDescription subpass2 = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments    = &referenceA2,
+            .pDepthStencilAttachment = NULL,
+            .inputAttachmentCount = TANTO_ARRAY_SIZE(inputAttachments),
+            .pInputAttachments = inputAttachments,
+            .preserveAttachmentCount = 0,
+        };
 
-    VkSubpassDescription subpass2 = {
-        .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-        .colorAttachmentCount = 1,
-        .pColorAttachments    = &referenceA2,
-        .pDepthStencilAttachment = NULL,
-        .inputAttachmentCount = TANTO_ARRAY_SIZE(inputAttachments),
-        .pInputAttachments = inputAttachments,
-        .preserveAttachmentCount = 0,
-    };
+        const VkSubpassDependency dependency1 = {
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        };
 
-    const VkSubpassDependency dependency1 = {
-        .srcSubpass = VK_SUBPASS_EXTERNAL,
-        .dstSubpass = 0,
-        .srcStageMask = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
-        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-    };
+        const VkSubpassDependency dependency2 = {
+            .srcSubpass = 0,
+            .dstSubpass = 1,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+        };
 
-    const VkSubpassDependency dependency2 = {
-        .srcSubpass = 0,
-        .dstSubpass = 1,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-    };
+        const VkSubpassDependency dependency3 = {
+            .srcSubpass = 1,
+            .dstSubpass = VK_SUBPASS_EXTERNAL,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        };
 
-    const VkSubpassDependency dependency3 = {
-        .srcSubpass = 1,
-        .dstSubpass = VK_SUBPASS_EXTERNAL,
-        .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-        .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-    };
+        VkSubpassDescription subpasses[] = {
+            subpass1, subpass2
+        };
 
-    VkSubpassDescription subpasses[] = {
-        subpass1, subpass2
-    };
+        VkSubpassDependency dependencies[] = {
+            dependency1, dependency2, dependency3
+        };
 
-    VkSubpassDependency dependencies[] = {
-        dependency1, dependency2, dependency3
-    };
+        VkAttachmentDescription attachments[] = {
+            attachmentA, attachmentB, attachmentC, attachmentD, attachmentA2
+        };
 
-    VkAttachmentDescription attachments[] = {
-        attachmentA, attachmentB, attachmentC, attachmentD, attachmentA2
-    };
+        VkRenderPassCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+            .subpassCount = TANTO_ARRAY_SIZE(subpasses),
+            .pSubpasses = subpasses,
+            .attachmentCount = TANTO_ARRAY_SIZE(attachments),
+            .pAttachments = attachments,
+            .dependencyCount = TANTO_ARRAY_SIZE(dependencies),
+            .pDependencies = dependencies,
+        };
 
-    VkRenderPassCreateInfo ci = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-        .subpassCount = TANTO_ARRAY_SIZE(subpasses),
-        .pSubpasses = subpasses,
-        .attachmentCount = TANTO_ARRAY_SIZE(attachments),
-        .pAttachments = attachments,
-        .dependencyCount = TANTO_ARRAY_SIZE(dependencies),
-        .pDependencies = dependencies,
-    };
+        V_ASSERT( vkCreateRenderPass(device, &ci, NULL, &compositeRenderPass) );
+    }
 
-    V_ASSERT( vkCreateRenderPass(device, &ci, NULL, &compositeRenderPass) );
+    {
+        const VkAttachmentDescription srcAttachment = {
+            .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+            .format = textureFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        };
+
+        const VkAttachmentDescription dstAttachment = {
+            .format = textureFormat,
+            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
+            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        };
+
+        const VkAttachmentReference refSrc = {
+            .attachment = 0,
+            .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+        };
+
+        const VkAttachmentReference refDst = {
+            .attachment = 1,
+            .layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+        };
+
+        const VkSubpassDescription subpass = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments    = &refDst,
+            .pDepthStencilAttachment = NULL,
+            .inputAttachmentCount = 1,
+            .pInputAttachments = &refSrc,
+            .preserveAttachmentCount = 0,
+        };
+
+        const VkSubpassDependency dependencies[] = {{
+            .srcSubpass = VK_SUBPASS_EXTERNAL,
+            .dstSubpass = 0,
+            .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        },{
+            .srcSubpass = 0,
+            .dstSubpass = VK_SUBPASS_EXTERNAL,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        }};
+
+        const VkAttachmentDescription attachments[] = {
+            srcAttachment, dstAttachment
+        };
+
+        VkRenderPassCreateInfo ci = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
+            .subpassCount = 1,
+            .pSubpasses = &subpass,
+            .attachmentCount = TANTO_ARRAY_SIZE(attachments),
+            .pAttachments = attachments,
+            .dependencyCount = TANTO_ARRAY_SIZE(dependencies),
+            .pDependencies = dependencies,
+        };
+
+        V_ASSERT( vkCreateRenderPass(device, &ci, NULL, &singleCompositeRenderPass) );
+    }
 }
 
 static void initDescSetsAndPipeLayouts(void)
@@ -763,11 +838,23 @@ static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
         .fragShader = SPVDIR"/comp2-frag.spv"
     };
 
-    const Tanto_R_GraphicsPipelineInfo infos[] = {
-        pipeInfo1, pipeInfo2
+    const Tanto_R_GraphicsPipelineInfo pipeInfoSingle = {
+        .layout  = pipelineLayouts[LAYOUT_COMP],
+        .renderPass = singleCompositeRenderPass, 
+        .subpass = 0,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
+        .blendMode   = blendMode,
+        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .fragShader = SPVDIR"/comp-frag.spv"
     };
 
-    tanto_r_CreateGraphicsPipelines(2, infos, &graphicsPipelines[PIPELINE_COMP_1]);
+    const Tanto_R_GraphicsPipelineInfo infos[] = {
+        pipeInfo1, pipeInfo2, pipeInfoSingle
+    };
+
+    tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
 }
 
 static void createShaderBindingTableSelect(void)
@@ -861,21 +948,62 @@ static void initFramebuffers(void)
         V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapchainFrameBuffers[i]) );
     }
 
-    const VkImageView attachments[] = {
-        imageA.view, imageB.view, imageC.view, imageD.view, imageA.view
-    };
+    // compositeFrameBuffer
+    {
+        const VkImageView attachments[] = {
+            imageA.view, imageB.view, imageC.view, imageD.view, imageA.view
+        };
 
-    VkFramebufferCreateInfo info = {
-        .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-        .layers = 1,
-        .height = TEXTURE_SIZE,
-        .width  = TEXTURE_SIZE,
-        .renderPass = compositeRenderPass,
-        .attachmentCount = 5,
-        .pAttachments = attachments
-    };
+        VkFramebufferCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .layers = 1,
+            .height = TEXTURE_SIZE,
+            .width  = TEXTURE_SIZE,
+            .renderPass = compositeRenderPass,
+            .attachmentCount = 5,
+            .pAttachments = attachments
+        };
 
-    V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &compositeFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &compositeFrameBuffer) );
+    }
+
+    // backgroundFrameBuffer
+    {
+        const VkImageView attachments[] = {
+            imageA.view, imageC.view, 
+        };
+
+        VkFramebufferCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .layers = 1,
+            .height = TEXTURE_SIZE,
+            .width  = TEXTURE_SIZE,
+            .renderPass = singleCompositeRenderPass,
+            .attachmentCount = 2,
+            .pAttachments = attachments
+        };
+
+        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &backgroundFrameBuffer) );
+    }
+
+    // foregroundFrameBuffer
+    {
+        const VkImageView attachments[] = {
+            imageA.view, imageD.view, 
+        };
+
+        VkFramebufferCreateInfo info = {
+            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
+            .layers = 1,
+            .height = TEXTURE_SIZE,
+            .width  = TEXTURE_SIZE,
+            .renderPass = singleCompositeRenderPass,
+            .attachmentCount = 2,
+            .pAttachments = attachments
+        };
+
+        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &foregroundFrameBuffer) );
+    }
 }
 
 static void cleanUpSwapchainDependent(void)
@@ -895,14 +1023,177 @@ static void cleanUpSwapchainDependent(void)
     tanto_v_FreeImage(&depthAttachment);
 }
 
-static void onCreateLayer(void)
+static void onLayerChange(void)
 {
+    printf("Begin %s\n", __PRETTY_FUNCTION__);
+
     vkDeviceWaitIdle(device);
-    // TODO
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+
+    Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+
+    tanto_v_BeginCommandBuffer(cmd.buffer);
+
+    BufferRegion* prevLayerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
+
+    VkImageSubresourceRange subResRange = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseArrayLayer = 0,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .layerCount = 1,
+    };
+
+    VkImageMemoryBarrier barriers[] = {{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageA.handle,
+        .oldLayout = imageA.layout,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
+    },{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageB.handle,
+        .oldLayout = imageB.layout,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT
+    },{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageC.handle,
+        .oldLayout = imageC.layout,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
+    },{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageD.handle,
+        .oldLayout = imageD.layout,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
+    }};
+
+    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers), barriers);
+
+    tanto_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, prevLayerBuffer);
+
+    curLayerId = l_GetActiveLayerId();
+
+    for (int l = 0; l < curLayerId; l++) 
     {
-        updateRenderCommands(i);
+        BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
+
+        tanto_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
+
+        VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
+
+        const VkRenderPassBeginInfo rpass = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .clearValueCount = 1,
+            .pClearValues = &clear,
+            .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
+            .renderPass =  singleCompositeRenderPass,
+            .framebuffer = backgroundFrameBuffer,
+        };
+
+        vkCmdBeginRenderPass(cmd.buffer, &rpass, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindDescriptorSets(
+            cmd.buffer, 
+            VK_PIPELINE_BIND_POINT_GRAPHICS, 
+            pipelineLayouts[LAYOUT_COMP], 
+            0, 1, &description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            0, NULL);
+
+        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_SINGLE]);
+
+        vkCmdDraw(cmd.buffer, 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(cmd.buffer);
     }
+
+    for (int l = l_GetLayerCount() - 1; l > curLayerId; l--) 
+    {
+        BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
+
+        tanto_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
+
+        VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
+
+        const VkRenderPassBeginInfo rpass = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .clearValueCount = 1,
+            .pClearValues = &clear,
+            .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
+            .renderPass =  singleCompositeRenderPass,
+            .framebuffer = foregroundFrameBuffer,
+        };
+
+        vkCmdBeginRenderPass(cmd.buffer, &rpass, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindDescriptorSets(
+            cmd.buffer, 
+            VK_PIPELINE_BIND_POINT_GRAPHICS, 
+            pipelineLayouts[LAYOUT_COMP], 
+            0, 1, &description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            0, NULL);
+
+        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_SINGLE]);
+
+        vkCmdDraw(cmd.buffer, 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(cmd.buffer);
+    }
+
+    VkImageMemoryBarrier barriers2[] = {{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageA.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+        .dstAccessMask = 0
+    },{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageB.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
+        .dstAccessMask = 0 
+    },{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageC.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = 0 
+    },{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageD.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+        .dstAccessMask = 0 
+    }};
+
+    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
+            0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers), barriers2);
+
+    tanto_v_EndCommandBuffer(cmd.buffer);
+
+    tanto_v_SubmitAndWait(&cmd, 0);
+
+    tanto_v_DestroyCommand(cmd);
+
+    printf("End %s\n", __PRETTY_FUNCTION__);
 }
 
 static void onRecreateSwapchain(void)
@@ -912,8 +1203,6 @@ static void onRecreateSwapchain(void)
     initOffscreenAttachments();
     initPipelines();
     initFramebuffers();
-
-    framesNeedUpdate = TANTO_FRAME_COUNT;
 }
 
 static void rayTraceSelect(const VkCommandBuffer cmdBuf)
@@ -1022,13 +1311,11 @@ static void paint(const VkCommandBuffer cmdBuf)
 
     vkCmdTraceRaysKHR(cmdBuf, &raygenShaderBindingTable,
             &missShaderBindingTable, &hitShaderBindingTable,
-            &callableShaderBindingTable, TEXTURE_SIZE, 
-            TEXTURE_SIZE, 1);
-
-    printf("Raytrace recorded!\n");
+            &callableShaderBindingTable, 2000, 
+            2000, 1);
 }
 
-static void comp(const VkCommandBuffer cmdBuf, const Image destImage)
+static void comp(const VkCommandBuffer cmdBuf)
 {
     VkClearValue clear = {0.9f, 0.003f, 0.009f, 1.0f};
 
@@ -1111,10 +1398,13 @@ static void updateRenderCommands(const int8_t frameIndex)
     updatePushConstants();
 
     Tanto_R_Frame* frame = tanto_r_GetFrame(frameIndex);
-    vkResetCommandPool(device, frame->command.commandPool, 0);
-    VkCommandBufferBeginInfo cbbi = {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO};
+    vkResetCommandPool(device, frame->command.pool, 0);
+    VkCommandBufferBeginInfo cbbi = {
+        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
+        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
+    };
 
-    VkCommandBuffer cmdBuf = frame->command.commandBuffer; 
+    VkCommandBuffer cmdBuf = frame->command.buffer; 
 
     V_ASSERT( vkBeginCommandBuffer(cmdBuf, &cbbi) );
 
@@ -1169,7 +1459,7 @@ static void updateRenderCommands(const int8_t frameIndex)
 
     paint(cmdBuf);
 
-    comp(cmdBuf, IMAGE_B);
+    comp(cmdBuf);
 
     rasterize(cmdBuf);
 
@@ -1178,15 +1468,10 @@ static void updateRenderCommands(const int8_t frameIndex)
 
 void r_InitRenderer(void)
 {
-    framesNeedUpdate = TANTO_FRAME_COUNT;
+    curLayerId = 0;
 
     initOffscreenAttachments();
     initPaintImages();
-
-    assert(imageA.size > 0);
-    l_Init(imageA.size); // eventually will move this out
-
-    l_SetCreateLayerCallback(onCreateLayer);
 
     initRenderPasses();
     initDescSetsAndPipeLayouts();
@@ -1200,27 +1485,33 @@ void r_InitRenderer(void)
     initFramebuffers();
 
     tanto_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
+
+    assert(imageA.size > 0);
+
+    l_Init(imageA.size, onLayerChange); // eventually will move this out
 }
 
 void r_Render(void)
 {
-    if (framesNeedUpdate)
-    {
-        uint32_t i = tanto_r_GetCurrentFrameIndex();
-        tanto_r_WaitOnFrame(i);
-        updateRenderCommands(i);
-        framesNeedUpdate--;
-    }
+    uint32_t i = tanto_r_GetCurrentFrameIndex();
+    tanto_r_WaitOnFrame(i);
+    updateRenderCommands(i);
     tanto_r_SubmitFrame();
 }
 
 int r_GetSelectionPos(Vec3* v)
 {
-    Tanto_V_CommandPool pool = tanto_v_RequestOneTimeUseCommand();
+    Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
 
-    rayTraceSelect(pool.buffer);
+    tanto_v_BeginCommandBuffer(cmd.buffer);
 
-    tanto_v_SubmitOneTimeCommandAndWait(&pool, 0);
+    rayTraceSelect(cmd.buffer);
+
+    tanto_v_EndCommandBuffer(cmd.buffer);
+
+    tanto_v_SubmitAndWait(&cmd, 0);
+
+    tanto_v_DestroyCommand(cmd);
 
     Selection* sel = (Selection*)selectionRegion.hostData;
     if (sel->hit)
