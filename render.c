@@ -1148,7 +1148,9 @@ static void onLayerChange(void)
         vkCmdEndRenderPass(cmd.buffer);
     }
 
-    for (int l = l_GetLayerCount() - 1; l > curLayerId; l--) 
+    const int layerCount = l_GetLayerCount();
+
+    for (int l = curLayerId + 1; l < layerCount; l++) 
     {
         BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
 
@@ -1638,6 +1640,8 @@ void r_CleanUp(void)
     memset(raytracePipelines, 0, sizeof(raytracePipelines));
     tanto_v_FreeImage(&imageA);
     tanto_v_FreeImage(&imageB);
+    tanto_v_FreeImage(&imageC);
+    tanto_v_FreeImage(&imageD);
     vkDestroyDescriptorPool(device, description.descriptorPool, NULL);
     for (int i = 0; i < description.descriptorSetCount; i++) 
     {
@@ -1653,7 +1657,10 @@ void r_CleanUp(void)
     memset(&pipelineLayouts, 0, sizeof(pipelineLayouts));
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
     vkDestroyRenderPass(device, compositeRenderPass, NULL);
+    vkDestroyRenderPass(device, singleCompositeRenderPass, NULL);
     vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
+    vkDestroyFramebuffer(device, backgroundFrameBuffer, NULL);
+    vkDestroyFramebuffer(device, foregroundFrameBuffer, NULL);
     l_CleanUp();
 }
 
