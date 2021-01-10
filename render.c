@@ -1043,6 +1043,13 @@ static void onLayerChange(void)
         .layerCount = 1,
     };
 
+    VkClearColorValue clearColor = {
+        .float32[0] = 0,
+        .float32[1] = 0,
+        .float32[2] = 0,
+        .float32[3] = 0,
+    };
+
     VkImageMemoryBarrier barriers[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .image = imageA.handle,
@@ -1063,7 +1070,7 @@ static void onLayerChange(void)
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .image = imageC.handle,
         .oldLayout = imageC.layout,
-        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .subresourceRange = subResRange,
         .srcAccessMask = 0,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
@@ -1071,7 +1078,7 @@ static void onLayerChange(void)
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .image = imageD.handle,
         .oldLayout = imageD.layout,
-        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .subresourceRange = subResRange,
         .srcAccessMask = 0,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
@@ -1081,6 +1088,30 @@ static void onLayerChange(void)
             0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers), barriers);
 
     tanto_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, prevLayerBuffer);
+
+    vkCmdClearColorImage(cmd.buffer, imageC.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
+    vkCmdClearColorImage(cmd.buffer, imageD.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
+
+    VkImageMemoryBarrier barriers0[] = {{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageC.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+    },{
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = imageD.handle,
+        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+        .subresourceRange = subResRange,
+        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+    }};
+
+    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers0), barriers0);
 
     curLayerId = l_GetActiveLayerId();
 

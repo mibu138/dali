@@ -60,6 +60,11 @@ int l_CreateLayer(void)
 
 void l_SetActiveLayer(uint16_t id)
 {
+    if (id >= layerStack.layerCount)
+    {
+        printf("Not enough layers.\n");
+        return;
+    }
     assert(id < layerStack.layerCount);
     layerStack.activeLayer = id;
     printf("Setting layer to: %d\n", id);
