@@ -105,6 +105,9 @@ static VkRenderPass singleCompositeRenderPass;
 static VkRenderPass compositeRenderPass;
 static VkRenderPass swapchainRenderPass;
 
+static Tanto_R_AccelerationStructure bottomLevelAS;
+static Tanto_R_AccelerationStructure topLevelAS;
+
 static L_LayerId curLayerId;
 
 static void updateRenderCommands(const int8_t frameIndex);
@@ -123,19 +126,6 @@ static void initFramebuffers(void);
 static void cleanUpSwapchainDependent(void);
 static void updateRenderCommands(const int8_t frameIndex);
 static void onRecreateSwapchain(void);
-VkDeviceSize r_GetTextureSize(void) { return imageA.size; }
-void         r_InitRenderer(void);
-void         r_Render(void);
-int          r_GetSelectionPos(Vec3* v);
-void         r_LoadPrim(Tanto_R_Primitive prim);
-void         r_ClearPrim(void);
-void         r_SavePaintImage(void);
-void         r_ClearPaintImage(void);
-void         r_CleanUp(void);
-Mat4*        r_GetXform(r_XformType type);
-Brush*       r_GetBrush(void);
-UboPlayer*   r_GetPlayer(void);
-void         r_SetPaintMode(const PaintMode mode);
 
 static void initOffscreenAttachments(void)
 {
@@ -1583,15 +1573,16 @@ int r_GetSelectionPos(Vec3* v)
 void r_LoadPrim(Tanto_R_Primitive prim)
 {
     renderPrim = prim;
-    tanto_r_BuildBlas(&renderPrim);
-    tanto_r_BuildTlas();
+    tanto_r_BuildBlas(&prim, &bottomLevelAS);
+    tanto_r_BuildTlas(&bottomLevelAS, &topLevelAS);
 
     updatePrimDescriptors();
 }
 
 void r_ClearPrim(void)
 {
-    tanto_r_RayTraceDestroyAccelStructs();
+    tanto_r_DestroyAccelerationStruct(&topLevelAS);
+    tanto_r_DestroyAccelerationStruct(&bottomLevelAS);
     tanto_r_FreePrim(&renderPrim);
 }
 
@@ -1661,6 +1652,7 @@ void r_CleanUp(void)
     vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
     vkDestroyFramebuffer(device, backgroundFrameBuffer, NULL);
     vkDestroyFramebuffer(device, foregroundFrameBuffer, NULL);
+    r_ClearPrim();
     l_CleanUp();
 }
 

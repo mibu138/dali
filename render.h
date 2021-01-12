@@ -41,18 +41,18 @@ typedef enum {
     PAINT_MODE_ERASE
 } PaintMode;
 
-void  r_InitRenderer(void);
-void  r_Render(void);
-int   r_GetSelectionPos(Vec3* v);
-Mat4* r_GetXform(r_XformType);
-Brush* r_GetBrush(void);
-UboPlayer* r_GetPlayer(void);
+void         r_InitRenderer(void);
+void         r_Render(void);
+int          r_GetSelectionPos(Vec3* v);
+Mat4*        r_GetXform(r_XformType);
+Brush*       r_GetBrush(void);
+UboPlayer*   r_GetPlayer(void);
 VkDeviceSize r_GetTextureSize(void);
-void  r_LoadPrim(Tanto_R_Primitive prim);
-void  r_ClearPrim(void);
-void  r_ClearPaintImage(void);
-void  r_SetPaintMode(const PaintMode mode);
-void  r_SavePaintImage(void);
-void  r_CleanUp(void);
+void         r_LoadPrim(Tanto_R_Primitive prim);
+void         r_ClearPrim(void);
+void         r_ClearPaintImage(void);
+void         r_SetPaintMode(const PaintMode mode);
+void         r_SavePaintImage(void);
+void         r_CleanUp(void);
 
 #endif /* end of include guard: R_COMMANDS_H */
