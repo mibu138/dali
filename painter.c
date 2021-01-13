@@ -112,8 +112,6 @@ void painter_StartLoop(void)
 
         tanto_u_Render();
 
-        tanto_r_PresentFrame();
-
         tanto_FrameEnd(&loopData);
     }
 
