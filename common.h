@@ -13,6 +13,7 @@ typedef struct {
     bool   renderNeedsUpdate;
     bool   shouldRun;
     bool   reload;
+    bool   restart;
 } Parms;
 
 extern Parms parms; 

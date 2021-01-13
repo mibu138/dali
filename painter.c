@@ -124,6 +124,20 @@ void painter_StartLoop(void)
         r_ClearPrim();
         Tanto_R_Primitive cube = tanto_r_CreateCubePrim(true);
         r_LoadPrim(cube);
+        printf("RELOAD!\n");
+
+        painter_StartLoop();
+    }
+    else if (parms.restart)
+    {
+        parms.restart = false;
+        vkDeviceWaitIdle(device);
+
+        painter_ShutDown();
+        painter_Init();
+        Tanto_R_Primitive cube = tanto_r_CreateCubePrim(true);
+        r_LoadPrim(cube);
+        printf("RESTART!\n");
 
         painter_StartLoop();
     }

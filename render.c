@@ -68,8 +68,6 @@ typedef Tanto_V_BufferRegion BufferRegion;
 
 static BufferRegion  matrixRegion;
 static BufferRegion  brushRegion;
-static BufferRegion  stbPaintRegion;
-static BufferRegion  stbSelectRegion;
 static BufferRegion  playerRegion;
 static BufferRegion  selectionRegion;
 
@@ -80,6 +78,9 @@ static RtPushConstants     rtPushConstants;
 static VkPipelineLayout pipelineLayouts[TANTO_MAX_PIPELINES];
 static VkPipeline       graphicsPipelines[TANTO_MAX_PIPELINES];
 static VkPipeline       raytracePipelines[TANTO_MAX_PIPELINES];
+
+static Tanto_R_ShaderBindingTable sbtPaint;
+static Tanto_R_ShaderBindingTable sbtSelect;
 
 static VkDescriptorSetLayout descriptorSetLayouts[TANTO_MAX_DESCRIPTOR_SETS];
 static Tanto_R_Description   description;
@@ -119,8 +120,6 @@ static void initPipelines(void);
 static void rayTraceSelect(const VkCommandBuffer cmdBuf);
 static void paint(const VkCommandBuffer cmdBuf);
 static void rasterize(const VkCommandBuffer cmdBuf);
-static void createShaderBindingTableSelect(void);
-static void createShaderBindingTablePaint(void);
 static void updatePushConstants(void);
 static void initFramebuffers(void);
 static void cleanUpSwapchainDependent(void);
@@ -847,65 +846,6 @@ static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
     tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
 }
 
-static void createShaderBindingTableSelect(void)
-{
-    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
-    const uint32_t groupCount = 3;
-    const uint32_t groupHandleSize = rtprops.shaderGroupHandleSize;
-    const uint32_t baseAlignment = rtprops.shaderGroupBaseAlignment;
-    const uint32_t sbtSize = groupCount * baseAlignment; // 3 shader groups: raygen, miss, closest hit
-
-    uint8_t shaderHandleData[sbtSize];
-
-    printf("ShaderGroup handle size: %d\n", groupHandleSize);
-    printf("ShaderGroup base alignment: %d\n", baseAlignment);
-    printf("ShaderGroups total size   : %d\n", sbtSize);
-
-    VkResult r;
-    r = vkGetRayTracingShaderGroupHandlesKHR(device, raytracePipelines[PIPELINE_SELECT], 0, groupCount, sbtSize, shaderHandleData);
-    assert( VK_SUCCESS == r );
-    stbSelectRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_TYPE);
-
-    uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbSelectRegion.hostData;
-
-    for (int i = 0; i < groupCount; i++) 
-    {
-        memcpy(pTarget, pSrc + i * groupHandleSize, groupHandleSize);
-        pTarget += baseAlignment;
-    }
-
-    printf("Created shader binding table\n");
-}
-
-static void createShaderBindingTablePaint(void)
-{
-    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
-    const uint32_t groupCount = 3;
-    const uint32_t groupHandleSize = rtprops.shaderGroupHandleSize;
-    const uint32_t baseAlignment = rtprops.shaderGroupBaseAlignment;
-    const uint32_t sbtSize = groupCount * baseAlignment; // 3 shader groups: raygen, miss, closest hit
-
-    uint8_t shaderHandleData[sbtSize];
-
-    printf("ShaderGroup base alignment: %d\n", baseAlignment);
-    printf("ShaderGroups total size   : %d\n", sbtSize);
-
-    V_ASSERT( vkGetRayTracingShaderGroupHandlesKHR(device, raytracePipelines[PIPELINE_RAY_TRACE], 0, groupCount, sbtSize, shaderHandleData) );
-    stbPaintRegion = tanto_v_RequestBufferRegionAligned(sbtSize, baseAlignment, TANTO_V_MEMORY_HOST_TYPE);
-
-    uint8_t* pSrc    = shaderHandleData;
-    uint8_t* pTarget = stbPaintRegion.hostData;
-
-    for (int i = 0; i < groupCount; i++) 
-    {
-        memcpy(pTarget, pSrc + i * groupHandleSize, groupHandleSize);
-        pTarget += baseAlignment;
-    }
-
-    printf("Created shader binding table\n");
-}
-
 static void updatePushConstants(void)
 {
     rtPushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
@@ -1259,7 +1199,7 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
 
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
-    const VkDeviceSize baseAlignment = stbSelectRegion.offset;
+    const VkDeviceSize baseAlignment = sbtSelect.bufferRegion.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment + 0;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
@@ -1268,7 +1208,7 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
 
     VkBufferDeviceAddressInfo addrInfo = {
         .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = stbSelectRegion.buffer,
+        .buffer = sbtSelect.bufferRegion.buffer,
     };
 
     VkDeviceAddress address = vkGetBufferDeviceAddress(device, &addrInfo);
@@ -1314,7 +1254,7 @@ static void paint(const VkCommandBuffer cmdBuf)
 
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
-    const VkDeviceSize baseAlignment = stbPaintRegion.offset;
+    const VkDeviceSize baseAlignment = sbtPaint.bufferRegion.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment + 0;
     const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
     const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
@@ -1323,7 +1263,7 @@ static void paint(const VkCommandBuffer cmdBuf)
 
     VkBufferDeviceAddressInfo addrInfo = {
         .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = stbPaintRegion.buffer,
+        .buffer = sbtPaint.bufferRegion.buffer,
     };
 
     VkDeviceAddress address = vkGetBufferDeviceAddress(device, &addrInfo);
@@ -1522,8 +1462,8 @@ void r_InitRenderer(void)
     initPipelines();
     initPaintPipelines(TANTO_R_BLEND_MODE_OVER);
 
-    createShaderBindingTablePaint();
-    createShaderBindingTableSelect();
+    tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_RAY_TRACE], &sbtPaint);
+    tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_SELECT], &sbtSelect);
     initNonMeshDescriptors();
 
     initFramebuffers();

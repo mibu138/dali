@@ -284,7 +284,7 @@ bool g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
             case TANTO_KEY_CTRL: tumbleDown = true; break;
             case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
-            //case TANTO_KEY_R:    parms.shouldRun = false; parms.reload = true; break;
+            case TANTO_KEY_R:    parms.shouldRun = false; parms.restart = true; break;
             case TANTO_KEY_K: l_SetActiveLayer(l_GetActiveLayerId() + 1);
             case TANTO_KEY_C: r_ClearPaintImage(); break;
             case TANTO_KEY_I: break;
@@ -386,3 +386,9 @@ void g_SetRadius(const float r)
     brushRadius = r;
 }
 
+void g_CleanUp(void)
+{
+    brush = NULL;
+    uboPlayer = NULL;
+    slider0 = NULL;
+}
