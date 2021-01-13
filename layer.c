@@ -29,11 +29,11 @@ void l_Init(const VkDeviceSize size, L_LayerChangeFn const fn)
 
     layerStack.backBuffer  = tanto_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            TANTO_V_MEMORY_HOST_TYPE);
+            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     layerStack.frontBuffer = tanto_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            TANTO_V_MEMORY_HOST_TYPE);
+            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     l_CreateLayer(); // create one layer to start
 }
@@ -51,7 +51,7 @@ int l_CreateLayer(void)
 
     layerStack.layers[curId].bufferRegion = tanto_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            TANTO_V_MEMORY_HOST_TYPE);
+            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     
     TANTO_DEBUG_PRINT("Layer created!");
     printf("Adding layer. There are now %d layers. Active layer is %d\n", layerStack.layerCount, layerStack.activeLayer);

@@ -87,6 +87,9 @@ static Tanto_R_Description   description;
 
 static Tanto_V_Image   depthAttachment;
 
+static uint32_t graphicsQueueFamilyIndex;
+static uint32_t transferQueueFamilyIndex;
+
 #define TEXTURE_SIZE 0x1000 // 0x1000 = 4096
 
 static Tanto_V_Image   imageA; // will use for brush and then as final frambuffer target
@@ -134,7 +137,8 @@ static void initOffscreenAttachments(void)
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_DEPTH_BIT, 
-            VK_SAMPLE_COUNT_1_BIT);
+            VK_SAMPLE_COUNT_1_BIT,
+            graphicsQueueFamilyIndex);
 }
 
 static void initPaintImages(void)
@@ -144,28 +148,32 @@ static void initPaintImages(void)
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
-            1);
+            1,
+            graphicsQueueFamilyIndex);
 
     imageB = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
-            1);
+            1,
+            graphicsQueueFamilyIndex);
 
     imageC = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
-            1);
+            1,
+            graphicsQueueFamilyIndex);
     
     imageD = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_FILTER_LINEAR, 
-            1);
+            1,
+            graphicsQueueFamilyIndex);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageB);
@@ -581,7 +589,7 @@ static void updatePrimDescriptors(void)
 static void initNonMeshDescriptors(void)
 {
     matrixRegion = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            TANTO_V_MEMORY_HOST_TYPE);
+            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
@@ -590,16 +598,16 @@ static void initNonMeshDescriptors(void)
     matrices->projInv = m_Ident_Mat4();
 
     brushRegion = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            TANTO_V_MEMORY_HOST_TYPE);
+            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
     memset(brush, 0, sizeof(Brush));
     brush->radius = 0.01;
     brush->mode = 1;
 
-    playerRegion = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_TYPE);
+    playerRegion = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
     memset(playerRegion.hostData, 0, sizeof(UboPlayer));
 
-    selectionRegion = tanto_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, TANTO_V_MEMORY_HOST_TYPE);
+    selectionRegion = tanto_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
 
 
     VkDescriptorBufferInfo uniformInfoMatrices = {
@@ -1453,6 +1461,8 @@ static void updateRenderCommands(const int8_t frameIndex)
 void r_InitRenderer(void)
 {
     curLayerId = 0;
+    graphicsQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_GRAPHICS_TYPE);
+    transferQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_TRANSFER_TYPE);
 
     initOffscreenAttachments();
     initPaintImages();
