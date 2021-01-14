@@ -14,12 +14,15 @@
 #include <tanto/r_pipeline.h>
 #include <tanto/r_raytrace.h>
 #include <tanto/v_command.h>
+#include <tanto/v_video.h>
 #include <tanto/r_renderpass.h>
 #include <vulkan/vulkan_core.h>
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
 typedef Brush UboBrush;
+typedef Tanto_V_Command Command;
+typedef Tanto_V_Image   Image;
 
 typedef struct {
     Vec4 clearColor;
@@ -92,10 +95,14 @@ static uint32_t transferQueueFamilyIndex;
 
 #define TEXTURE_SIZE 0x1000 // 0x1000 = 4096
 
-static Tanto_V_Image   imageA; // will use for brush and then as final frambuffer target
-static Tanto_V_Image   imageB;
-static Tanto_V_Image   imageC; // primarily background layers
-static Tanto_V_Image   imageD; // primarily foreground layers
+static Command backupLayerCommand;
+
+static Command renderCommands[TANTO_FRAME_COUNT];
+
+static Image   imageA; // will use for brush and then as final frambuffer target
+static Image   imageB;
+static Image   imageC; // primarily background layers
+static Image   imageD; // primarily foreground layers
 
 static VkFramebuffer   compositeFrameBuffer;
 static VkFramebuffer   backgroundFrameBuffer;
@@ -1193,6 +1200,28 @@ static void onRecreateSwapchain(void)
     initFramebuffers();
 }
 
+static void backupCurrentLayer(void)
+{
+    //tanto_v_WaitForFence(&backupLayerCommand.fence);
+
+    //VkCommandBuffer cmdBuf = backupLayerCommand.buffer;
+
+    //tanto_v_BeginCommandBuffer(cmdBuf);
+
+    //VkImageMemoryBarrier imgBarrier = {
+    //    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+    //    .pNext = NULL,
+    //    .srcAccessMask = VK_ACCESS_SHADER_READ_BIT
+    //    .dstAccessMask = 
+    //    .oldLayout = 
+    //    .newLayout = 
+    //    .srcQueueFamilyIndex = 
+    //    .dstQueueFamilyIndex = 
+    //    .image = 
+    //    .subresourceRange = 
+    //};
+}
+
 static void rayTraceSelect(const VkCommandBuffer cmdBuf)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_SELECT]); 
@@ -1389,16 +1418,9 @@ static void updateRenderCommands(const int8_t frameIndex)
 {
     updatePushConstants();
 
-    Tanto_R_Frame* frame = tanto_r_GetFrame(frameIndex);
-    vkResetCommandPool(device, frame->command.pool, 0);
-    VkCommandBufferBeginInfo cbbi = {
-        .sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO,
-        .flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT
-    };
+    VkCommandBuffer cmdBuf = renderCommands[frameIndex].buffer;
 
-    VkCommandBuffer cmdBuf = frame->command.buffer; 
-
-    V_ASSERT( vkBeginCommandBuffer(cmdBuf, &cbbi) );
+    tanto_v_BeginCommandBuffer(cmdBuf);
 
     VkClearColorValue clearColor = {
         .float32[0] = 0,
@@ -1464,6 +1486,12 @@ void r_InitRenderer(void)
     graphicsQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_GRAPHICS_TYPE);
     transferQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_TRANSFER_TYPE);
 
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        renderCommands[i] = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+    }
+    backupLayerCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_TRANSFER_TYPE);
+
     initOffscreenAttachments();
     initPaintImages();
 
@@ -1488,10 +1516,14 @@ void r_InitRenderer(void)
 
 void r_Render(void)
 {
-    uint32_t i = tanto_r_GetCurrentFrameIndex();
-    tanto_r_WaitOnFrame(i);
+    uint32_t i = tanto_r_RequestFrame();
+    VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    tanto_v_WaitForFence(&renderCommands[i].fence);
+    tanto_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
-    tanto_r_SubmitFrame();
+    tanto_v_SubmitCommand(graphicsQueueFamilyIndex, 0, &stageFlags, NULL, &renderCommands[i]);
+    const VkSemaphore* pWaitSemaphore = tanto_u_Render(&renderCommands[i].semaphore);
+    tanto_r_PresentFrame(*pWaitSemaphore);
 }
 
 int r_GetSelectionPos(Vec3* v)
@@ -1576,9 +1608,16 @@ void r_CleanUp(void)
             vkDestroyPipeline(device, graphicsPipelines[i], NULL);
         if (raytracePipelines[i] != VK_NULL_HANDLE)
             vkDestroyPipeline(device, raytracePipelines[i], NULL);
+        if (pipelineLayouts[i])
+            vkDestroyPipelineLayout(device, pipelineLayouts[i], NULL);
+    }
+    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    {
+        tanto_v_DestroyCommand(renderCommands[i]);
     }
     memset(graphicsPipelines, 0, sizeof(graphicsPipelines));
     memset(raytracePipelines, 0, sizeof(raytracePipelines));
+    memset(&pipelineLayouts, 0, sizeof(pipelineLayouts));
     tanto_v_FreeImage(&imageA);
     tanto_v_FreeImage(&imageB);
     tanto_v_FreeImage(&imageC);
@@ -1590,12 +1629,6 @@ void r_CleanUp(void)
             vkDestroyDescriptorSetLayout(device, descriptorSetLayouts[i], NULL);
     }
     memset(&description, 0, sizeof(description));
-    for (int i = 0; i < TANTO_MAX_PIPELINES; i++) 
-    {
-        if (pipelineLayouts[i])
-            vkDestroyPipelineLayout(device, pipelineLayouts[i], NULL);
-    }
-    memset(&pipelineLayouts, 0, sizeof(pipelineLayouts));
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
     vkDestroyRenderPass(device, compositeRenderPass, NULL);
     vkDestroyRenderPass(device, singleCompositeRenderPass, NULL);
