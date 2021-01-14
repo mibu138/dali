@@ -16,7 +16,7 @@
 #include <tanto/v_command.h>
 #include <tanto/v_video.h>
 #include <tanto/r_renderpass.h>
-#include <vulkan/vulkan_core.h>
+#include "undo.h"
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
@@ -95,7 +95,9 @@ static uint32_t transferQueueFamilyIndex;
 
 #define TEXTURE_SIZE 0x1000 // 0x1000 = 4096
 
-static Command backupLayerCommand;
+static Command releaseImageCommand;
+static Command transferImageCommand;
+static Command acquireImageCommand;
 
 static Command renderCommands[TANTO_FRAME_COUNT];
 
@@ -120,6 +122,9 @@ static Tanto_R_AccelerationStructure bottomLevelAS;
 static Tanto_R_AccelerationStructure topLevelAS;
 
 static L_LayerId curLayerId;
+
+static bool needsToBackupLayer;
+static bool needsToUndo;
 
 static void updateRenderCommands(const int8_t frameIndex);
 static void initOffscreenAttachments(void);
@@ -968,7 +973,7 @@ static void cleanUpSwapchainDependent(void)
     tanto_v_FreeImage(&depthAttachment);
 }
 
-static void onLayerChange(void)
+static void onLayerChange(L_LayerId newLayerId)
 {
     printf("Begin %s\n", __PRETTY_FUNCTION__);
 
@@ -1058,7 +1063,7 @@ static void onLayerChange(void)
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
             0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers0), barriers0);
 
-    curLayerId = l_GetActiveLayerId();
+    curLayerId = newLayerId;
 
     for (int l = 0; l < curLayerId; l++) 
     {
@@ -1200,26 +1205,101 @@ static void onRecreateSwapchain(void)
     initFramebuffers();
 }
 
-static void backupCurrentLayer(void)
+static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
 {
-    //tanto_v_WaitForFence(&backupLayerCommand.fence);
+    tanto_v_WaitForFence(&acquireImageCommand.fence);
 
-    //VkCommandBuffer cmdBuf = backupLayerCommand.buffer;
+    tanto_v_ResetCommand(&releaseImageCommand);
+    tanto_v_ResetCommand(&transferImageCommand);
+    tanto_v_ResetCommand(&acquireImageCommand);
 
-    //tanto_v_BeginCommandBuffer(cmdBuf);
+    VkCommandBuffer cmdBuf = releaseImageCommand.buffer;
 
-    //VkImageMemoryBarrier imgBarrier = {
-    //    .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-    //    .pNext = NULL,
-    //    .srcAccessMask = VK_ACCESS_SHADER_READ_BIT
-    //    .dstAccessMask = 
-    //    .oldLayout = 
-    //    .newLayout = 
-    //    .srcQueueFamilyIndex = 
-    //    .dstQueueFamilyIndex = 
-    //    .image = 
-    //    .subresourceRange = 
-    //};
+    tanto_v_BeginCommandBuffer(cmdBuf);
+
+    const VkImageSubresourceRange range = {
+        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
+        .baseMipLevel = 0,
+        .levelCount = 1,
+        .baseArrayLayer = 0,
+        .layerCount = 1
+    };
+
+    const VkImageLayout otherLayout     = toHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    const VkAccessFlags otherAccessMask = toHost ? VK_ACCESS_TRANSFER_READ_BIT : VK_ACCESS_TRANSFER_WRITE_BIT;
+
+    VkImageMemoryBarrier imgBarrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext = NULL,
+        .srcAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+        .dstAccessMask = otherAccessMask,
+        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .newLayout = otherLayout,
+        .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
+        .dstQueueFamilyIndex = transferQueueFamilyIndex,
+        .image = imageB.handle,
+        .subresourceRange = range
+    };
+
+    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
+
+    tanto_v_EndCommandBuffer(cmdBuf);
+
+    cmdBuf = transferImageCommand.buffer;
+
+    tanto_v_BeginCommandBuffer(cmdBuf);
+
+    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
+            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
+
+    if (toHost)
+        tanto_v_CmdCopyImageToBuffer(cmdBuf, &imageB, bufferRegion);
+    else
+        tanto_v_CmdCopyBufferToImage(cmdBuf, bufferRegion, &imageB);
+
+    imgBarrier.srcAccessMask = otherAccessMask;
+    imgBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+    imgBarrier.oldLayout = otherLayout;
+    imgBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imgBarrier.srcQueueFamilyIndex = transferQueueFamilyIndex;
+    imgBarrier.dstQueueFamilyIndex = graphicsQueueFamilyIndex;
+
+    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
+
+    tanto_v_EndCommandBuffer(cmdBuf);
+
+    cmdBuf = acquireImageCommand.buffer;
+
+    tanto_v_BeginCommandBuffer(cmdBuf);
+
+    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
+            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
+
+    tanto_v_EndCommandBuffer(cmdBuf);
+
+    tanto_v_SubmitGraphicsCommand(0, NULL, NULL, VK_NULL_HANDLE, &releaseImageCommand);
+    
+    VkPipelineStageFlags transferStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;
+
+    tanto_v_SubmitTransferCommand(0, &transferStageFlags, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
+
+    VkPipelineStageFlags acquireStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+    tanto_v_SubmitGraphicsCommand(0, &acquireStageFlags, &transferImageCommand.semaphore, acquireImageCommand.fence, &acquireImageCommand);
+}
+
+static void backupLayer(void)
+{
+    runUndoCommands(true, u_GetNextBuffer());
+    printf("%s\n",__PRETTY_FUNCTION__);
+}
+
+static void undo(void)
+{
+    runUndoCommands(false, u_GetLastBuffer());
+    printf("%s\n",__PRETTY_FUNCTION__);
 }
 
 static void rayTraceSelect(const VkCommandBuffer cmdBuf)
@@ -1483,6 +1563,7 @@ static void updateRenderCommands(const int8_t frameIndex)
 void r_InitRenderer(void)
 {
     curLayerId = 0;
+    needsToBackupLayer = false;
     graphicsQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_GRAPHICS_TYPE);
     transferQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_TRANSFER_TYPE);
 
@@ -1490,7 +1571,10 @@ void r_InitRenderer(void)
     {
         renderCommands[i] = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
     }
-    backupLayerCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_TRANSFER_TYPE);
+
+    releaseImageCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+    transferImageCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_TRANSFER_TYPE);
+    acquireImageCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
 
     initOffscreenAttachments();
     initPaintImages();
@@ -1510,18 +1594,33 @@ void r_InitRenderer(void)
 
     assert(imageA.size > 0);
 
-    l_Init(imageA.size, onLayerChange); // eventually will move this out
-    onLayerChange();
+    l_Init(imageA.size); // eventually will move this out
+    l_RegisterLayerChangeFn(onLayerChange);
+    u_InitUndo(imageB.size);
+    onLayerChange(0);
 }
 
 void r_Render(void)
 {
     uint32_t i = tanto_r_RequestFrame();
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSemaphore* waitSemaphore = NULL;
+    if (needsToBackupLayer)
+    {
+        backupLayer();
+        waitSemaphore = &acquireImageCommand.semaphore;
+        needsToBackupLayer = false;
+    }
+    if (needsToUndo)
+    {
+        undo();
+        waitSemaphore = &acquireImageCommand.semaphore;
+        needsToUndo = false;
+    }
     tanto_v_WaitForFence(&renderCommands[i].fence);
     tanto_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
-    tanto_v_SubmitCommand(graphicsQueueFamilyIndex, 0, &stageFlags, NULL, &renderCommands[i]);
+    tanto_v_SubmitGraphicsCommand(0, &stageFlags, waitSemaphore, renderCommands[i].fence, &renderCommands[i]);
     const VkSemaphore* pWaitSemaphore = tanto_u_Render(&renderCommands[i].semaphore);
     tanto_r_PresentFrame(*pWaitSemaphore);
 }
@@ -1635,6 +1734,9 @@ void r_CleanUp(void)
     vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
     vkDestroyFramebuffer(device, backgroundFrameBuffer, NULL);
     vkDestroyFramebuffer(device, foregroundFrameBuffer, NULL);
+    tanto_v_DestroyCommand(releaseImageCommand);
+    tanto_v_DestroyCommand(transferImageCommand);
+    tanto_v_DestroyCommand(acquireImageCommand);
     r_ClearPrim();
     l_CleanUp();
 }
@@ -1683,4 +1785,14 @@ void r_SetPaintMode(const PaintMode mode)
     {
         updateRenderCommands(i);
     }
+}
+
+void r_BackUpLayer(void)
+{
+    needsToBackupLayer = true;
+}
+
+void r_Undo(void)
+{
+    needsToUndo = true;
 }

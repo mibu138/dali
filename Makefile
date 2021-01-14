@@ -21,6 +21,7 @@ DEPS =  \
 		render.h \
 		painter.h \
 		layer.h \
+		undo.h \
 		common.h \
 		shaders/common.glsl \
 		shaders/selcommon.glsl \
@@ -30,7 +31,8 @@ OBJS =  \
 		$(O)/game.o \
 		$(O)/render.o \
 		$(O)/painter.o \
-		$(O)/layer.o
+		$(O)/layer.o \
+		$(O)/undo.o
 
 SHADERS =  $(SPV)/post-frag.spv \
 		   $(SPV)/comp-frag.spv \

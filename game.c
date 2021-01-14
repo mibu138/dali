@@ -277,6 +277,8 @@ bool g_Responder(const Tanto_I_Event *event)
             //case TANTO_KEY_E: moveUp = true; break;
             //case TANTO_KEY_Q: moveDown = true; break;
             case TANTO_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
+            case TANTO_KEY_B: r_BackUpLayer(); break;
+            case TANTO_KEY_Z: r_Undo(); break;
             case TANTO_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
             case TANTO_KEY_P: r_SavePaintImage(); break;
             case TANTO_KEY_J: l_SetActiveLayer(l_GetActiveLayerId() -1); break;
@@ -339,7 +341,7 @@ bool g_Responder(const Tanto_I_Event *event)
         {
             switch (mode) 
             {
-                case MODE_PAINT: mode = MODE_DO_NOTHING; break;
+                case MODE_PAINT: mode = MODE_DO_NOTHING; r_BackUpLayer(); break;
                 case MODE_VIEW:  drag.active = false; break;
                 default: break;
             }

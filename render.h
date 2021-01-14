@@ -53,6 +53,8 @@ void         r_ClearPrim(void);
 void         r_ClearPaintImage(void);
 void         r_SetPaintMode(const PaintMode mode);
 void         r_SavePaintImage(void);
+void         r_Undo(void);
+void         r_BackUpLayer(void);
 void         r_CleanUp(void);
 
 #endif /* end of include guard: R_COMMANDS_H */

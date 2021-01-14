@@ -20,12 +20,13 @@ struct {
 
 static VkDeviceSize textureSize;
 
-L_LayerChangeFn onLayerChange;
+#define MAX_LAYER_CHANGE_FNS 8
+uint8_t         layerChangeFnCount;
+L_LayerChangeFn onLayerChangeFns[MAX_LAYER_CHANGE_FNS];
 
-void l_Init(const VkDeviceSize size, L_LayerChangeFn const fn)
+void l_Init(const VkDeviceSize size)
 {
     textureSize = size;
-    onLayerChange = fn;
 
     layerStack.backBuffer  = tanto_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
@@ -38,10 +39,17 @@ void l_Init(const VkDeviceSize size, L_LayerChangeFn const fn)
     l_CreateLayer(); // create one layer to start
 }
 
+void l_RegisterLayerChangeFn(L_LayerChangeFn const fn)
+{
+    onLayerChangeFns[layerChangeFnCount++] = fn;
+    assert(layerChangeFnCount < MAX_LAYER_CHANGE_FNS);
+}
+
 void l_CleanUp()
 {
     memset(&layerStack, 0, sizeof(layerStack));
-    onLayerChange = NULL;
+    memset(onLayerChangeFns, 0, sizeof(onLayerChangeFns));
+    layerChangeFnCount = 0;
 }
 
 int l_CreateLayer(void)
@@ -58,7 +66,7 @@ int l_CreateLayer(void)
     return curId;
 }
 
-void l_SetActiveLayer(uint16_t id)
+void l_SetActiveLayer(L_LayerId id)
 {
     if (id >= layerStack.layerCount)
     {
@@ -68,7 +76,10 @@ void l_SetActiveLayer(uint16_t id)
     assert(id < layerStack.layerCount);
     layerStack.activeLayer = id;
     printf("Setting layer to: %d\n", id);
-    onLayerChange();
+    for (int i = 0; i < layerChangeFnCount; i++) 
+    {
+        onLayerChangeFns[i](id);
+    }
 }
 
 int l_GetLayerCount(void)
