@@ -60,7 +60,6 @@ static void onLayerChange(L_LayerId newLayerId)
         layerCache[curStackIndex] = newLayerId; 
         undoStacks[curStackIndex].cur = undoStacks[curStackIndex].trl;
     }
-    // TODO: need to wipe this or disallow undos. need a trailing marker.
     stackNotUsedCounters[curStackIndex] = 0;
     assert(curStackIndex < MAX_STACKS);
 }
@@ -83,6 +82,11 @@ Tanto_V_BufferRegion* u_GetNextBuffer(void)
     UndoStack* undoStack = &undoStacks[curStackIndex];
     const uint8_t stackIndex = undoStack->cur;
     undoStack->cur = (undoStack->cur + 1) % MAX_UNDOS;
+    if (stackIndex == undoStack->trl)
+    {
+        undoStack->trl++;
+        undoStack->trl = undoStack->trl % MAX_UNDOS;
+    }
     printf("%s: cur: %d\n", __PRETTY_FUNCTION__, undoStack->cur);
     return &undoStack->bufferRegions[stackIndex];
 }
@@ -90,7 +94,13 @@ Tanto_V_BufferRegion* u_GetNextBuffer(void)
 Tanto_V_BufferRegion* u_GetLastBuffer(void)
 {
     UndoStack* undoStack = &undoStacks[curStackIndex];
-    uint8_t stackIndex = undoStack->cur - 2;
+    uint8_t stackIndex = undoStack->cur - 1;
+    if (stackIndex % MAX_UNDOS == undoStack->trl)
+    {
+        printf("Nothing to undo!\n");
+        return NULL; // cannot cross trl
+    }
+    stackIndex--;
     stackIndex = stackIndex % MAX_UNDOS;
     printf("undoStack->cur - 1 = %d\n", undoStack->cur - 1);
     undoStack->cur--;

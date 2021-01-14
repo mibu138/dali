@@ -977,6 +977,8 @@ static void onLayerChange(L_LayerId newLayerId)
 {
     printf("Begin %s\n", __PRETTY_FUNCTION__);
 
+    needsToBackupLayer = true;
+
     vkDeviceWaitIdle(device);
 
     Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
@@ -1296,10 +1298,13 @@ static void backupLayer(void)
     printf("%s\n",__PRETTY_FUNCTION__);
 }
 
-static void undo(void)
+static bool undo(void)
 {
-    runUndoCommands(false, u_GetLastBuffer());
     printf("%s\n",__PRETTY_FUNCTION__);
+    BufferRegion* buf = u_GetLastBuffer();
+    if (!buf) return false; // nothing to undo
+    runUndoCommands(false, buf);
+    return true;
 }
 
 static void rayTraceSelect(const VkCommandBuffer cmdBuf)
@@ -1613,8 +1618,8 @@ void r_Render(void)
     }
     if (needsToUndo)
     {
-        undo();
-        waitSemaphore = &acquireImageCommand.semaphore;
+        if (undo())
+            waitSemaphore = &acquireImageCommand.semaphore;
         needsToUndo = false;
     }
     tanto_v_WaitForFence(&renderCommands[i].fence);
