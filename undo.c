@@ -1,6 +1,7 @@
 #include "undo.h"
 #include "painter/layer.h"
 #include "layer.h"
+#include "render.h"
 #include <stdio.h>
 
 #define MAX_UNDOS 8
@@ -59,6 +60,7 @@ static void onLayerChange(L_LayerId newLayerId)
         curStackIndex = leastRecentlyUsedStack;
         layerCache[curStackIndex] = newLayerId; 
         undoStacks[curStackIndex].cur = undoStacks[curStackIndex].trl;
+        r_BackUpLayer();
     }
     stackNotUsedCounters[curStackIndex] = 0;
     assert(curStackIndex < MAX_STACKS);
@@ -82,7 +84,7 @@ Tanto_V_BufferRegion* u_GetNextBuffer(void)
     UndoStack* undoStack = &undoStacks[curStackIndex];
     const uint8_t stackIndex = undoStack->cur;
     undoStack->cur = (undoStack->cur + 1) % MAX_UNDOS;
-    if (stackIndex == undoStack->trl)
+    if (undoStack->cur == undoStack->trl)
     {
         undoStack->trl++;
         undoStack->trl = undoStack->trl % MAX_UNDOS;

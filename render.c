@@ -977,8 +977,6 @@ static void onLayerChange(L_LayerId newLayerId)
 {
     printf("Begin %s\n", __PRETTY_FUNCTION__);
 
-    needsToBackupLayer = true;
-
     vkDeviceWaitIdle(device);
 
     Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
