@@ -150,6 +150,7 @@ static void initOffscreenAttachments(void)
             VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_DEPTH_BIT, 
             VK_SAMPLE_COUNT_1_BIT,
+            1,
             graphicsQueueFamilyIndex);
 }
 
@@ -159,32 +160,36 @@ static void initPaintImages(void)
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_FILTER_LINEAR, 
+            VK_SAMPLE_COUNT_1_BIT,
             1,
+            VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
 
     imageB = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_FILTER_LINEAR, 
+            VK_SAMPLE_COUNT_1_BIT,
             1,
+            VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
 
     imageC = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_FILTER_LINEAR, 
+            VK_SAMPLE_COUNT_1_BIT,
             1,
+            VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
     
     imageD = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_FILTER_LINEAR, 
+            VK_SAMPLE_COUNT_1_BIT,
             1,
+            VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
 
     tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
