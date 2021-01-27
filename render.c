@@ -16,6 +16,7 @@
 #include <tanto/v_command.h>
 #include <tanto/v_video.h>
 #include <tanto/r_renderpass.h>
+#include <vulkan/vulkan_core.h>
 #include "undo.h"
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
@@ -135,7 +136,6 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf);
 static void paint(const VkCommandBuffer cmdBuf);
 static void rasterize(const VkCommandBuffer cmdBuf);
 static void updatePushConstants(void);
-static void initFramebuffers(void);
 static void cleanUpSwapchainDependent(void);
 static void updateRenderCommands(const int8_t frameIndex);
 static void onRecreateSwapchain(void);
@@ -882,7 +882,7 @@ static void updatePushConstants(void)
     rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(float);
 }
 
-static void initFramebuffers(void)
+static void initSwapchainDependentFramebuffers(void)
 {
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
     {
@@ -902,7 +902,10 @@ static void initFramebuffers(void)
 
         V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapchainFrameBuffers[i]) );
     }
+}
 
+static void initNonSwapchainDependentFramebuffers(void)
+{
     // compositeFrameBuffer
     {
         const VkImageView attachments[] = {
@@ -1207,7 +1210,7 @@ static void onRecreateSwapchain(void)
 
     initOffscreenAttachments();
     initPipelines();
-    initFramebuffers();
+    initSwapchainDependentFramebuffers();
 }
 
 static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
@@ -1596,7 +1599,8 @@ void r_InitRenderer(void)
     tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_SELECT], &sbtSelect);
     initNonMeshDescriptors();
 
-    initFramebuffers();
+    initSwapchainDependentFramebuffers();
+    initNonSwapchainDependentFramebuffers();
 
     tanto_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
 
@@ -1610,6 +1614,7 @@ void r_InitRenderer(void)
 
 void r_Render(void)
 {
+    vkDeviceWaitIdle(device);
     uint32_t i = tanto_r_RequestFrame();
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSemaphore* waitSemaphore = NULL;
@@ -1629,12 +1634,15 @@ void r_Render(void)
     tanto_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
     tanto_v_SubmitGraphicsCommand(0, &stageFlags, waitSemaphore, renderCommands[i].fence, &renderCommands[i]);
+    vkDeviceWaitIdle(device);
     const VkSemaphore* pWaitSemaphore = tanto_u_Render(&renderCommands[i].semaphore);
+    vkDeviceWaitIdle(device);
     tanto_r_PresentFrame(*pWaitSemaphore);
 }
 
 int r_GetSelectionPos(Vec3* v)
 {
+    vkDeviceWaitIdle(device);
     Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
 
     tanto_v_BeginCommandBuffer(cmd.buffer);
