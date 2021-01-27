@@ -9,7 +9,7 @@
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 
 layout(binding = 1, set = 0, scalar) buffer Attributes {
-    vec3 a[];
+    float a[];
 } attribs;
 
 layout(binding = 2, set = 0) buffer Indices {
@@ -24,7 +24,6 @@ layout(push_constant) uniform Constants {
     float lightIntensity;
     int   lightType;
     uint  posOffset;
-    uint  colorOffset;
     uint  normalOffset;
     uint  uvwOffset;
 } pushC;
@@ -32,6 +31,14 @@ layout(push_constant) uniform Constants {
 hitAttributeEXT vec3 hitAttrs;
 
 layout(location = 1) rayPayloadEXT bool isShadowed;
+
+vec3 getPos(const uint ind, const uint pOffset)
+{
+    float x = attribs.a[ind * 3 + 0 + pOffset];
+    float y = attribs.a[ind * 3 + 1 + pOffset];
+    float z = attribs.a[ind * 3 + 2 + pOffset];
+    return vec3(x,y,z);
+}
 
 void main()
 {
@@ -44,9 +51,9 @@ void main()
 
     const uint pOffset = pushC.posOffset;
 
-    const vec3 p0 = attribs.a[ind[0] + pOffset];
-    const vec3 p1 = attribs.a[ind[1] + pOffset];
-    const vec3 p2 = attribs.a[ind[2] + pOffset];
+    const vec3 p0 = getPos(ind[0], pOffset);
+    const vec3 p1 = getPos(ind[1], pOffset);
+    const vec3 p2 = getPos(ind[2], pOffset);
 
     vec3 pos    = p0 * barycen.x + p1 * barycen.y + p2 * barycen.z;
 

@@ -224,44 +224,6 @@ static void handleMouseMovement(void)
     }
 }
 
-void g_Init(void)
-{
-    player.pos = (Vec3){0, 0., 3};
-    player.target = (Vec3){0, 0, 0};
-    player.pivot = player.target;
-    brushX = 0;
-    brushY = 0;
-    brushColor = (Vec3){0.1, 0.95, 0.3};
-    brushRadius = 0.01;
-    mode = MODE_DO_NOTHING;
-    gameState.shouldRun = true;
-    viewMat = r_GetXform(R_XFORM_VIEW);
-    viewInvMat = r_GetXform(R_XFORM_VIEW_INV);
-    projInvMat = r_GetXform(R_XFORM_PROJ_INV);
-    brush = r_GetBrush();
-    uboPlayer = r_GetPlayer();
-
-    slider0 = tanto_u_CreateSlider(0, 40, NULL);
-}
-
-void g_BindToView(Mat4* view, Mat4* viewInv)
-{
-    assert(view);
-    viewMat = view;
-    if (viewInv)
-        viewInvMat = viewInv;
-}
-
-void g_BindToBrush(Brush* br)
-{
-    brush = br;
-}
-
-void g_BindToPlayer(UboPlayer* ubo)
-{
-    uboPlayer = ubo;
-}
-
 bool g_Responder(const Tanto_I_Event *event)
 {
     switch (event->type) 
@@ -350,6 +312,45 @@ bool g_Responder(const Tanto_I_Event *event)
     }
     return true;
 }
+
+void g_Init(void)
+{
+    player.pos = (Vec3){0, 0., 3};
+    player.target = (Vec3){0, 0, 0};
+    player.pivot = player.target;
+    brushX = 0;
+    brushY = 0;
+    brushColor = (Vec3){0.1, 0.95, 0.3};
+    brushRadius = 0.01;
+    mode = MODE_DO_NOTHING;
+    gameState.shouldRun = true;
+    viewMat = r_GetXform(R_XFORM_VIEW);
+    viewInvMat = r_GetXform(R_XFORM_VIEW_INV);
+    projInvMat = r_GetXform(R_XFORM_PROJ_INV);
+    brush = r_GetBrush();
+    uboPlayer = r_GetPlayer();
+
+    slider0 = tanto_u_CreateSlider(0, 40, NULL);
+}
+
+void g_BindToView(Mat4* view, Mat4* viewInv)
+{
+    assert(view);
+    viewMat = view;
+    if (viewInv)
+        viewInvMat = viewInv;
+}
+
+void g_BindToBrush(Brush* br)
+{
+    brush = br;
+}
+
+void g_BindToPlayer(UboPlayer* ubo)
+{
+    uboPlayer = ubo;
+}
+
 
 void g_Update(void)
 {

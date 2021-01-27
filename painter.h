@@ -4,17 +4,9 @@
 #include <tanto/r_geo.h>
 #include <tanto/f_file.h>
 
-typedef struct {
-    uint32_t           vertexCount;
-    Tanto_R_Attribute* posData;
-    Tanto_R_Attribute* norData;
-    Tanto_R_Attribute* uvwData;
-    Tanto_R_Index*     indexData;
-} Painter_HouMesh;
-
 void painter_Init(void);
-void painter_LoadHouMesh(Painter_HouMesh houMesh);
-void painter_ReloadHouMesh(Painter_HouMesh houMesh);
+void painter_LoadFprim(Tanto_F_Primitive* fprim); // frees fprim
+void painter_ReloadPrim(Tanto_F_Primitive* fprim); // frees fprim
 void painter_StartLoop(void);
 void painter_StopLoop(void);
 bool painter_ShouldRun(void);

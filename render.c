@@ -30,7 +30,6 @@ typedef struct {
     float lightIntensity;
     int   lightType;
     uint32_t posOffset;
-    uint32_t colorOffset;
     uint32_t normalOffset;
     uint32_t uvwOffset;
 } RtPushConstants;
@@ -411,7 +410,7 @@ static void initRenderPasses(void)
             .srcSubpass = VK_SUBPASS_EXTERNAL,
             .dstSubpass = 0,
             .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-            .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+            .srcAccessMask = 0,
             .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
         },{
@@ -768,11 +767,12 @@ static void initNonMeshDescriptors(void)
 
 static void initPipelines(void)
 {
+    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 8};
     const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
         // raster
         .renderPass = swapchainRenderPass, 
         .layout     = pipelineLayouts[LAYOUT_RASTER],
-        .vertexDescription = tanto_r_GetVertexDescription3D_3Vec3(),
+        .vertexDescription = tanto_r_GetVertexDescription(3, attrSizes),
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .vertShader = SPVDIR"/raster-vert.spv", 
@@ -877,9 +877,9 @@ static void updatePushConstants(void)
     rtPushConstants.lightIntensity = 1.0;
     rtPushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
     rtPushConstants.lightType = 0;
-    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(Vec3);
-    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(Vec3);
-    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(Vec3);
+    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(float);
+    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(float);
+    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(float);
 }
 
 static void initFramebuffers(void)

@@ -2,6 +2,7 @@
 #include "game.h"
 #include "common.h"
 #include "render.h"
+#include "tanto/f_file.h"
 #include "tanto/r_geo.h"
 
 #include <stdio.h>
@@ -24,29 +25,6 @@
 //#define NS_TARGET 500000000
 #define NS_PER_S  1000000000
 
-static Tanto_R_Primitive houMeshToPrim(const Painter_HouMesh pm)
-{
-    size_t nverts = pm.vertexCount;
-    Tanto_R_Primitive prim = tanto_r_CreatePrimitive(nverts, nverts, 3);
-
-    Tanto_R_Attribute* pos = tanto_r_GetPrimAttribute(&prim, 0);
-    Tanto_R_Attribute* nor = tanto_r_GetPrimAttribute(&prim, 1);
-    Tanto_R_Attribute* uvw = tanto_r_GetPrimAttribute(&prim, 2);
-    Tanto_R_Index* indices = tanto_r_GetPrimIndices(&prim);
-
-    memcpy(pos,     pm.posData,   sizeof(Tanto_R_Attribute) * nverts);
-    memcpy(nor,     pm.norData,   sizeof(Tanto_R_Attribute) * nverts);
-    memcpy(uvw,     pm.uvwData,   sizeof(Tanto_R_Attribute) * nverts);
-    memcpy(indices, pm.indexData, sizeof(Tanto_R_Index) * nverts);
-
-    // the new stuff
-
-    tanto_v_TransferToDevice(&prim.vertexRegion);
-    tanto_v_TransferToDevice(&prim.indexRegion);
-
-    return prim;
-}
-
 void painter_Init(void)
 {
     tanto_v_config.rayTraceEnabled = true;
@@ -55,7 +33,7 @@ void painter_Init(void)
 #else
     tanto_v_config.validationEnabled = false;
 #endif
-    tanto_d_Init(NULL);
+    tanto_d_Init(1000, 1000, NULL);
     tanto_v_Init();
     tanto_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
     tanto_r_Init();
@@ -66,23 +44,19 @@ void painter_Init(void)
     g_Init();
 }
 
-void painter_LoadHouMesh(Painter_HouMesh m)
+void painter_LoadFprim(Tanto_F_Primitive* fprim)
 {
-    Tanto_R_Primitive prim = houMeshToPrim(m);
-    free(m.posData);
-    free(m.norData);
-    free(m.uvwData);
-    free(m.indexData);
-
+    Tanto_R_Primitive prim = tanto_f_CreateRPrimFromFPrim(fprim);
+    tanto_f_FreePrimitive(fprim);
     r_LoadPrim(prim);
 }
 
-void painter_ReloadHouMesh(Painter_HouMesh pm)
+void painter_ReloadPrim(Tanto_F_Primitive* fprim)
 {
     vkDeviceWaitIdle(device);
     r_ClearPrim();
 
-    painter_LoadHouMesh(pm);
+    painter_LoadFprim(fprim);
     painter_StartLoop();
 }
 
