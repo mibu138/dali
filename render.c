@@ -432,7 +432,7 @@ static void initDescSetsAndPipeLayouts(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            },{ // position buffer
+            },{ // attrib buffer
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
@@ -749,7 +749,7 @@ static void initNonMeshDescriptors(void)
 
 static void initPipelines(void)
 {
-    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 8};
+    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 12};
     const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
         // raster
         .renderPass = swapchainRenderPass, 
