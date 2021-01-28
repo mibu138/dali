@@ -31,6 +31,7 @@ typedef struct {
     float lightIntensity;
     int   lightType;
     uint32_t posOffset;
+    uint32_t colOffset;
     uint32_t normalOffset;
     uint32_t uvwOffset;
 } RtPushConstants;
@@ -877,9 +878,9 @@ static void updatePushConstants(void)
     rtPushConstants.lightIntensity = 1.0;
     rtPushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
     rtPushConstants.lightType = 0;
-    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(float);
-    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(float);
-    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(float);
+    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(Vec3);
+    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(Vec3);
+    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(Vec3);
 }
 
 static void initSwapchainDependentFramebuffers(void)
