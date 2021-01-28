@@ -25,16 +25,6 @@ typedef Brush UboBrush;
 typedef Tanto_V_Command Command;
 typedef Tanto_V_Image   Image;
 
-typedef struct {
-    uint32_t posOffset;
-    uint32_t normalOffset;
-    uint32_t uvwOffset;
-} RtPushConstants;
-
-typedef struct {
-    uint32_t index;
-} RasterPushConstants;
-
 enum {
     LAYOUT_RASTER,
     LAYOUT_RAYTRACE,
@@ -71,8 +61,6 @@ static BufferRegion  playerRegion;
 static BufferRegion  selectionRegion;
 
 static Tanto_R_Primitive     renderPrim;
-
-static RtPushConstants     rtPushConstants;
 
 static VkPipelineLayout pipelineLayouts[TANTO_MAX_PIPELINES];
 static VkPipeline       graphicsPipelines[TANTO_MAX_PIPELINES];
@@ -131,7 +119,6 @@ static void initPipelines(void);
 static void rayTraceSelect(const VkCommandBuffer cmdBuf);
 static void paint(const VkCommandBuffer cmdBuf);
 static void rasterize(const VkCommandBuffer cmdBuf);
-static void updatePushConstants(void);
 static void cleanUpSwapchainDependent(void);
 static void updateRenderCommands(const int8_t frameIndex);
 static void onRecreateSwapchain(void);
@@ -463,7 +450,7 @@ static void initDescSetsAndPipeLayouts(void)
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         },{ // ray trace
-            .bindingCount = 3,
+            .bindingCount = 4,
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
@@ -476,6 +463,10 @@ static void initDescSetsAndPipeLayouts(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            },{ // uv buffer
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
             }}
         },{ // post
             .bindingCount = 1,
@@ -513,29 +504,12 @@ static void initDescSetsAndPipeLayouts(void)
 
     tanto_r_CreateDescriptorSets(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
 
-    const VkPushConstantRange pushConstantRt = {
-        .stageFlags = 
-            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
-        .offset = 0,
-        .size = sizeof(RtPushConstants)
-    };
-
-    const VkPushConstantRange pushConstantRaster = {
-        .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-        .offset = 0,
-        .size = sizeof(RtPushConstants)
-    };
-
     const Tanto_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = descriptorSetLayouts,
-        .pushConstantCount = 1,
-        .pushConstantsRanges = &pushConstantRaster
     },{
         .descriptorSetCount = 3, 
         .descriptorSetLayouts = descriptorSetLayouts,
-        .pushConstantCount = 1, 
-        .pushConstantsRanges = &pushConstantRt,
     },{
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
@@ -567,6 +541,12 @@ static void updatePrimDescriptors(void)
         .buffer = renderPrim.indexRegion.buffer,
     };
 
+    VkDescriptorBufferInfo uvBufInfo = {
+        .offset = renderPrim.vertexRegion.offset + renderPrim.attrOffsets[2],
+        .range  = renderPrim.vertexRegion.size - renderPrim.attrOffsets[2], //works only because uv is the last attribute
+        .buffer = renderPrim.vertexRegion.buffer,
+    };
+
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -591,6 +571,14 @@ static void updatePrimDescriptors(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
             .pNext = &asInfo
+        },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_RAYTRACE],
+            .dstBinding = 3,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+            .pBufferInfo = &uvBufInfo
     }};
 
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
@@ -863,16 +851,6 @@ static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
     };
 
     tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
-}
-
-static void updatePushConstants(void)
-{
-    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(float);
-    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(float);
-    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(float);
-    printf(">>> posOffset: %d\n", rtPushConstants.posOffset);
-    printf(">>> norOffset: %d\n", rtPushConstants.normalOffset);
-    printf(">>> uvwOffset: %d\n", rtPushConstants.uvwOffset);
 }
 
 static void initSwapchainDependentFramebuffers(void)
@@ -1311,9 +1289,6 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], 
-        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR , 0, sizeof(RtPushConstants), &rtPushConstants);
-
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
     const VkDeviceSize baseAlignment = sbtSelect.bufferRegion.offset;
@@ -1363,9 +1338,6 @@ static void paint(const VkCommandBuffer cmdBuf)
 
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
-
-    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], 
-        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
 
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
@@ -1494,8 +1466,6 @@ static void rasterize(const VkCommandBuffer cmdBuf)
 
 static void updateRenderCommands(const int8_t frameIndex)
 {
-    updatePushConstants();
-
     VkCommandBuffer cmdBuf = renderCommands[frameIndex].buffer;
 
     tanto_v_BeginCommandBuffer(cmdBuf);

@@ -18,12 +18,6 @@ layout(binding = 2, set = 0) buffer Indices {
 
 layout(binding = 0, set = 1) uniform accelerationStructureEXT topLevelAS;
 
-layout(push_constant) uniform Constants {
-    uint  posOffset;
-    uint  normalOffset;
-    uint  uvwOffset;
-} pushC;
-
 hitAttributeEXT vec3 hitAttrs;
 
 layout(location = 1) rayPayloadEXT bool isShadowed;
@@ -37,11 +31,9 @@ void main()
 
     const vec3 barycen = vec3(1.0 - hitAttrs.x - hitAttrs.y, hitAttrs.x, hitAttrs.y);
 
-    const uint pOffset = 0;
-
-    const vec3 p0 = attribs.a[ind[0] + pOffset];
-    const vec3 p1 = attribs.a[ind[1] + pOffset];
-    const vec3 p2 = attribs.a[ind[2] + pOffset];
+    const vec3 p0 = attribs.a[ind[0]];
+    const vec3 p1 = attribs.a[ind[1]];
+    const vec3 p2 = attribs.a[ind[2]];
 
     vec3 pos    = p0 * barycen.x + p1 * barycen.y + p2 * barycen.z;
 
