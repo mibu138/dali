@@ -115,13 +115,11 @@ static void initOffscreenAttachments(void);
 static void updatePrimDescriptors(void);
 static void initNonMeshDescriptors(void);
 static void initDescSetsAndPipeLayouts(void);
-static void initPipelines(void);
 static void rayTraceSelect(const VkCommandBuffer cmdBuf);
 static void paint(const VkCommandBuffer cmdBuf);
 static void rasterize(const VkCommandBuffer cmdBuf);
 static void cleanUpSwapchainDependent(void);
 static void updateRenderCommands(const int8_t frameIndex);
-static void onRecreateSwapchain(void);
 
 static void initOffscreenAttachments(void)
 {
@@ -747,7 +745,7 @@ static void initNonMeshDescriptors(void)
     vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
 }
 
-static void initPipelines(void)
+static void initRasterPipelines(void)
 {
     Tanto_R_AttributeSize attrSizes[3] = {12, 12, 12};
     const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
@@ -770,6 +768,11 @@ static void initPipelines(void)
         .fragShader = SPVDIR"/post-frag.spv"
     }};
 
+    tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
+}
+
+static void initRayTracePipelines(void)
+{
     const Tanto_R_RayTracePipelineInfo pipeInfosRT[] = {{
         // ray trace
         .layout = pipelineLayouts[LAYOUT_RAYTRACE],
@@ -802,7 +805,6 @@ static void initPipelines(void)
         }
     }};
 
-    tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
     tanto_r_CreateRayTracePipelines(TANTO_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines);
 }
 
@@ -943,10 +945,6 @@ static void cleanUpSwapchainDependent(void)
     }
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_RASTER], NULL);
     graphicsPipelines[PIPELINE_RASTER] = VK_NULL_HANDLE;
-    vkDestroyPipeline(device, raytracePipelines[PIPELINE_RAY_TRACE], NULL);
-    raytracePipelines[PIPELINE_RAY_TRACE] = VK_NULL_HANDLE;
-    vkDestroyPipeline(device, raytracePipelines[PIPELINE_SELECT], NULL);
-    raytracePipelines[PIPELINE_SELECT] = VK_NULL_HANDLE;
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_POST], NULL);
     graphicsPipelines[PIPELINE_POST] = VK_NULL_HANDLE;
     tanto_v_FreeImage(&depthAttachment);
@@ -1178,7 +1176,7 @@ static void onRecreateSwapchain(void)
     cleanUpSwapchainDependent();
 
     initOffscreenAttachments();
-    initPipelines();
+    initRasterPipelines();
     initSwapchainDependentFramebuffers();
 }
 
@@ -1549,7 +1547,8 @@ void r_InitRenderer(void)
 
     initRenderPasses();
     initDescSetsAndPipeLayouts();
-    initPipelines();
+    initRasterPipelines();
+    initRayTracePipelines();
     initPaintPipelines(TANTO_R_BLEND_MODE_OVER);
 
     tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_RAY_TRACE], &sbtPaint);
