@@ -26,10 +26,6 @@ typedef Tanto_V_Command Command;
 typedef Tanto_V_Image   Image;
 
 typedef struct {
-    Vec4 clearColor;
-    Vec3 lightDir;
-    float lightIntensity;
-    int   lightType;
     uint32_t posOffset;
     uint32_t normalOffset;
     uint32_t uvwOffset;
@@ -449,11 +445,11 @@ static void initDescSetsAndPipeLayouts(void)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            },{
+            },{ // position buffer
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{
+            },{ // index buffer
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
@@ -519,9 +515,7 @@ static void initDescSetsAndPipeLayouts(void)
 
     const VkPushConstantRange pushConstantRt = {
         .stageFlags = 
-            VK_SHADER_STAGE_RAYGEN_BIT_KHR |
-            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-            VK_SHADER_STAGE_MISS_BIT_KHR,
+            VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
         .offset = 0,
         .size = sizeof(RtPushConstants)
     };
@@ -767,7 +761,7 @@ static void initNonMeshDescriptors(void)
 
 static void initPipelines(void)
 {
-    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 12};
+    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 8};
     const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
         // raster
         .renderPass = swapchainRenderPass, 
@@ -801,7 +795,7 @@ static void initPipelines(void)
         },
         .chitCount = 1,
         .chitShaders = (char*[]){
-            SPVDIR"/paint-rchit.spv"
+            SPVDIR"/paint-vec2-rchit.spv"
         }
     },{
         // select
@@ -873,13 +867,12 @@ static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
 
 static void updatePushConstants(void)
 {
-    rtPushConstants.clearColor = (Vec4){0.1, 0.2, 0.5, 1.0};
-    rtPushConstants.lightIntensity = 1.0;
-    rtPushConstants.lightDir = (Vec3){-0.707106769, -0.5, -0.5};
-    rtPushConstants.lightType = 0;
-    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(Vec3);
-    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(Vec3);
-    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(Vec3);
+    rtPushConstants.posOffset =    renderPrim.attrOffsets[0] / sizeof(float);
+    rtPushConstants.normalOffset = renderPrim.attrOffsets[1] / sizeof(float);
+    rtPushConstants.uvwOffset    = renderPrim.attrOffsets[2] / sizeof(float);
+    printf(">>> posOffset: %d\n", rtPushConstants.posOffset);
+    printf(">>> norOffset: %d\n", rtPushConstants.normalOffset);
+    printf(">>> uvwOffset: %d\n", rtPushConstants.uvwOffset);
 }
 
 static void initSwapchainDependentFramebuffers(void)
@@ -1319,9 +1312,7 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
     vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], 
-        VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
-        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-        VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR , 0, sizeof(RtPushConstants), &rtPushConstants);
 
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
@@ -1374,9 +1365,7 @@ static void paint(const VkCommandBuffer cmdBuf)
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
     vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], 
-        VK_SHADER_STAGE_RAYGEN_BIT_KHR | 
-        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR |
-        VK_SHADER_STAGE_MISS_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
+        VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR, 0, sizeof(RtPushConstants), &rtPushConstants);
 
     const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;

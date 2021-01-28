@@ -4,12 +4,15 @@
 #extension GL_EXT_scalar_block_layout  : enable
 #extension GL_GOOGLE_include_directive : enable
 
-#include "selcommon.glsl"
+#include "raycommon.glsl"
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 
-layout(binding = 1, set = 0, scalar) buffer Attributes {
-    vec3 a[];
+//layout(binding = 1, set = 0) buffer Attributes {
+//    float a[];
+//} attribs;
+layout(binding = 1, set = 0) buffer Attributes {
+    vec2 a[];
 } attribs;
 
 layout(binding = 2, set = 0) buffer Indices {
@@ -37,14 +40,14 @@ void main()
 
     const vec3 barycen = vec3(1.0 - hitAttrs.x - hitAttrs.y, hitAttrs.x, hitAttrs.y);
 
-    const uint pOffset = 0;
+    //const uint uvwOffset = pushC.uvwOffset;
+    const uint uvwOffset = 21000;
 
-    const vec3 p0 = attribs.a[ind[0] + pOffset];
-    const vec3 p1 = attribs.a[ind[1] + pOffset];
-    const vec3 p2 = attribs.a[ind[2] + pOffset];
+    const vec3 uvw0 = vec3(attribs.a[ind[0] * 2 + uvwOffset], attribs.a[ind[0] * 2 + 1 + uvwOffset], 0);
+    const vec3 uvw1 = vec3(attribs.a[ind[1] * 2 + uvwOffset], attribs.a[ind[1] * 2 + 1 + uvwOffset], 0);
+    const vec3 uvw2 = vec3(attribs.a[ind[2] * 2 + uvwOffset], attribs.a[ind[2] * 2 + 1 + uvwOffset], 0);
 
-    vec3 pos    = p0 * barycen.x + p1 * barycen.y + p2 * barycen.z;
+    vec3 uvw    = uvw0 * barycen.x + uvw1 * barycen.y + uvw2 * barycen.z;
 
-    prd.hit = true;
-    prd.hitPos = pos;
+    prd.hitUv = uvw.xy;
 }

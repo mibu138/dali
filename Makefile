@@ -34,20 +34,11 @@ OBJS =  \
 		$(O)/layer.o \
 		$(O)/undo.o
 
-SHADERS =  $(SPV)/post-frag.spv \
-		   $(SPV)/comp-frag.spv \
-		   $(SPV)/comp2-frag.spv \
-		   $(SPV)/raster-vert.spv \
-		   $(SPV)/raster-frag.spv \
-		   $(SPV)/raytraceShadow-rmiss.spv \
-		   $(SPV)/paint-rgen.spv \
-		   $(SPV)/paint-rchit.spv \
-		   $(SPV)/paint-rmiss.spv \
-		   $(SPV)/select-rgen.spv \
-		   $(SPV)/select-rchit.spv \
-		   $(SPV)/applyPaint-frag.spv \
-		   $(SPV)/layerStack-frag.spv \
-		   $(SPV)/select-rmiss.spv
+FRAG  := $(patsubst %.frag,$(SPV)/%-frag.spv,$(notdir $(wildcard $(GLSL)/*.frag)))
+VERT  := $(patsubst %.vert,$(SPV)/%-vert.spv,$(notdir $(wildcard $(GLSL)/*.vert)))
+RGEN  := $(patsubst %.rgen,$(SPV)/%-rgen.spv,$(notdir $(wildcard $(GLSL)/*.rgen)))
+RCHIT := $(patsubst %.rchit,$(SPV)/%-rchit.spv,$(notdir $(wildcard $(GLSL)/*.rchit)))
+RMISS := $(patsubst %.rmiss,$(SPV)/%-rmiss.spv,$(notdir $(wildcard $(GLSL)/*.rmiss)))
 
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all
@@ -57,7 +48,7 @@ release: all
 
 all: tanto bin lib tags
 
-shaders: $(SHADERS)
+shaders: $(FRAG) $(VERT) $(RGEN) $(RCHIT) $(RMISS)
 
 .PHONY: tanto
 tanto:

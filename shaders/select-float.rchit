@@ -8,8 +8,8 @@
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 
-layout(binding = 1, set = 0, scalar) buffer Attributes {
-    vec3 a[];
+layout(binding = 1, set = 0) buffer Attributes {
+    float a[];
 } attribs;
 
 layout(binding = 2, set = 0) buffer Indices {
@@ -19,6 +19,10 @@ layout(binding = 2, set = 0) buffer Indices {
 layout(binding = 0, set = 1) uniform accelerationStructureEXT topLevelAS;
 
 layout(push_constant) uniform Constants {
+    vec4 clearColor;
+    vec3 lightDir;
+    float lightIntensity;
+    int   lightType;
     uint  posOffset;
     uint  normalOffset;
     uint  uvwOffset;
@@ -37,11 +41,17 @@ void main()
 
     const vec3 barycen = vec3(1.0 - hitAttrs.x - hitAttrs.y, hitAttrs.x, hitAttrs.y);
 
-    const uint pOffset = 0;
+    const uint pOffset = pushC.posOffset;
 
-    const vec3 p0 = attribs.a[ind[0] + pOffset];
-    const vec3 p1 = attribs.a[ind[1] + pOffset];
-    const vec3 p2 = attribs.a[ind[2] + pOffset];
+    const vec3 p0 = vec3(attribs.a[ind[0] * 3 + 0 + pOffset],
+                         attribs.a[ind[0] * 3 + 1 + pOffset],
+                         attribs.a[ind[0] * 3 + 2 + pOffset]);
+    const vec3 p1 = vec3(attribs.a[ind[1] * 3 + 0 + pOffset],
+                         attribs.a[ind[1] * 3 + 1 + pOffset],
+                         attribs.a[ind[1] * 3 + 2 + pOffset]);
+    const vec3 p2 = vec3(attribs.a[ind[2] * 3 + 0 + pOffset],
+                         attribs.a[ind[2] * 3 + 1 + pOffset],
+                         attribs.a[ind[2] * 3 + 2 + pOffset]);
 
     vec3 pos    = p0 * barycen.x + p1 * barycen.y + p2 * barycen.z;
 
