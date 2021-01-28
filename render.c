@@ -31,7 +31,6 @@ typedef struct {
     float lightIntensity;
     int   lightType;
     uint32_t posOffset;
-    uint32_t colOffset;
     uint32_t normalOffset;
     uint32_t uvwOffset;
 } RtPushConstants;
@@ -986,8 +985,6 @@ static void onLayerChange(L_LayerId newLayerId)
 {
     printf("Begin %s\n", __PRETTY_FUNCTION__);
 
-    vkDeviceWaitIdle(device);
-
     Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
 
     tanto_v_BeginCommandBuffer(cmd.buffer);
@@ -1615,7 +1612,6 @@ void r_InitRenderer(void)
 
 void r_Render(void)
 {
-    vkDeviceWaitIdle(device);
     uint32_t i = tanto_r_RequestFrame();
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSemaphore* waitSemaphore = NULL;
@@ -1635,15 +1631,12 @@ void r_Render(void)
     tanto_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
     tanto_v_SubmitGraphicsCommand(0, &stageFlags, waitSemaphore, renderCommands[i].fence, &renderCommands[i]);
-    vkDeviceWaitIdle(device);
     const VkSemaphore* pWaitSemaphore = tanto_u_Render(&renderCommands[i].semaphore);
-    vkDeviceWaitIdle(device);
     tanto_r_PresentFrame(*pWaitSemaphore);
 }
 
 int r_GetSelectionPos(Vec3* v)
 {
-    vkDeviceWaitIdle(device);
     Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
 
     tanto_v_BeginCommandBuffer(cmd.buffer);
@@ -1786,7 +1779,6 @@ UboPlayer* r_GetPlayer(void)
 
 void r_SetPaintMode(const PaintMode mode)
 {
-    vkDeviceWaitIdle(device);
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_1], NULL);
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_2], NULL);
 

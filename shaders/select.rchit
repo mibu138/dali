@@ -24,7 +24,6 @@ layout(push_constant) uniform Constants {
     float lightIntensity;
     int   lightType;
     uint  posOffset;
-    uint  colOffset;
     uint  normalOffset;
     uint  uvwOffset;
 } pushC;
