@@ -15,7 +15,7 @@ layout(binding = 2, set = 0) buffer Indices {
 layout(binding = 0, set = 1) uniform accelerationStructureEXT topLevelAS;
 
 layout(binding = 3, set = 1, scalar) buffer Attributes {
-    vec3 a[];
+    vec2 a[];
 } attribs;
 
 hitAttributeEXT vec3 hitAttrs;
@@ -31,12 +31,12 @@ void main()
 
     const vec3 barycen = vec3(1.0 - hitAttrs.x - hitAttrs.y, hitAttrs.x, hitAttrs.y);
 
-    //const vec3 uvw0 = vec3(attribs.a[ind[0]], 0);
-    //const vec3 uvw1 = vec3(attribs.a[ind[1]], 0);
-    //const vec3 uvw2 = vec3(attribs.a[ind[2]], 0);
-    const vec3 uvw0 = vec3(attribs.a[ind.x]);
-    const vec3 uvw1 = vec3(attribs.a[ind.y]);
-    const vec3 uvw2 = vec3(attribs.a[ind.z]);
+    const vec3 uvw0 = vec3(attribs.a[ind[0]], 0);
+    const vec3 uvw1 = vec3(attribs.a[ind[1]], 0);
+    const vec3 uvw2 = vec3(attribs.a[ind[2]], 0);
+    //const vec3 uvw0 = vec3(attribs.a[ind.x]);
+    //const vec3 uvw1 = vec3(attribs.a[ind.y]);
+    //const vec3 uvw2 = vec3(attribs.a[ind.z]);
 
     vec3 uvw    = uvw0 * barycen.x + uvw1 * barycen.y + uvw2 * barycen.z;
 

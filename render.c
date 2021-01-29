@@ -747,7 +747,7 @@ static void initNonMeshDescriptors(void)
 
 static void initRasterPipelines(void)
 {
-    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 12};
+    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 8};
     const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
         // raster
         .renderPass = swapchainRenderPass, 
@@ -771,7 +771,7 @@ static void initRasterPipelines(void)
     tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
 }
 
-static void initRayTracePipelines(void)
+static void initRayTracePipelinesAndShaderBindingTables(void)
 {
     const Tanto_R_RayTracePipelineInfo pipeInfosRT[] = {{
         // ray trace
@@ -806,6 +806,10 @@ static void initRayTracePipelines(void)
     }};
 
     tanto_r_CreateRayTracePipelines(TANTO_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines);
+    // the shader binding tables DEPEND ON THE PIPELINE. we need to always group these. fuck it. you need to pass the shader table
+    // on pipeline creation!
+    tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_RAY_TRACE], &sbtPaint);
+    tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_SELECT], &sbtSelect);
 }
 
 static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
@@ -1548,11 +1552,9 @@ void r_InitRenderer(void)
     initRenderPasses();
     initDescSetsAndPipeLayouts();
     initRasterPipelines();
-    initRayTracePipelines();
+    initRayTracePipelinesAndShaderBindingTables();
     initPaintPipelines(TANTO_R_BLEND_MODE_OVER);
 
-    tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_RAY_TRACE], &sbtPaint);
-    tanto_r_CreateShaderBindingTable(3, raytracePipelines[PIPELINE_SELECT], &sbtSelect);
     initNonMeshDescriptors();
 
     initSwapchainDependentFramebuffers();
@@ -1566,6 +1568,14 @@ void r_InitRenderer(void)
     l_RegisterLayerChangeFn(onLayerChange);
     u_InitUndo(imageB.size);
     onLayerChange(0);
+}
+
+void r_DEBUG_RecreateRTPipelines(void)
+{
+    vkDeviceWaitIdle(device);
+    vkDestroyPipeline(device, raytracePipelines[PIPELINE_RAY_TRACE], NULL);
+    vkDestroyPipeline(device, raytracePipelines[PIPELINE_SELECT], NULL);
+    initRayTracePipelinesAndShaderBindingTables();
 }
 
 void r_Render(void)
