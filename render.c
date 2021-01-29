@@ -1622,6 +1622,7 @@ int r_GetSelectionPos(Vec3* v)
 
 void r_LoadPrim(Tanto_R_Primitive prim)
 {
+    assert(renderPrim.vertexRegion.size == 0);
     renderPrim = prim;
     tanto_r_BuildBlas(&prim, &bottomLevelAS);
     tanto_r_BuildTlas(&bottomLevelAS, &topLevelAS);
