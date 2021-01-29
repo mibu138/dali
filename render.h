@@ -43,7 +43,6 @@ typedef enum {
 
 void         r_InitRenderer(void);
 void         r_Render(void);
-void  r_DEBUG_RecreateRTPipelines(void);
 int          r_GetSelectionPos(Vec3* v);
 Mat4*        r_GetXform(r_XformType);
 Brush*       r_GetBrush(void);

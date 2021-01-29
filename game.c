@@ -233,7 +233,6 @@ bool g_Responder(const Tanto_I_Event *event)
             case TANTO_KEY_W: zoomIn = true; break;
             //case TANTO_KEY_S: zoomOut = true; break;
             //case TANTO_KEY_S: brushColor = (Vec3){1, 1, 1}; r_SetPaintMode(PAINT_MODE_ERASE); break;
-            case TANTO_KEY_S: r_DEBUG_RecreateRTPipelines(); break;
             case TANTO_KEY_A: tumbleLeft = true; break;
             //case TANTO_KEY_D: tumbleRight = true; break;
             case TANTO_KEY_D: r_SetPaintMode(PAINT_MODE_OVER); break;
