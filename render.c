@@ -117,9 +117,9 @@ static bool needsToUndo;
 
 // swap to host stuff
 
-static bool         copySwapToHost;
-static BufferRegion swapHostBuffer;
-static Command      copyToHostCommand;
+static bool            copySwapToHost;
+static BufferRegion    swapHostBuffer;
+static Command         copyToHostCommand;
 static pthread_mutex_t swapHostLock;
 
 // swap to host stuff
@@ -207,6 +207,7 @@ static void initRenderPasses(void)
     obdn_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
             obdn_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
+
     {
         const VkAttachmentDescription attachmentA = {
             .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
