@@ -1276,11 +1276,15 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
 
     obdn_v_EndCommandBuffer(cmdBuf);
 
-    obdn_v_SubmitGraphicsCommand(0, 0, NULL, VK_NULL_HANDLE, &releaseImageCommand);
+    obdn_v_SubmitGraphicsCommand(0, 0, NULL, releaseImageCommand.semaphore, VK_NULL_HANDLE, releaseImageCommand.buffer);
     
     obdn_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
 
-    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, &transferImageCommand.semaphore, acquireImageCommand.fence, &acquireImageCommand);
+    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+            transferImageCommand.semaphore, 
+            acquireImageCommand.semaphore, 
+            acquireImageCommand.fence, 
+            acquireImageCommand.buffer);
 }
 
 static void backupLayer(void)
@@ -1599,25 +1603,26 @@ void r_InitRenderer(void)
 void r_Render(void)
 {
     uint32_t i = obdn_r_RequestFrame();
-    VkSemaphore* waitSemaphore = NULL;
+    VkSemaphore waitSemaphore = 0;
     if (needsToBackupLayer)
     {
         backupLayer();
-        waitSemaphore = &acquireImageCommand.semaphore;
+        waitSemaphore = acquireImageCommand.semaphore;
         needsToBackupLayer = false;
     }
     if (needsToUndo)
     {
         if (undo())
-            waitSemaphore = &acquireImageCommand.semaphore;
+            waitSemaphore = acquireImageCommand.semaphore;
         needsToUndo = false;
     }
     obdn_v_WaitForFence(&renderCommands[i].fence);
     obdn_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
     obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            waitSemaphore, renderCommands[i].fence, &renderCommands[i]);
-    const VkSemaphore* pWaitSemaphore = obdn_u_Render(&renderCommands[i].semaphore);
+            waitSemaphore, renderCommands[i].semaphore, 
+            renderCommands[i].fence, renderCommands[i].buffer);
+    waitSemaphore = obdn_u_Render(renderCommands[i].semaphore);
     if (copySwapToHost)
     {
         obdn_v_ResetCommand(&copyToHostCommand);
@@ -1643,12 +1648,13 @@ void r_Render(void)
 
         pthread_mutex_lock(&swapHostLock);
 
-        obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, pWaitSemaphore, 
-                copyToHostCommand.fence, &copyToHostCommand);
+        obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, waitSemaphore, 
+                copyToHostCommand.semaphore,
+                copyToHostCommand.fence, copyToHostCommand.buffer);
 
-        pWaitSemaphore = &copyToHostCommand.semaphore;
+        waitSemaphore = copyToHostCommand.semaphore;
     }
-    obdn_r_PresentFrame(*pWaitSemaphore);
+    obdn_r_PresentFrame(waitSemaphore);
     if (copySwapToHost)
     {
         obdn_v_WaitForFence(&copyToHostCommand.fence);
