@@ -33,12 +33,14 @@ void painter_Init(void)
 #else
     tanto_v_config.validationEnabled = false;
 #endif
+    parms.copySwapToHost = true;
+    const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     tanto_d_Init(1000, 1000, NULL);
     tanto_v_Init();
     tanto_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
-    tanto_r_Init();
+    tanto_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
     tanto_i_Init();
-    tanto_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL);
+    tanto_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     tanto_i_Subscribe(g_Responder);
     r_InitRenderer();
     g_Init();

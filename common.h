@@ -14,6 +14,7 @@ typedef struct {
     bool   shouldRun;
     bool   reload;
     bool   restart;
+    bool   copySwapToHost;
 } Parms;
 
 extern Parms parms; 

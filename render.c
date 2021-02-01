@@ -113,6 +113,14 @@ static L_LayerId curLayerId;
 static bool needsToBackupLayer;
 static bool needsToUndo;
 
+// swap to host stuff
+
+static bool         copySwapToHost;
+static BufferRegion swapHostBuffer;
+static Command      copyToHostCommand;
+
+// swap to host stuff
+
 static void updateRenderCommands(const int8_t frameIndex);
 static void initOffscreenAttachments(void);
 static void updatePrimDescriptors(void);
@@ -1181,6 +1189,13 @@ static void onRecreateSwapchain(void)
     initOffscreenAttachments();
     initRasterPipelines();
     initSwapchainDependentFramebuffers();
+
+    if (copySwapToHost)
+    {
+        tanto_v_FreeBufferRegion(&swapHostBuffer);
+        const uint64_t size = tanto_r_GetFrame(tanto_r_GetCurrentFrameIndex())->swapImage.size;
+        swapHostBuffer = tanto_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    }
 }
 
 static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
@@ -1257,15 +1272,11 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
 
     tanto_v_EndCommandBuffer(cmdBuf);
 
-    tanto_v_SubmitGraphicsCommand(0, NULL, NULL, VK_NULL_HANDLE, &releaseImageCommand);
+    tanto_v_SubmitGraphicsCommand(0, 0, NULL, VK_NULL_HANDLE, &releaseImageCommand);
     
-    VkPipelineStageFlags transferStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    tanto_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
 
-    tanto_v_SubmitTransferCommand(0, &transferStageFlags, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
-
-    VkPipelineStageFlags acquireStageFlags = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-    tanto_v_SubmitGraphicsCommand(0, &acquireStageFlags, &transferImageCommand.semaphore, acquireImageCommand.fence, &acquireImageCommand);
+    tanto_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, &transferImageCommand.semaphore, acquireImageCommand.fence, &acquireImageCommand);
 }
 
 static void backupLayer(void)
@@ -1536,6 +1547,8 @@ void r_InitRenderer(void)
     graphicsQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_GRAPHICS_TYPE);
     transferQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_TRANSFER_TYPE);
 
+    copySwapToHost = parms.copySwapToHost; //note this
+
     for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
     {
         renderCommands[i] = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
@@ -1567,12 +1580,19 @@ void r_InitRenderer(void)
     l_RegisterLayerChangeFn(onLayerChange);
     u_InitUndo(imageB.size);
     onLayerChange(0);
+    
+    if (copySwapToHost)
+    {
+        VkDeviceSize swapImageSize = tanto_r_GetFrame(0)->swapImage.size;
+        swapHostBuffer = tanto_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+        copyToHostCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+        printf(">> SwapHostBuffer created\n");
+    }
 }
 
 void r_Render(void)
 {
     uint32_t i = tanto_r_RequestFrame();
-    VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSemaphore* waitSemaphore = NULL;
     if (needsToBackupLayer)
     {
@@ -1589,8 +1609,38 @@ void r_Render(void)
     tanto_v_WaitForFence(&renderCommands[i].fence);
     tanto_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
-    tanto_v_SubmitGraphicsCommand(0, &stageFlags, waitSemaphore, renderCommands[i].fence, &renderCommands[i]);
+    tanto_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            waitSemaphore, renderCommands[i].fence, &renderCommands[i]);
     const VkSemaphore* pWaitSemaphore = tanto_u_Render(&renderCommands[i].semaphore);
+    if (copySwapToHost)
+    {
+        tanto_v_WaitForFence(&copyToHostCommand.fence);
+        tanto_v_ResetCommand(&copyToHostCommand);
+        tanto_v_BeginCommandBuffer(copyToHostCommand.buffer);
+
+        const Image* swapImage = &tanto_r_GetFrame(i)->swapImage;
+
+        assert(swapImage->size == swapHostBuffer.size);
+
+        tanto_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, &swapHostBuffer);
+
+        Tanto_V_Barrier barrier = {
+            .srcStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT,
+            .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+            .dstStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            .dstAccessMask = 0, 
+        };
+
+        tanto_v_CmdTransitionImageLayout(copyToHostCommand.buffer, barrier, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 1, swapImage->handle);
+
+        tanto_v_EndCommandBuffer(copyToHostCommand.buffer);
+
+        tanto_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, pWaitSemaphore, 
+                copyToHostCommand.fence, &copyToHostCommand);
+
+        pWaitSemaphore = &copyToHostCommand.semaphore;
+    }
     tanto_r_PresentFrame(*pWaitSemaphore);
 }
 
