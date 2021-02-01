@@ -57,4 +57,7 @@ void         r_Undo(void);
 void         r_BackUpLayer(void);
 void         r_CleanUp(void);
 
+void* r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize);
+void  r_ReleaseSwapBuffer(void);
+
 #endif /* end of include guard: R_COMMANDS_H */

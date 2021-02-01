@@ -19,6 +19,8 @@
 #include <vulkan/vulkan_core.h>
 #include "undo.h"
 
+#include <pthread.h>
+
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
 typedef Brush UboBrush;
@@ -118,6 +120,7 @@ static bool needsToUndo;
 static bool         copySwapToHost;
 static BufferRegion swapHostBuffer;
 static Command      copyToHostCommand;
+static pthread_mutex_t swapHostLock;
 
 // swap to host stuff
 
@@ -1586,6 +1589,8 @@ void r_InitRenderer(void)
         VkDeviceSize swapImageSize = obdn_r_GetFrame(0)->swapImage.size;
         swapHostBuffer = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+        int r = pthread_mutex_init(&swapHostLock, NULL);
+        assert(r == 0);
         printf(">> SwapHostBuffer created\n");
     }
 }
@@ -1614,7 +1619,6 @@ void r_Render(void)
     const VkSemaphore* pWaitSemaphore = obdn_u_Render(&renderCommands[i].semaphore);
     if (copySwapToHost)
     {
-        obdn_v_WaitForFence(&copyToHostCommand.fence);
         obdn_v_ResetCommand(&copyToHostCommand);
         obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
 
@@ -1636,12 +1640,19 @@ void r_Render(void)
 
         obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
 
+        pthread_mutex_lock(&swapHostLock);
+
         obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, pWaitSemaphore, 
                 copyToHostCommand.fence, &copyToHostCommand);
 
         pWaitSemaphore = &copyToHostCommand.semaphore;
     }
     obdn_r_PresentFrame(*pWaitSemaphore);
+    if (copySwapToHost)
+    {
+        obdn_v_WaitForFence(&copyToHostCommand.fence);
+        pthread_mutex_unlock(&swapHostLock);
+    }
 }
 
 int r_GetSelectionPos(Vec3* v)
@@ -1773,6 +1784,22 @@ Mat4* r_GetXform(r_XformType type)
         case R_XFORM_PROJ_INV: return &matrices->projInv;
     }
     return NULL;
+}
+
+void* r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize)
+{
+    pthread_mutex_lock(&swapHostLock);
+    printf("Acquired swap buffer lock...\n");
+    *width = OBDN_WINDOW_WIDTH;
+    *height = OBDN_WINDOW_HEIGHT;
+    *elementSize = 4;
+    return swapHostBuffer.hostData;
+}
+
+void r_ReleaseSwapBuffer(void)
+{
+    pthread_mutex_unlock(&swapHostLock);
+    printf("Released swap buffer lock.\n");
 }
 
 Brush* r_GetBrush(void)
