@@ -1634,32 +1634,30 @@ void r_Render(void)
 
         obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, &swapHostBuffer);
 
-        Obdn_V_Barrier barrier = {
-            .srcStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT,
-            .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-            .dstStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-            .dstAccessMask = 0, 
-        };
+        //Obdn_V_Barrier barrier = {
+        //    .srcStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT,
+        //    .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
+        //    .dstStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+        //    .dstAccessMask = 0, 
+        //};
 
-        obdn_v_CmdTransitionImageLayout(copyToHostCommand.buffer, barrier, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
-                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 1, swapImage->handle);
+        //obdn_v_CmdTransitionImageLayout(copyToHostCommand.buffer, barrier, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+        //        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 1, swapImage->handle);
 
         obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
 
         pthread_mutex_lock(&swapHostLock);
 
         obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, waitSemaphore, 
-                copyToHostCommand.semaphore,
-                copyToHostCommand.fence, copyToHostCommand.buffer);
+                VK_NULL_HANDLE,
+                copyToHostCommand.fence, 
+                copyToHostCommand.buffer);
 
-        waitSemaphore = copyToHostCommand.semaphore;
-    }
-    obdn_r_PresentFrame(waitSemaphore);
-    if (copySwapToHost)
-    {
         obdn_v_WaitForFence(&copyToHostCommand.fence);
         pthread_mutex_unlock(&swapHostLock);
     }
+    else   
+        obdn_r_PresentFrame(waitSemaphore);
 }
 
 int r_GetSelectionPos(Vec3* v)

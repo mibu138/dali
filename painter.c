@@ -33,12 +33,19 @@ void painter_Init(void)
 #else
     obdn_v_config.validationEnabled = false;
 #endif
-    parms.copySwapToHost = true;
+    parms.copySwapToHost = false;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    obdn_d_Init(1000, 1000, NULL);
+    if (!parms.copySwapToHost)
+        obdn_d_Init(1000, 1000, NULL);
+    else
+    {
+        OBDN_WINDOW_WIDTH = 1000;
+        OBDN_WINDOW_HEIGHT = 1000;
+    }
     obdn_v_Init();
-    obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
-    obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, false);
+    if (!parms.copySwapToHost)
+        obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
+    obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     obdn_i_Subscribe(g_Responder);
@@ -78,7 +85,8 @@ void painter_StartLoop(void)
     {
         obdn_FrameStart(&loopData);
 
-        obdn_i_GetEvents();
+        if (!parms.copySwapToHost)
+            obdn_d_DrainEventQueue();
         obdn_i_ProcessEvents();
 
         g_Update();
