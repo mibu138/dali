@@ -7,13 +7,13 @@ typedef struct {
     bool shouldRun;
 } G_GameState;
 
-struct Tanto_I_Event;
+struct Obdn_I_Event;
 
 extern G_GameState gameState;
 
 void g_Init(void);
 void g_CleanUp(void);
-bool g_Responder(const struct Tanto_I_Event *event);
+bool g_Responder(const struct Obdn_I_Event *event);
 void g_Update(void);
 void g_SetColor(const float r, const float g, const float b);
 void g_SetRadius(const float r);

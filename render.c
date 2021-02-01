@@ -1,29 +1,29 @@
 #include "render.h"
 #include "layer.h"
-#include "tanto/r_geo.h"
-#include "tanto/u_ui.h"
-#include "tanto/v_image.h"
-#include "tanto/v_memory.h"
+#include "obsidian/r_geo.h"
+#include "obsidian/u_ui.h"
+#include "obsidian/v_image.h"
+#include "obsidian/v_memory.h"
 #include <memory.h>
 #include <assert.h>
 #include <string.h>
-#include <tanto/r_render.h>
-#include <tanto/v_video.h>
-#include <tanto/t_def.h>
-#include <tanto/t_utils.h>
-#include <tanto/r_pipeline.h>
-#include <tanto/r_raytrace.h>
-#include <tanto/v_command.h>
-#include <tanto/v_video.h>
-#include <tanto/r_renderpass.h>
+#include <obsidian/r_render.h>
+#include <obsidian/v_video.h>
+#include <obsidian/t_def.h>
+#include <obsidian/t_utils.h>
+#include <obsidian/r_pipeline.h>
+#include <obsidian/r_raytrace.h>
+#include <obsidian/v_command.h>
+#include <obsidian/v_video.h>
+#include <obsidian/r_renderpass.h>
 #include <vulkan/vulkan_core.h>
 #include "undo.h"
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
 typedef Brush UboBrush;
-typedef Tanto_V_Command Command;
-typedef Tanto_V_Image   Image;
+typedef Obdn_V_Command Command;
+typedef Obdn_V_Image   Image;
 
 enum {
     LAYOUT_RASTER,
@@ -58,24 +58,24 @@ enum {
     SBT_SELECT,
 };
 
-typedef Tanto_V_BufferRegion BufferRegion;
+typedef Obdn_V_BufferRegion BufferRegion;
 
 static BufferRegion  matrixRegion;
 static BufferRegion  brushRegion;
 static BufferRegion  playerRegion;
 static BufferRegion  selectionRegion;
 
-static Tanto_R_Primitive     renderPrim;
+static Obdn_R_Primitive     renderPrim;
 
-static VkPipelineLayout           pipelineLayouts[TANTO_MAX_PIPELINES];
-static VkPipeline                 graphicsPipelines[TANTO_MAX_PIPELINES];
-static VkPipeline                 raytracePipelines[TANTO_MAX_PIPELINES];
-static Tanto_R_ShaderBindingTable shaderBindingTables[TANTO_MAX_PIPELINES];
+static VkPipelineLayout           pipelineLayouts[OBDN_MAX_PIPELINES];
+static VkPipeline                 graphicsPipelines[OBDN_MAX_PIPELINES];
+static VkPipeline                 raytracePipelines[OBDN_MAX_PIPELINES];
+static Obdn_R_ShaderBindingTable shaderBindingTables[OBDN_MAX_PIPELINES];
 
-static VkDescriptorSetLayout descriptorSetLayouts[TANTO_MAX_DESCRIPTOR_SETS];
-static Tanto_R_Description   description;
+static VkDescriptorSetLayout descriptorSetLayouts[OBDN_MAX_DESCRIPTOR_SETS];
+static Obdn_R_Description   description;
 
-static Tanto_V_Image   depthAttachment;
+static Obdn_V_Image   depthAttachment;
 
 static uint32_t graphicsQueueFamilyIndex;
 static uint32_t transferQueueFamilyIndex;
@@ -86,7 +86,7 @@ static Command releaseImageCommand;
 static Command transferImageCommand;
 static Command acquireImageCommand;
 
-static Command renderCommands[TANTO_FRAME_COUNT];
+static Command renderCommands[OBDN_FRAME_COUNT];
 
 static Image   imageA; // will use for brush and then as final frambuffer target
 static Image   imageB;
@@ -96,7 +96,7 @@ static Image   imageD; // primarily foreground layers
 static VkFramebuffer   compositeFrameBuffer;
 static VkFramebuffer   backgroundFrameBuffer;
 static VkFramebuffer   foregroundFrameBuffer;
-static VkFramebuffer   swapchainFrameBuffers[TANTO_FRAME_COUNT];
+static VkFramebuffer   swapchainFrameBuffers[OBDN_FRAME_COUNT];
 
 static const VkFormat depthFormat   = VK_FORMAT_D32_SFLOAT;
 static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
@@ -105,8 +105,8 @@ static VkRenderPass singleCompositeRenderPass;
 static VkRenderPass compositeRenderPass;
 static VkRenderPass swapchainRenderPass;
 
-static Tanto_R_AccelerationStructure bottomLevelAS;
-static Tanto_R_AccelerationStructure topLevelAS;
+static Obdn_R_AccelerationStructure bottomLevelAS;
+static Obdn_R_AccelerationStructure topLevelAS;
 
 static L_LayerId curLayerId;
 
@@ -134,8 +134,8 @@ static void updateRenderCommands(const int8_t frameIndex);
 
 static void initOffscreenAttachments(void)
 {
-    depthAttachment = tanto_v_CreateImage(
-            TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT,
+    depthAttachment = obdn_v_CreateImage(
+            OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT,
             depthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -147,7 +147,7 @@ static void initOffscreenAttachments(void)
 
 static void initPaintImages(void)
 {
-    imageA = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageA = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -156,7 +156,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
 
-    imageB = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageB = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -165,7 +165,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
 
-    imageC = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageC = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -174,7 +174,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
     
-    imageD = tanto_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageD = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -183,27 +183,27 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             graphicsQueueFamilyIndex);
 
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageB);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageC);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageD);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageB);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageC);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageD);
 
-    tanto_v_ClearColorImage(&imageA);
-    tanto_v_ClearColorImage(&imageB);
-    tanto_v_ClearColorImage(&imageC);
-    tanto_v_ClearColorImage(&imageD);
+    obdn_v_ClearColorImage(&imageA);
+    obdn_v_ClearColorImage(&imageB);
+    obdn_v_ClearColorImage(&imageC);
+    obdn_v_ClearColorImage(&imageD);
 
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageA);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageB);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageC);
-    tanto_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageD);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageA);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageB);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageC);
+    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageD);
 }
 
 static void initRenderPasses(void)
 {
-    tanto_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
+    obdn_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
-            tanto_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
+            obdn_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
     {
         const VkAttachmentDescription attachmentA = {
             .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
@@ -301,7 +301,7 @@ static void initRenderPasses(void)
             .colorAttachmentCount = 1,
             .pColorAttachments    = &referenceA2,
             .pDepthStencilAttachment = NULL,
-            .inputAttachmentCount = TANTO_ARRAY_SIZE(inputAttachments),
+            .inputAttachmentCount = OBDN_ARRAY_SIZE(inputAttachments),
             .pInputAttachments = inputAttachments,
             .preserveAttachmentCount = 0,
         };
@@ -347,11 +347,11 @@ static void initRenderPasses(void)
 
         VkRenderPassCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-            .subpassCount = TANTO_ARRAY_SIZE(subpasses),
+            .subpassCount = OBDN_ARRAY_SIZE(subpasses),
             .pSubpasses = subpasses,
-            .attachmentCount = TANTO_ARRAY_SIZE(attachments),
+            .attachmentCount = OBDN_ARRAY_SIZE(attachments),
             .pAttachments = attachments,
-            .dependencyCount = TANTO_ARRAY_SIZE(dependencies),
+            .dependencyCount = OBDN_ARRAY_SIZE(dependencies),
             .pDependencies = dependencies,
         };
 
@@ -422,9 +422,9 @@ static void initRenderPasses(void)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             .subpassCount = 1,
             .pSubpasses = &subpass,
-            .attachmentCount = TANTO_ARRAY_SIZE(attachments),
+            .attachmentCount = OBDN_ARRAY_SIZE(attachments),
             .pAttachments = attachments,
-            .dependencyCount = TANTO_ARRAY_SIZE(dependencies),
+            .dependencyCount = OBDN_ARRAY_SIZE(dependencies),
             .pDependencies = dependencies,
         };
 
@@ -434,7 +434,7 @@ static void initRenderPasses(void)
 
 static void initDescSetsAndPipeLayouts(void)
 {
-    const Tanto_R_DescriptorSetInfo descSets[] = {{
+    const Obdn_R_DescriptorSetInfo descSets[] = {{
         //   raster
             .bindingCount = 5, 
             .bindings = {{
@@ -509,11 +509,11 @@ static void initDescSetsAndPipeLayouts(void)
         }
     };
 
-    tanto_r_CreateDescriptorSetLayouts(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts);
+    obdn_r_CreateDescriptorSetLayouts(OBDN_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts);
 
-    tanto_r_CreateDescriptorSets(TANTO_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
+    obdn_r_CreateDescriptorSets(OBDN_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
 
-    const Tanto_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
+    const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = descriptorSetLayouts,
     },{
@@ -527,7 +527,7 @@ static void initDescSetsAndPipeLayouts(void)
         .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_APPLY_PAINT]
     }};
 
-    tanto_r_CreatePipelineLayouts(TANTO_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
+    obdn_r_CreatePipelineLayouts(OBDN_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
 }
 
 static void updatePrimDescriptors(void)
@@ -590,13 +590,13 @@ static void updatePrimDescriptors(void)
             .pBufferInfo = &uvBufInfo
     }};
 
-    vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
 }
 
 static void initNonMeshDescriptors(void)
 {
-    matrixRegion = tanto_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    matrixRegion = obdn_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->model   = m_Ident_Mat4();
     matrices->view    = m_Ident_Mat4();
@@ -604,17 +604,17 @@ static void initNonMeshDescriptors(void)
     matrices->viewInv = m_Ident_Mat4();
     matrices->projInv = m_Ident_Mat4();
 
-    brushRegion = tanto_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    brushRegion = obdn_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
     memset(brush, 0, sizeof(Brush));
     brush->radius = 0.01;
     brush->mode = 1;
 
-    playerRegion = tanto_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    playerRegion = obdn_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     memset(playerRegion.hostData, 0, sizeof(UboPlayer));
 
-    selectionRegion = tanto_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+    selectionRegion = obdn_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 
 
     VkDescriptorBufferInfo uniformInfoMatrices = {
@@ -753,17 +753,17 @@ static void initNonMeshDescriptors(void)
             .pImageInfo = &imageInfoD
     }};
 
-    vkUpdateDescriptorSets(device, TANTO_ARRAY_SIZE(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
 }
 
 static void initRasterPipelines(void)
 {
-    Tanto_R_AttributeSize attrSizes[3] = {12, 12, 8};
-    const Tanto_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
+    Obdn_R_AttributeSize attrSizes[3] = {12, 12, 8};
+    const Obdn_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
         // raster
         .renderPass = swapchainRenderPass, 
         .layout     = pipelineLayouts[LAYOUT_RASTER],
-        .vertexDescription = tanto_r_GetVertexDescription(3, attrSizes),
+        .vertexDescription = obdn_r_GetVertexDescription(3, attrSizes),
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .vertShader = SPVDIR"/raster-vert.spv", 
@@ -774,17 +774,17 @@ static void initRasterPipelines(void)
         .layout     = pipelineLayouts[LAYOUT_POST],
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .frontFace   = VK_FRONT_FACE_CLOCKWISE,
-        .blendMode   = TANTO_R_BLEND_MODE_OVER,
-        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .blendMode   = OBDN_R_BLEND_MODE_OVER,
+        .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/post-frag.spv"
     }};
 
-    tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
+    obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
 }
 
 static void initRayTracePipelinesAndShaderBindingTables(void)
 {
-    const Tanto_R_RayTracePipelineInfo pipeInfosRT[] = {{
+    const Obdn_R_RayTracePipelineInfo pipeInfosRT[] = {{
         // ray trace
         .layout = pipelineLayouts[LAYOUT_RAYTRACE],
         .raygenCount = 1,
@@ -816,14 +816,14 @@ static void initRayTracePipelinesAndShaderBindingTables(void)
         }
     }};
 
-    tanto_r_CreateRayTracePipelines(TANTO_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines, shaderBindingTables);
+    obdn_r_CreateRayTracePipelines(OBDN_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines, shaderBindingTables);
 }
 
-static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
+static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
 {
-    assert(blendMode != TANTO_R_BLEND_MODE_NONE);
+    assert(blendMode != OBDN_R_BLEND_MODE_NONE);
 
-    const Tanto_R_GraphicsPipelineInfo pipeInfo1 = {
+    const Obdn_R_GraphicsPipelineInfo pipeInfo1 = {
         .layout  = pipelineLayouts[LAYOUT_COMP],
         .renderPass = compositeRenderPass, 
         .subpass = 0,
@@ -831,11 +831,11 @@ static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
         .blendMode   = blendMode,
-        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
     };
 
-    const Tanto_R_GraphicsPipelineInfo pipeInfo2 = {
+    const Obdn_R_GraphicsPipelineInfo pipeInfo2 = {
         .layout  = pipelineLayouts[LAYOUT_COMP],
         .renderPass = compositeRenderPass, 
         .subpass = 1,
@@ -843,11 +843,11 @@ static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
         .blendMode   = blendMode,
-        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp2-frag.spv"
     };
 
-    const Tanto_R_GraphicsPipelineInfo pipeInfoSingle = {
+    const Obdn_R_GraphicsPipelineInfo pipeInfoSingle = {
         .layout  = pipelineLayouts[LAYOUT_COMP],
         .renderPass = singleCompositeRenderPass, 
         .subpass = 0,
@@ -855,30 +855,30 @@ static void initPaintPipelines(const Tanto_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
         .blendMode   = blendMode,
-        .vertShader = tanto_r_FullscreenTriVertShader(),
+        .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
     };
 
-    const Tanto_R_GraphicsPipelineInfo infos[] = {
+    const Obdn_R_GraphicsPipelineInfo infos[] = {
         pipeInfo1, pipeInfo2, pipeInfoSingle
     };
 
-    tanto_r_CreateGraphicsPipelines(TANTO_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
+    obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
 }
 
 static void initSwapchainDependentFramebuffers(void)
 {
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
-        Tanto_R_Frame* frame = tanto_r_GetFrame(i);
+        Obdn_R_Frame* frame = obdn_r_GetFrame(i);
 
         const VkImageView offscreenAttachments[] = {frame->swapImage.view, depthAttachment.view};
 
         const VkFramebufferCreateInfo framebufferInfo = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = TANTO_WINDOW_HEIGHT,
-            .width  = TANTO_WINDOW_WIDTH,
+            .height = OBDN_WINDOW_HEIGHT,
+            .width  = OBDN_WINDOW_WIDTH,
             .renderPass = swapchainRenderPass,
             .attachmentCount = 2,
             .pAttachments = offscreenAttachments 
@@ -950,7 +950,7 @@ static void initNonSwapchainDependentFramebuffers(void)
 
 static void cleanUpSwapchainDependent(void)
 {
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
         vkDestroyFramebuffer(device, swapchainFrameBuffers[i], NULL);
     }
@@ -958,16 +958,16 @@ static void cleanUpSwapchainDependent(void)
     graphicsPipelines[PIPELINE_RASTER] = VK_NULL_HANDLE;
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_POST], NULL);
     graphicsPipelines[PIPELINE_POST] = VK_NULL_HANDLE;
-    tanto_v_FreeImage(&depthAttachment);
+    obdn_v_FreeImage(&depthAttachment);
 }
 
 static void onLayerChange(L_LayerId newLayerId)
 {
     printf("Begin %s\n", __PRETTY_FUNCTION__);
 
-    Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+    Obdn_V_Command cmd = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    tanto_v_BeginCommandBuffer(cmd.buffer);
+    obdn_v_BeginCommandBuffer(cmd.buffer);
 
     BufferRegion* prevLayerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
 
@@ -1021,9 +1021,9 @@ static void onLayerChange(L_LayerId newLayerId)
     }};
 
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers), barriers);
+            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers), barriers);
 
-    tanto_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, prevLayerBuffer);
+    obdn_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, prevLayerBuffer);
 
     vkCmdClearColorImage(cmd.buffer, imageC.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
     vkCmdClearColorImage(cmd.buffer, imageD.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
@@ -1047,7 +1047,7 @@ static void onLayerChange(L_LayerId newLayerId)
     }};
 
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers0), barriers0);
+            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers0), barriers0);
 
     curLayerId = newLayerId;
 
@@ -1055,7 +1055,7 @@ static void onLayerChange(L_LayerId newLayerId)
     {
         BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
 
-        tanto_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
+        obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
 
         VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
 
@@ -1090,7 +1090,7 @@ static void onLayerChange(L_LayerId newLayerId)
     {
         BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
 
-        tanto_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
+        obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
 
         VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
 
@@ -1134,7 +1134,7 @@ static void onLayerChange(L_LayerId newLayerId)
 
     BufferRegion* layerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
 
-    tanto_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageB);
+    obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageB);
 
     VkImageMemoryBarrier barriers2[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
@@ -1171,13 +1171,13 @@ static void onLayerChange(L_LayerId newLayerId)
     }};
 
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-            0, 0, NULL, 0, NULL, TANTO_ARRAY_SIZE(barriers), barriers2);
+            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers), barriers2);
 
-    tanto_v_EndCommandBuffer(cmd.buffer);
+    obdn_v_EndCommandBuffer(cmd.buffer);
 
-    tanto_v_SubmitAndWait(&cmd, 0);
+    obdn_v_SubmitAndWait(&cmd, 0);
 
-    tanto_v_DestroyCommand(cmd);
+    obdn_v_DestroyCommand(cmd);
 
     printf("End %s\n", __PRETTY_FUNCTION__);
 }
@@ -1192,23 +1192,23 @@ static void onRecreateSwapchain(void)
 
     if (copySwapToHost)
     {
-        tanto_v_FreeBufferRegion(&swapHostBuffer);
-        const uint64_t size = tanto_r_GetFrame(tanto_r_GetCurrentFrameIndex())->swapImage.size;
-        swapHostBuffer = tanto_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+        obdn_v_FreeBufferRegion(&swapHostBuffer);
+        const uint64_t size = obdn_r_GetFrame(obdn_r_GetCurrentFrameIndex())->swapImage.size;
+        swapHostBuffer = obdn_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     }
 }
 
 static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
 {
-    tanto_v_WaitForFence(&acquireImageCommand.fence);
+    obdn_v_WaitForFence(&acquireImageCommand.fence);
 
-    tanto_v_ResetCommand(&releaseImageCommand);
-    tanto_v_ResetCommand(&transferImageCommand);
-    tanto_v_ResetCommand(&acquireImageCommand);
+    obdn_v_ResetCommand(&releaseImageCommand);
+    obdn_v_ResetCommand(&transferImageCommand);
+    obdn_v_ResetCommand(&acquireImageCommand);
 
     VkCommandBuffer cmdBuf = releaseImageCommand.buffer;
 
-    tanto_v_BeginCommandBuffer(cmdBuf);
+    obdn_v_BeginCommandBuffer(cmdBuf);
 
     const VkImageSubresourceRange range = {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1237,19 +1237,19 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
-    tanto_v_EndCommandBuffer(cmdBuf);
+    obdn_v_EndCommandBuffer(cmdBuf);
 
     cmdBuf = transferImageCommand.buffer;
 
-    tanto_v_BeginCommandBuffer(cmdBuf);
+    obdn_v_BeginCommandBuffer(cmdBuf);
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
     if (toHost)
-        tanto_v_CmdCopyImageToBuffer(cmdBuf, &imageB, bufferRegion);
+        obdn_v_CmdCopyImageToBuffer(cmdBuf, &imageB, bufferRegion);
     else
-        tanto_v_CmdCopyBufferToImage(cmdBuf, bufferRegion, &imageB);
+        obdn_v_CmdCopyBufferToImage(cmdBuf, bufferRegion, &imageB);
 
     imgBarrier.srcAccessMask = otherAccessMask;
     imgBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
@@ -1261,22 +1261,22 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
-    tanto_v_EndCommandBuffer(cmdBuf);
+    obdn_v_EndCommandBuffer(cmdBuf);
 
     cmdBuf = acquireImageCommand.buffer;
 
-    tanto_v_BeginCommandBuffer(cmdBuf);
+    obdn_v_BeginCommandBuffer(cmdBuf);
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
-    tanto_v_EndCommandBuffer(cmdBuf);
+    obdn_v_EndCommandBuffer(cmdBuf);
 
-    tanto_v_SubmitGraphicsCommand(0, 0, NULL, VK_NULL_HANDLE, &releaseImageCommand);
+    obdn_v_SubmitGraphicsCommand(0, 0, NULL, VK_NULL_HANDLE, &releaseImageCommand);
     
-    tanto_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
+    obdn_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
 
-    tanto_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, &transferImageCommand.semaphore, acquireImageCommand.fence, &acquireImageCommand);
+    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, &transferImageCommand.semaphore, acquireImageCommand.fence, &acquireImageCommand);
 }
 
 static void backupLayer(void)
@@ -1301,7 +1301,7 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
+    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = obdn_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
     const VkDeviceSize baseAlignment = shaderBindingTables[SBT_SELECT].bufferRegion.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment + 0;
@@ -1351,7 +1351,7 @@ static void paint(const VkCommandBuffer cmdBuf)
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = tanto_v_GetPhysicalDeviceRayTracingProperties();
+    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = obdn_v_GetPhysicalDeviceRayTracingProperties();
     const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
     const VkDeviceSize baseAlignment = shaderBindingTables[SBT_RAY_TRACE].bufferRegion.offset;
     const VkDeviceSize rayGenOffset   = baseAlignment + 0;
@@ -1404,7 +1404,7 @@ static void comp(const VkCommandBuffer cmdBuf)
 
     const VkRenderPassBeginInfo rpass = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = TANTO_ARRAY_SIZE(clears),
+        .clearValueCount = OBDN_ARRAY_SIZE(clears),
         .pClearValues = clears,
         .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
         .renderPass =  compositeRenderPass,
@@ -1444,9 +1444,9 @@ static void rasterize(const VkCommandBuffer cmdBuf)
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .clearValueCount = 2,
         .pClearValues = clears,
-        .renderArea = {{0, 0}, {TANTO_WINDOW_WIDTH, TANTO_WINDOW_HEIGHT}},
+        .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
         .renderPass =  swapchainRenderPass,
-        .framebuffer = swapchainFrameBuffers[tanto_r_GetCurrentFrameIndex()]
+        .framebuffer = swapchainFrameBuffers[obdn_r_GetCurrentFrameIndex()]
     };
 
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_RASTER]);
@@ -1460,7 +1460,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
 
     vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
 
-        tanto_r_DrawPrim(cmdBuf, &renderPrim);
+        obdn_r_DrawPrim(cmdBuf, &renderPrim);
 
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_POST]);
 
@@ -1480,7 +1480,7 @@ static void updateRenderCommands(const int8_t frameIndex)
 {
     VkCommandBuffer cmdBuf = renderCommands[frameIndex].buffer;
 
-    tanto_v_BeginCommandBuffer(cmdBuf);
+    obdn_v_BeginCommandBuffer(cmdBuf);
 
     VkClearColorValue clearColor = {
         .float32[0] = 0,
@@ -1544,19 +1544,19 @@ void r_InitRenderer(void)
 {
     curLayerId = 0;
     needsToBackupLayer = false;
-    graphicsQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_GRAPHICS_TYPE);
-    transferQueueFamilyIndex = tanto_v_GetQueueFamilyIndex(TANTO_V_QUEUE_TRANSFER_TYPE);
+    graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);
+    transferQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_TRANSFER_TYPE);
 
     copySwapToHost = parms.copySwapToHost; //note this
 
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
-        renderCommands[i] = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+        renderCommands[i] = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
     }
 
-    releaseImageCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
-    transferImageCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_TRANSFER_TYPE);
-    acquireImageCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+    releaseImageCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+    transferImageCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_TRANSFER_TYPE);
+    acquireImageCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
 
     initOffscreenAttachments();
     initPaintImages();
@@ -1565,14 +1565,14 @@ void r_InitRenderer(void)
     initDescSetsAndPipeLayouts();
     initRasterPipelines();
     initRayTracePipelinesAndShaderBindingTables();
-    initPaintPipelines(TANTO_R_BLEND_MODE_OVER);
+    initPaintPipelines(OBDN_R_BLEND_MODE_OVER);
 
     initNonMeshDescriptors();
 
     initSwapchainDependentFramebuffers();
     initNonSwapchainDependentFramebuffers();
 
-    tanto_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
+    obdn_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
 
     assert(imageA.size > 0);
 
@@ -1583,16 +1583,16 @@ void r_InitRenderer(void)
     
     if (copySwapToHost)
     {
-        VkDeviceSize swapImageSize = tanto_r_GetFrame(0)->swapImage.size;
-        swapHostBuffer = tanto_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
-        copyToHostCommand = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+        VkDeviceSize swapImageSize = obdn_r_GetFrame(0)->swapImage.size;
+        swapHostBuffer = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
         printf(">> SwapHostBuffer created\n");
     }
 }
 
 void r_Render(void)
 {
-    uint32_t i = tanto_r_RequestFrame();
+    uint32_t i = obdn_r_RequestFrame();
     VkSemaphore* waitSemaphore = NULL;
     if (needsToBackupLayer)
     {
@@ -1606,57 +1606,57 @@ void r_Render(void)
             waitSemaphore = &acquireImageCommand.semaphore;
         needsToUndo = false;
     }
-    tanto_v_WaitForFence(&renderCommands[i].fence);
-    tanto_v_ResetCommand(&renderCommands[i]);
+    obdn_v_WaitForFence(&renderCommands[i].fence);
+    obdn_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
-    tanto_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
             waitSemaphore, renderCommands[i].fence, &renderCommands[i]);
-    const VkSemaphore* pWaitSemaphore = tanto_u_Render(&renderCommands[i].semaphore);
+    const VkSemaphore* pWaitSemaphore = obdn_u_Render(&renderCommands[i].semaphore);
     if (copySwapToHost)
     {
-        tanto_v_WaitForFence(&copyToHostCommand.fence);
-        tanto_v_ResetCommand(&copyToHostCommand);
-        tanto_v_BeginCommandBuffer(copyToHostCommand.buffer);
+        obdn_v_WaitForFence(&copyToHostCommand.fence);
+        obdn_v_ResetCommand(&copyToHostCommand);
+        obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
 
-        const Image* swapImage = &tanto_r_GetFrame(i)->swapImage;
+        const Image* swapImage = &obdn_r_GetFrame(i)->swapImage;
 
         assert(swapImage->size == swapHostBuffer.size);
 
-        tanto_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, &swapHostBuffer);
+        obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, &swapHostBuffer);
 
-        Tanto_V_Barrier barrier = {
+        Obdn_V_Barrier barrier = {
             .srcStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT,
             .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
             .dstStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
             .dstAccessMask = 0, 
         };
 
-        tanto_v_CmdTransitionImageLayout(copyToHostCommand.buffer, barrier, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+        obdn_v_CmdTransitionImageLayout(copyToHostCommand.buffer, barrier, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 1, swapImage->handle);
 
-        tanto_v_EndCommandBuffer(copyToHostCommand.buffer);
+        obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
 
-        tanto_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, pWaitSemaphore, 
+        obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, pWaitSemaphore, 
                 copyToHostCommand.fence, &copyToHostCommand);
 
         pWaitSemaphore = &copyToHostCommand.semaphore;
     }
-    tanto_r_PresentFrame(*pWaitSemaphore);
+    obdn_r_PresentFrame(*pWaitSemaphore);
 }
 
 int r_GetSelectionPos(Vec3* v)
 {
-    Tanto_V_Command cmd = tanto_v_CreateCommand(TANTO_V_QUEUE_GRAPHICS_TYPE);
+    Obdn_V_Command cmd = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    tanto_v_BeginCommandBuffer(cmd.buffer);
+    obdn_v_BeginCommandBuffer(cmd.buffer);
 
     rayTraceSelect(cmd.buffer);
 
-    tanto_v_EndCommandBuffer(cmd.buffer);
+    obdn_v_EndCommandBuffer(cmd.buffer);
 
-    tanto_v_SubmitAndWait(&cmd, 0);
+    obdn_v_SubmitAndWait(&cmd, 0);
 
-    tanto_v_DestroyCommand(cmd);
+    obdn_v_DestroyCommand(cmd);
 
     Selection* sel = (Selection*)selectionRegion.hostData;
     if (sel->hit)
@@ -1670,21 +1670,21 @@ int r_GetSelectionPos(Vec3* v)
         return 0;
 }
 
-void r_LoadPrim(Tanto_R_Primitive prim)
+void r_LoadPrim(Obdn_R_Primitive prim)
 {
     assert(renderPrim.vertexRegion.size == 0);
     renderPrim = prim;
-    tanto_r_BuildBlas(&prim, &bottomLevelAS);
-    tanto_r_BuildTlas(&bottomLevelAS, &topLevelAS);
+    obdn_r_BuildBlas(&prim, &bottomLevelAS);
+    obdn_r_BuildTlas(&bottomLevelAS, &topLevelAS);
 
     updatePrimDescriptors();
 }
 
 void r_ClearPrim(void)
 {
-    tanto_r_DestroyAccelerationStruct(&topLevelAS);
-    tanto_r_DestroyAccelerationStruct(&bottomLevelAS);
-    tanto_r_FreePrim(&renderPrim);
+    obdn_r_DestroyAccelerationStruct(&topLevelAS);
+    obdn_r_DestroyAccelerationStruct(&bottomLevelAS);
+    obdn_r_FreePrim(&renderPrim);
 }
 
 void r_SavePaintImage(void)
@@ -1700,28 +1700,28 @@ void r_SavePaintImage(void)
     }
     if (strbuf[len - 1] == '\n')  strbuf[--len] = '\0'; 
     const char* ext = strbuf + len - 3;
-    TANTO_DEBUG_PRINT("%s", ext);
-    Tanto_V_ImageFileType fileType;
-    if (strncmp(ext, "png", 3) == 0) fileType = TANTO_V_IMAGE_FILE_TYPE_PNG;
-    else if (strncmp(ext, "jpg", 3) == 0) fileType = TANTO_V_IMAGE_FILE_TYPE_JPG;
+    OBDN_DEBUG_PRINT("%s", ext);
+    Obdn_V_ImageFileType fileType;
+    if (strncmp(ext, "png", 3) == 0) fileType = OBDN_V_IMAGE_FILE_TYPE_PNG;
+    else if (strncmp(ext, "jpg", 3) == 0) fileType = OBDN_V_IMAGE_FILE_TYPE_JPG;
     else 
     {
         printf("Bad extension.\n");
         return;
     }
-    tanto_v_SaveImage(&imageA, fileType, strbuf);
+    obdn_v_SaveImage(&imageA, fileType, strbuf);
 }
 
 void r_ClearPaintImage(void)
 {
     printf("called %s. need to reimplement.\n", __PRETTY_FUNCTION__);
-    //tanto_v_ClearColorImage(&paintImage);
+    //obdn_v_ClearColorImage(&paintImage);
 }
 
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
-    for (int i = 0; i < TANTO_MAX_PIPELINES; i++) 
+    for (int i = 0; i < OBDN_MAX_PIPELINES; i++) 
     {
         if (graphicsPipelines[i] != VK_NULL_HANDLE)
             vkDestroyPipeline(device, graphicsPipelines[i], NULL);
@@ -1730,17 +1730,17 @@ void r_CleanUp(void)
         if (pipelineLayouts[i])
             vkDestroyPipelineLayout(device, pipelineLayouts[i], NULL);
     }
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
-        tanto_v_DestroyCommand(renderCommands[i]);
+        obdn_v_DestroyCommand(renderCommands[i]);
     }
     memset(graphicsPipelines, 0, sizeof(graphicsPipelines));
     memset(raytracePipelines, 0, sizeof(raytracePipelines));
     memset(&pipelineLayouts, 0, sizeof(pipelineLayouts));
-    tanto_v_FreeImage(&imageA);
-    tanto_v_FreeImage(&imageB);
-    tanto_v_FreeImage(&imageC);
-    tanto_v_FreeImage(&imageD);
+    obdn_v_FreeImage(&imageA);
+    obdn_v_FreeImage(&imageB);
+    obdn_v_FreeImage(&imageC);
+    obdn_v_FreeImage(&imageD);
     vkDestroyDescriptorPool(device, description.descriptorPool, NULL);
     for (int i = 0; i < description.descriptorSetCount; i++) 
     {
@@ -1754,9 +1754,9 @@ void r_CleanUp(void)
     vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
     vkDestroyFramebuffer(device, backgroundFrameBuffer, NULL);
     vkDestroyFramebuffer(device, foregroundFrameBuffer, NULL);
-    tanto_v_DestroyCommand(releaseImageCommand);
-    tanto_v_DestroyCommand(transferImageCommand);
-    tanto_v_DestroyCommand(acquireImageCommand);
+    obdn_v_DestroyCommand(releaseImageCommand);
+    obdn_v_DestroyCommand(transferImageCommand);
+    obdn_v_DestroyCommand(acquireImageCommand);
     r_ClearPrim();
     l_CleanUp();
 }
@@ -1792,15 +1792,15 @@ void r_SetPaintMode(const PaintMode mode)
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_1], NULL);
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_2], NULL);
 
-    Tanto_R_BlendMode blendMode;
+    Obdn_R_BlendMode blendMode;
     switch (mode)
     {
-        case PAINT_MODE_OVER:  blendMode = TANTO_R_BLEND_MODE_OVER;  break;
-        case PAINT_MODE_ERASE: blendMode = TANTO_R_BLEND_MODE_ERASE; break;
+        case PAINT_MODE_OVER:  blendMode = OBDN_R_BLEND_MODE_OVER;  break;
+        case PAINT_MODE_ERASE: blendMode = OBDN_R_BLEND_MODE_ERASE; break;
     }
 
     initPaintPipelines(blendMode);
-    for (int i = 0; i < TANTO_FRAME_COUNT; i++) 
+    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
         updateRenderCommands(i);
     }

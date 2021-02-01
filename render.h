@@ -1,7 +1,7 @@
 #ifndef VIEWER_R_COMMANDS_H
 #define VIEWER_R_COMMANDS_H
 
-#include <tanto/r_geo.h>
+#include <obsidian/r_geo.h>
 #include "common.h"
 
 typedef enum {
@@ -48,7 +48,7 @@ Mat4*        r_GetXform(r_XformType);
 Brush*       r_GetBrush(void);
 UboPlayer*   r_GetPlayer(void);
 VkDeviceSize r_GetTextureSize(void);
-void         r_LoadPrim(Tanto_R_Primitive prim);
+void         r_LoadPrim(Obdn_R_Primitive prim);
 void         r_ClearPrim(void);
 void         r_ClearPaintImage(void);
 void         r_SetPaintMode(const PaintMode mode);

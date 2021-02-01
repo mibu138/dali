@@ -9,12 +9,12 @@
 
 _Static_assert(MAX_UNDOS % 2 == 0, "MAX_UNDOS must be a multiple of 2 for bottom wrap around to work");
 
-typedef Tanto_V_BufferRegion BufferRegion;
+typedef Obdn_V_BufferRegion BufferRegion;
 
 typedef struct UndoStack {
     uint8_t              trl; // cur cannot cross this
     uint8_t              cur;
-    Tanto_V_BufferRegion bufferRegions[MAX_UNDOS];
+    Obdn_V_BufferRegion bufferRegions[MAX_UNDOS];
 } UndoStack;
 
 uint8_t   curStackIndex;
@@ -28,8 +28,8 @@ static void initStack(const uint8_t index, const uint32_t size)
     undoStacks[index].trl = 0;
     for (int i = 0; i < MAX_UNDOS; i++) 
     {
-        undoStacks[index].bufferRegions[i] = tanto_v_RequestBufferRegion(size, 
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT, TANTO_V_MEMORY_HOST_TRANSFER_TYPE);
+        undoStacks[index].bufferRegions[i] = obdn_v_RequestBufferRegion(size, 
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_TRANSFER_TYPE);
     }
 }
 
@@ -79,7 +79,7 @@ void u_InitUndo(const uint32_t size)
     onLayerChange(0);
 }
 
-Tanto_V_BufferRegion* u_GetNextBuffer(void)
+Obdn_V_BufferRegion* u_GetNextBuffer(void)
 {
     UndoStack* undoStack = &undoStacks[curStackIndex];
     const uint8_t stackIndex = undoStack->cur;
@@ -93,7 +93,7 @@ Tanto_V_BufferRegion* u_GetNextBuffer(void)
     return &undoStack->bufferRegions[stackIndex];
 }
 
-Tanto_V_BufferRegion* u_GetLastBuffer(void)
+Obdn_V_BufferRegion* u_GetLastBuffer(void)
 {
     UndoStack* undoStack = &undoStacks[curStackIndex];
     uint8_t stackIndex = undoStack->cur - 1;

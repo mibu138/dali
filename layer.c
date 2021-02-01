@@ -1,9 +1,9 @@
 #include "layer.h"
-#include "tanto/v_memory.h"
-#include <tanto/r_renderpass.h>
-#include <tanto/v_video.h>
-#include <tanto/v_image.h>
-#include <tanto/t_def.h>
+#include "obsidian/v_memory.h"
+#include <obsidian/r_renderpass.h>
+#include <obsidian/v_video.h>
+#include <obsidian/v_image.h>
+#include <obsidian/t_def.h>
 #include <string.h>
 #include <vulkan/vulkan_core.h>
 
@@ -14,8 +14,8 @@ struct {
     uint16_t layerCount;
     uint16_t activeLayer;
     Layer    layers[MAX_LAYERS];
-    Tanto_V_BufferRegion backBuffer;
-    Tanto_V_BufferRegion frontBuffer;
+    Obdn_V_BufferRegion backBuffer;
+    Obdn_V_BufferRegion frontBuffer;
 } layerStack;
 
 static VkDeviceSize textureSize;
@@ -28,13 +28,13 @@ void l_Init(const VkDeviceSize size)
 {
     textureSize = size;
 
-    layerStack.backBuffer  = tanto_v_RequestBufferRegion(textureSize, 
+    layerStack.backBuffer  = obdn_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 
-    layerStack.frontBuffer = tanto_v_RequestBufferRegion(textureSize, 
+    layerStack.frontBuffer = obdn_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     l_CreateLayer(); // create one layer to start
 }
@@ -57,11 +57,11 @@ int l_CreateLayer(void)
     assert(layerStack.layerCount < MAX_LAYERS);
     const uint16_t curId = layerStack.layerCount++;
 
-    layerStack.layers[curId].bufferRegion = tanto_v_RequestBufferRegion(textureSize, 
+    layerStack.layers[curId].bufferRegion = obdn_v_RequestBufferRegion(textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            TANTO_V_MEMORY_HOST_GRAPHICS_TYPE);
+            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     
-    TANTO_DEBUG_PRINT("Layer created!");
+    OBDN_DEBUG_PRINT("Layer created!");
     printf("Adding layer. There are now %d layers. Active layer is %d\n", layerStack.layerCount, layerStack.activeLayer);
     return curId;
 }

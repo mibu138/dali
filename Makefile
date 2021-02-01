@@ -4,7 +4,7 @@ GLC = glslc
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
 LDFLAGS = -L/opt/hfs18.0/dsolib -L/home/michaelb/lib
 INFLAGS = -I$(HOME)/dev
-LIBS = -lm -lcoal -ltanto -lvulkan -lxcb -lxcb-keysyms -lfreetype
+LIBS = -lm -lcoal -lobsidian -lvulkan -lxcb -lxcb-keysyms -lfreetype
 GLFLAGS = --target-env=vulkan1.2
 BIN = bin
 LIB = $(HOME)/lib
@@ -46,13 +46,13 @@ debug: all
 release: CFLAGS += -DNDEBUG -O3
 release: all
 
-all: tanto bin lib tags
+all: obsidian bin lib tags
 
 shaders: $(FRAG) $(VERT) $(RGEN) $(RCHIT) $(RMISS)
 
-.PHONY: tanto
-tanto:
-	make -C tanto/ 
+.PHONY: obsidian
+obsidian:
+	make -C obsidian/ 
 
 clean: 
 	rm -f $(O)/* $(LIB)/$(LIBNAME) $(BIN)/* $(SPV)/*

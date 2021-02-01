@@ -3,13 +3,13 @@
 #include "render.h"
 #include "layer.h"
 #include "common.h"
-#include "tanto/t_utils.h"
+#include "obsidian/t_utils.h"
 #include <assert.h>
 #include <string.h>
-#include <tanto/t_def.h>
-#include <tanto/i_input.h>
-#include <tanto/v_video.h>
-#include <tanto/u_ui.h>
+#include <obsidian/t_def.h>
+#include <obsidian/i_input.h>
+#include <obsidian/v_video.h>
+#include <obsidian/u_ui.h>
 
 
 static bool zoomIn;
@@ -73,7 +73,7 @@ UboPlayer* uboPlayer;
 
 const Vec3 UP_VEC = {0, 1, 0};
 
-static Tanto_U_Widget* slider0;
+static Obdn_U_Widget* slider0;
 
 static void setViewerPivotByIntersection(void)
 {
@@ -224,74 +224,74 @@ static void handleMouseMovement(void)
     }
 }
 
-bool g_Responder(const Tanto_I_Event *event)
+bool g_Responder(const Obdn_I_Event *event)
 {
     switch (event->type) 
     {
-        case TANTO_I_KEYDOWN: switch (event->data.keyCode)
+        case OBDN_I_KEYDOWN: switch (event->data.keyCode)
         {
-            case TANTO_KEY_W: zoomIn = true; break;
-            //case TANTO_KEY_S: zoomOut = true; break;
-            //case TANTO_KEY_S: brushColor = (Vec3){1, 1, 1}; r_SetPaintMode(PAINT_MODE_ERASE); break;
-            case TANTO_KEY_A: tumbleLeft = true; break;
-            //case TANTO_KEY_D: tumbleRight = true; break;
-            case TANTO_KEY_D: r_SetPaintMode(PAINT_MODE_OVER); break;
-            //case TANTO_KEY_E: moveUp = true; break;
-            //case TANTO_KEY_Q: moveDown = true; break;
-            case TANTO_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
-            case TANTO_KEY_B: r_BackUpLayer(); break;
-            case TANTO_KEY_Z: r_Undo(); break;
-            case TANTO_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
-            case TANTO_KEY_P: r_SavePaintImage(); break;
-            case TANTO_KEY_J: l_SetActiveLayer(l_GetActiveLayerId() -1); break;
-            case TANTO_KEY_L: l_CreateLayer(); break;
-            case TANTO_KEY_SPACE: mode = MODE_VIEW; break;
-            case TANTO_KEY_CTRL: tumbleDown = true; break;
-            case TANTO_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
-            case TANTO_KEY_R:    parms.shouldRun = false; parms.restart = true; break;
-            case TANTO_KEY_K: l_SetActiveLayer(l_GetActiveLayerId() + 1);
-            case TANTO_KEY_C: r_ClearPaintImage(); break;
-            case TANTO_KEY_I: break;
+            case OBDN_KEY_W: zoomIn = true; break;
+            //case OBDN_KEY_S: zoomOut = true; break;
+            //case OBDN_KEY_S: brushColor = (Vec3){1, 1, 1}; r_SetPaintMode(PAINT_MODE_ERASE); break;
+            case OBDN_KEY_A: tumbleLeft = true; break;
+            //case OBDN_KEY_D: tumbleRight = true; break;
+            case OBDN_KEY_D: r_SetPaintMode(PAINT_MODE_OVER); break;
+            //case OBDN_KEY_E: moveUp = true; break;
+            //case OBDN_KEY_Q: moveDown = true; break;
+            case OBDN_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
+            case OBDN_KEY_B: r_BackUpLayer(); break;
+            case OBDN_KEY_Z: r_Undo(); break;
+            case OBDN_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
+            case OBDN_KEY_P: r_SavePaintImage(); break;
+            case OBDN_KEY_J: l_SetActiveLayer(l_GetActiveLayerId() -1); break;
+            case OBDN_KEY_L: l_CreateLayer(); break;
+            case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
+            case OBDN_KEY_CTRL: tumbleDown = true; break;
+            case OBDN_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
+            case OBDN_KEY_R:    parms.shouldRun = false; parms.restart = true; break;
+            case OBDN_KEY_K: l_SetActiveLayer(l_GetActiveLayerId() + 1);
+            case OBDN_KEY_C: r_ClearPaintImage(); break;
+            case OBDN_KEY_I: break;
             default: return true;
         } break;
-        case TANTO_I_KEYUP:   switch (event->data.keyCode)
+        case OBDN_I_KEYUP:   switch (event->data.keyCode)
         {
-            case TANTO_KEY_W: zoomIn = false; break;
-            case TANTO_KEY_S: zoomOut = false; break;
-            case TANTO_KEY_A: tumbleLeft = false; break;
-            case TANTO_KEY_D: tumbleRight = false; break;
-            case TANTO_KEY_E: moveUp = false; break;
-            case TANTO_KEY_Q: moveDown = false; break;
-            case TANTO_KEY_SPACE: mode = MODE_DO_NOTHING; break;
-            case TANTO_KEY_CTRL: tumbleDown = false; break;
+            case OBDN_KEY_W: zoomIn = false; break;
+            case OBDN_KEY_S: zoomOut = false; break;
+            case OBDN_KEY_A: tumbleLeft = false; break;
+            case OBDN_KEY_D: tumbleRight = false; break;
+            case OBDN_KEY_E: moveUp = false; break;
+            case OBDN_KEY_Q: moveDown = false; break;
+            case OBDN_KEY_SPACE: mode = MODE_DO_NOTHING; break;
+            case OBDN_KEY_CTRL: tumbleDown = false; break;
             default: return true;
         } break;
-        case TANTO_I_MOTION: 
+        case OBDN_I_MOTION: 
         {
-            mousePos.x = (float)event->data.mouseData.x / TANTO_WINDOW_WIDTH;
-            mousePos.y = (float)event->data.mouseData.y / TANTO_WINDOW_HEIGHT;
+            mousePos.x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH;
+            mousePos.y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT;
         } break;
-        case TANTO_I_MOUSEDOWN: switch (mode) 
+        case OBDN_I_MOUSEDOWN: switch (mode) 
         {
             case MODE_DO_NOTHING: mode = MODE_PAINT; break;
             case MODE_VIEW:
             {
                 drag.active = true;
                 const Vec2 p = {
-                    .x = (float)event->data.mouseData.x / TANTO_WINDOW_WIDTH,
-                    .y = (float)event->data.mouseData.y / TANTO_WINDOW_HEIGHT
+                    .x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH,
+                    .y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT
                 };
                 drag.startPos = p;
-                if (event->data.mouseData.buttonCode == TANTO_MOUSE_LEFT)
+                if (event->data.mouseData.buttonCode == OBDN_MOUSE_LEFT)
                 {
                     drag.mode = TUMBLE;
                     pivotChanged = true;
                 }
-                if (event->data.mouseData.buttonCode == TANTO_MOUSE_MID)
+                if (event->data.mouseData.buttonCode == OBDN_MOUSE_MID)
                 {
                     drag.mode = PAN;
                 }
-                if (event->data.mouseData.buttonCode == TANTO_MOUSE_RIGHT)
+                if (event->data.mouseData.buttonCode == OBDN_MOUSE_RIGHT)
                 {
                     drag.mode = ZOOM;
                     pivotChanged = true;
@@ -299,7 +299,7 @@ bool g_Responder(const Tanto_I_Event *event)
             } break;
             default: break;
         } break;
-        case TANTO_I_MOUSEUP:
+        case OBDN_I_MOUSEUP:
         {
             switch (mode) 
             {
@@ -330,7 +330,7 @@ void g_Init(void)
     brush = r_GetBrush();
     uboPlayer = r_GetPlayer();
 
-    slider0 = tanto_u_CreateSlider(0, 40, NULL);
+    slider0 = obdn_u_CreateSlider(0, 40, NULL);
 }
 
 void g_BindToView(Mat4* view, Mat4* viewInv)

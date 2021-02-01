@@ -1,12 +1,12 @@
 #ifndef PAINTER_H
 #define PAINTER_H
 
-#include <tanto/r_geo.h>
-#include <tanto/f_file.h>
+#include <obsidian/r_geo.h>
+#include <obsidian/f_file.h>
 
 void painter_Init(void);
-void painter_LoadFprim(Tanto_F_Primitive* fprim); // frees fprim
-void painter_ReloadPrim(Tanto_F_Primitive* fprim); // frees fprim
+void painter_LoadFprim(Obdn_F_Primitive* fprim); // frees fprim
+void painter_ReloadPrim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_StartLoop(void);
 void painter_StopLoop(void);
 bool painter_ShouldRun(void);

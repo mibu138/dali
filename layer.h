@@ -1,7 +1,7 @@
 #ifndef LAYER_H
 #define LAYER_H
 
-#include <tanto/v_memory.h>
+#include <obsidian/v_memory.h>
 
 #define MAX_LAYERS 64
 
@@ -9,7 +9,7 @@ typedef uint16_t L_LayerId;
 typedef void (*L_LayerChangeFn)(L_LayerId newLayerId);
 
 typedef struct {
-    Tanto_V_BufferRegion bufferRegion;
+    Obdn_V_BufferRegion bufferRegion;
 } L_Layer;
 
 // returns number of layer or -1 on failure
