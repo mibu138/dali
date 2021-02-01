@@ -38,7 +38,7 @@ void painter_Init(void)
     obdn_d_Init(1000, 1000, NULL);
     obdn_v_Init();
     obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
-    obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT);
+    obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, false);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     obdn_i_Subscribe(g_Responder);
