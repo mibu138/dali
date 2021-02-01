@@ -874,9 +874,9 @@ static void initSwapchainDependentFramebuffers(void)
 {
     for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
-        Obdn_R_Frame* frame = obdn_r_GetFrame(i);
+        const Obdn_R_Frame* frame = obdn_r_GetFrame(i);
 
-        const VkImageView offscreenAttachments[] = {frame->swapImage.view, depthAttachment.view};
+        const VkImageView offscreenAttachments[] = {frame->view, depthAttachment.view};
 
         const VkFramebufferCreateInfo framebufferInfo = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
@@ -1197,7 +1197,7 @@ static void onRecreateSwapchain(void)
     if (copySwapToHost)
     {
         obdn_v_FreeBufferRegion(&swapHostBuffer);
-        const uint64_t size = obdn_r_GetFrame(obdn_r_GetCurrentFrameIndex())->swapImage.size;
+        const uint64_t size = obdn_r_GetFrame(obdn_r_GetCurrentFrameIndex())->size;
         swapHostBuffer = obdn_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     }
 }
@@ -1587,7 +1587,7 @@ void r_InitRenderer(void)
     
     if (copySwapToHost)
     {
-        VkDeviceSize swapImageSize = obdn_r_GetFrame(0)->swapImage.size;
+        VkDeviceSize swapImageSize = obdn_r_GetFrame(0)->size;
         swapHostBuffer = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
         int r = pthread_mutex_init(&swapHostLock, NULL);
@@ -1623,7 +1623,7 @@ void r_Render(void)
         obdn_v_ResetCommand(&copyToHostCommand);
         obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
 
-        const Image* swapImage = &obdn_r_GetFrame(i)->swapImage;
+        const Image* swapImage = obdn_r_GetFrame(i);
 
         assert(swapImage->size == swapHostBuffer.size);
 
