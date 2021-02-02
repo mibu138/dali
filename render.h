@@ -13,15 +13,6 @@ typedef struct {
 } UboMatrices;
 
 typedef struct {
-    float posX;
-    float posY;
-    float posZ;
-    float targetX;
-    float targetY;
-    float targetZ;
-} UboPlayer;
-
-typedef struct {
     float x;
     float y;
     float z;
@@ -58,7 +49,6 @@ void         r_InitRenderer(void);
 void         r_Render(void);
 int          r_GetSelectionPos(Vec3* v);
 Brush*       r_GetBrush(void);
-UboPlayer*   r_GetPlayer(void);
 VkDeviceSize r_GetTextureSize(void);
 void         r_LoadPrim(Obdn_R_Primitive prim);
 void         r_ClearPrim(void);

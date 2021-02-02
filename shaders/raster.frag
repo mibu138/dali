@@ -11,22 +11,9 @@ layout(location = 0) out vec4 outColor;
 
 layout(set = 0, binding = 3) uniform sampler2D image;
 
-layout(set = 0, binding = 4) uniform Player {
-    float posx;
-    float posy;
-    float posz;
-    float targetx;
-    float targety;
-    float targetz;
-} player;
-
-//const vec3 lightDir = {-0.707106769, -0.5, -0.5};
-
 void main()
 {
-    const vec3 playerPos = vec3(player.posx, player.posy, player.posz);
-    const vec3 playerTarget = vec3(player.targetx, player.targety, player.targetz);
-    const vec3 lightDir = normalize(playerTarget - playerPos);
+    const vec3 lightDir = vec3(0, 0, -1);
     const float illume = clamp(dot(-1 * inNormal, lightDir), 0.0, 1.0);
     const ivec2 texel = ivec2(inUvw.xy * 50);
     const float b = float((texel.x + texel.y) % 2) * 0.2 + 0.3;
@@ -35,5 +22,4 @@ void main()
     vec4 tex = texture(image, inUvw.xy);
     const vec4 albedo = over(tex, uvColor);
     outColor = vec4(albedo.rgb * illume, 1.0);
-    //outColor = vec4(inUvw, 1);
 }

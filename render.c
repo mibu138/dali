@@ -65,7 +65,6 @@ typedef Obdn_V_BufferRegion BufferRegion;
 
 static BufferRegion  matrixRegion;
 static BufferRegion  brushRegion;
-static BufferRegion  playerRegion;
 static BufferRegion  selectionRegion;
 
 static Obdn_R_Primitive     renderPrim;
@@ -443,7 +442,7 @@ static void initDescSetsAndPipeLayouts(void)
 {
     const Obdn_R_DescriptorSetInfo descSets[] = {{
         //   raster
-            .bindingCount = 5, 
+            .bindingCount = 4, 
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -459,10 +458,6 @@ static void initDescSetsAndPipeLayouts(void)
             },{ // paint image
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         },{ // ray trace
@@ -618,9 +613,6 @@ static void initNonMeshDescriptors(void)
     brush->radius = 0.01;
     brush->mode = 1;
 
-    playerRegion = obdn_v_RequestBufferRegion(sizeof(UboPlayer), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
-    memset(playerRegion.hostData, 0, sizeof(UboPlayer));
-
     selectionRegion = obdn_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 
 
@@ -634,12 +626,6 @@ static void initNonMeshDescriptors(void)
         .range  = brushRegion.size,
         .offset = brushRegion.offset,
         .buffer = brushRegion.buffer,
-    };
-
-    VkDescriptorBufferInfo uniformInfoPlayer = {
-        .range  = playerRegion.size,
-        .offset = playerRegion.offset,
-        .buffer = playerRegion.buffer,
     };
 
     VkDescriptorBufferInfo storageBufInfoSelection= {
@@ -694,14 +680,6 @@ static void initNonMeshDescriptors(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
             .pImageInfo = &imageInfoA
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_RASTER],
-            .dstBinding = 4,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &uniformInfoPlayer
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -1835,11 +1813,6 @@ Brush* r_GetBrush(void)
     return (Brush*)brushRegion.hostData;
 }
 
-UboPlayer* r_GetPlayer(void)
-{
-    assert(playerRegion.hostData);
-    return (UboPlayer*)playerRegion.hostData;
-}
 
 void r_SetPaintMode(const PaintMode mode)
 {

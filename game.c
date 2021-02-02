@@ -63,7 +63,6 @@ G_GameState gameState;
 Scene scene;
 
 Brush* brush;
-UboPlayer* uboPlayer;
 
 bool firstFrame;
 
@@ -273,7 +272,6 @@ void g_Init(void)
     mode = MODE_DO_NOTHING;
     gameState.shouldRun = true;
     brush = r_GetBrush();
-    uboPlayer = r_GetPlayer();
     firstFrame = true;
 
     slider0 = obdn_u_CreateSlider(0, 40, NULL);
@@ -286,11 +284,6 @@ void g_BindToBrush(Brush* br)
     brush = br;
 }
 
-void g_BindToPlayer(UboPlayer* ubo)
-{
-    uboPlayer = ubo;
-}
-
 void g_Update(void)
 {
     scene.dirt = 0;
@@ -301,7 +294,6 @@ void g_Update(void)
         firstFrame = false;
     }
     assert(brush);
-    assert(uboPlayer);
     //assert(sizeof(struct Player) == sizeof(UboPlayer));
     //handleKeyMovement();
     vkDeviceWaitIdle(device);
@@ -320,7 +312,6 @@ void g_Update(void)
     brush->b = brushColor.x[2];
     brush->mode = mode;
     brush->radius = brushRadius;
-    memcpy(uboPlayer, &player, sizeof(UboPlayer));
 }
 
 void g_SetColor(const float r, const float g, const float b)
@@ -338,6 +329,5 @@ void g_SetRadius(const float r)
 void g_CleanUp(void)
 {
     brush = NULL;
-    uboPlayer = NULL;
     slider0 = NULL;
 }

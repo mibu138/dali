@@ -20,6 +20,6 @@ void main()
 {
     gl_Position = matrices.proj * matrices.view * matrices.model * vec4(pos, 1.0);
     outColor = vec3(1, 1, 1);
-    outNormal = normal;
+    outNormal = mat3(matrices.view) * mat3(matrices.model) * normal;
     outUvw = vec3(uvw, 0);
 }
