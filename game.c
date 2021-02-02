@@ -10,6 +10,7 @@
 #include <obsidian/i_input.h>
 #include <obsidian/v_video.h>
 #include <obsidian/u_ui.h>
+#include <pthread.h>
 
 
 static bool zoomIn;
@@ -50,6 +51,9 @@ static float brushRadius;
 static Mode  mode;
 
 Parms parms;
+
+static pthread_mutex_t viewLock;
+static Mat4            view;
 
 // order matters here since we memcpy to a matching ubo
 static struct Player {
@@ -262,6 +266,9 @@ bool g_Responder(const Obdn_I_Event *event)
 
 void g_Init(void)
 {
+    view = m_Ident_Mat4();
+    pthread_mutex_init(&viewLock, NULL);
+
     player.pos = (Vec3){0, 0., 3};
     player.target = (Vec3){0, 0, 0};
     player.pivot = player.target;
@@ -305,7 +312,14 @@ void g_Update(void)
         setViewerPivotByIntersection();
     handleMouseMovement();
     pivotChanged = false;
-    scene.view = generatePlayerView();
+    if (!parms.copySwapToHost)
+        scene.view = generatePlayerView();
+    else
+    {
+        pthread_mutex_lock(&viewLock);
+        scene.view = view;
+        pthread_mutex_unlock(&viewLock);
+    }
     scene.dirt |= SCENE_VIEW_BIT;
     brush->r = brushColor.x[0];
     brush->g = brushColor.x[1];
@@ -330,4 +344,12 @@ void g_CleanUp(void)
 {
     brush = NULL;
     slider0 = NULL;
+}
+
+// can be called from other thread
+void g_UpdateView(const Mat4* m)
+{
+    pthread_mutex_lock(&viewLock);
+    view = *m;
+    pthread_mutex_unlock(&viewLock);
 }

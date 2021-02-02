@@ -2,6 +2,7 @@
 #define G_GAME_H
 
 #include "common.h"
+#include <coal/coal.h>
 
 typedef struct {
     bool shouldRun;
@@ -17,5 +18,6 @@ bool g_Responder(const struct Obdn_I_Event *event);
 void g_Update(void);
 void g_SetColor(const float r, const float g, const float b);
 void g_SetRadius(const float r);
+void g_UpdateView(const Mat4* m);
 
 #endif /* end of include guard: G_GAME_H */
