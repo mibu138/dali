@@ -36,13 +36,21 @@ typedef enum {
 typedef Obdn_Mask Scene_DirtMask;
 
 typedef enum {
-    SCENE_VIEW_BIT = 0x00000001,
-    SCENE_PROJ_BIT = 0x00000002,
+    SCENE_VIEW_BIT  = (Scene_DirtMask)1 << 0,
+    SCENE_PROJ_BIT  = (Scene_DirtMask)1 << 1,
+    SCENE_BRUSH_BIT = (Scene_DirtMask)1 << 2
 } Scene_DirtyBits;
 
 typedef struct {
     Mat4           view;
     Mat4           proj;
+    float          brush_x;
+    float          brush_y;
+    float          brush_radius;
+    float          brush_r;
+    float          brush_g;
+    float          brush_b;
+    int            brush_mode;
     Scene_DirtMask dirt;
 } Scene;
 
