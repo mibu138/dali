@@ -4,14 +4,6 @@
 #include <obsidian/r_geo.h>
 #include "common.h"
 
-typedef enum {
-    R_XFORM_MODEL,
-    R_XFORM_VIEW,
-    R_XFORM_PROJ,
-    R_XFORM_VIEW_INV,
-    R_XFORM_PROJ_INV
-} r_XformType;
-
 typedef struct {
     Mat4 model;
     Mat4 view;
@@ -41,10 +33,22 @@ typedef enum {
     PAINT_MODE_ERASE
 } PaintMode;
 
+typedef Obdn_Mask Scene_DirtMask;
+
+typedef enum {
+    SCENE_VIEW_BIT = 0x00000001,
+    SCENE_PROJ_BIT = 0x00000002,
+} Scene_DirtyBits;
+
+typedef struct {
+    Mat4           view;
+    Mat4           proj;
+    Scene_DirtMask dirt;
+} Scene;
+
 void         r_InitRenderer(void);
 void         r_Render(void);
 int          r_GetSelectionPos(Vec3* v);
-Mat4*        r_GetXform(r_XformType);
 Brush*       r_GetBrush(void);
 UboPlayer*   r_GetPlayer(void);
 VkDeviceSize r_GetTextureSize(void);
@@ -56,6 +60,7 @@ void         r_SavePaintImage(void);
 void         r_Undo(void);
 void         r_BackUpLayer(void);
 void         r_CleanUp(void);
+void         r_BindScene(const Scene* scene);
 
 void* r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize);
 void  r_ReleaseSwapBuffer(void);

@@ -73,12 +73,6 @@ void painter_StartLoop(void)
 {
     Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 0, 0);
 
-    // initialize matrices
-    Mat4* xformProj    = r_GetXform(R_XFORM_PROJ);
-    Mat4* xformProjInv = r_GetXform(R_XFORM_PROJ_INV);
-    *xformProj    = m_BuildPerspective(0.01, 30);
-    *xformProjInv = m_Invert4x4(xformProj);
-
     parms.shouldRun = true;
 
     while( parms.shouldRun ) 

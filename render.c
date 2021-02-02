@@ -1,4 +1,5 @@
 #include "render.h"
+#include "coal/m_math.h"
 #include "layer.h"
 #include "obsidian/r_geo.h"
 #include "obsidian/u_ui.h"
@@ -114,6 +115,8 @@ static L_LayerId curLayerId;
 
 static bool needsToBackupLayer;
 static bool needsToUndo;
+
+static const Scene* scene;
 
 // swap to host stuff
 
@@ -1302,6 +1305,31 @@ static bool undo(void)
     return true;
 }
 
+static void updateView()
+{
+    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
+    matrices->view = scene->view;
+    matrices->viewInv = m_Invert4x4(&scene->view);
+}
+
+static void updateProj()
+{
+    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
+    matrices->proj = scene->proj;
+    matrices->projInv = m_Invert4x4(&scene->proj);
+}
+
+static void syncScene(const uint32_t frameIndex)
+{
+    if (scene->dirt)
+    {
+        if (scene->dirt & SCENE_VIEW_BIT)
+            updateView();
+        if (scene->dirt & SCENE_PROJ_BIT)
+            updateProj();
+    }
+}
+
 static void rayTraceSelect(const VkCommandBuffer cmdBuf)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_SELECT]); 
@@ -1603,6 +1631,8 @@ void r_InitRenderer(void)
 void r_Render(void)
 {
     uint32_t i = obdn_r_RequestFrame();
+    syncScene(i);
+
     VkSemaphore waitSemaphore = 0;
     if (needsToBackupLayer)
     {
@@ -1684,6 +1714,12 @@ int r_GetSelectionPos(Vec3* v)
     }
     else
         return 0;
+}
+
+void r_BindScene(const Scene* scene_)
+{
+    scene = scene_;
+    printf("Scene bound!\n");
 }
 
 void r_LoadPrim(Obdn_R_Primitive prim)
@@ -1775,20 +1811,6 @@ void r_CleanUp(void)
     obdn_v_DestroyCommand(acquireImageCommand);
     r_ClearPrim();
     l_CleanUp();
-}
-
-Mat4* r_GetXform(r_XformType type)
-{
-    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    switch (type) 
-    {
-        case R_XFORM_MODEL:    return &matrices->model;
-        case R_XFORM_VIEW:     return &matrices->view;
-        case R_XFORM_PROJ:     return &matrices->proj;
-        case R_XFORM_VIEW_INV: return &matrices->viewInv;
-        case R_XFORM_PROJ_INV: return &matrices->projInv;
-    }
-    return NULL;
 }
 
 void* r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize)

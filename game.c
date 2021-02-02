@@ -37,10 +37,6 @@ struct Drag {
 
 static Vec2  mousePos;
 
-static Mat4* viewMat;
-static Mat4* viewInvMat;
-static Mat4* projInvMat;
-
 typedef enum {
     MODE_PAINT,
     MODE_DO_NOTHING,
@@ -64,12 +60,12 @@ static struct Player {
 
 G_GameState gameState;
 
-#define FORWARD {0, 0, -1};
-#define MOVE_SPEED 0.04
-#define TURN_SPEED 0.04
+Scene scene;
 
 Brush* brush;
 UboPlayer* uboPlayer;
+
+bool firstFrame;
 
 const Vec3 UP_VEC = {0, 1, 0};
 
@@ -103,54 +99,6 @@ static Mat4 generatePlayerView(void)
     Mat4 m = m_LookAt(&player.pos, &player.target, &UP_VEC);
     return m_Invert4x4(&m);
     //return m;
-}
-
-static void handleKeyMovement(void)
-{
-    if (zoomIn) 
-    {
-        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
-        dir = m_Normalize_Vec3(&dir);
-        dir = m_Scale_Vec3(MOVE_SPEED, &dir);
-        player.pos = m_Add_Vec3(&player.pos, &dir);
-    }
-    if (zoomOut) 
-    {
-        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
-        dir = m_Normalize_Vec3(&dir);
-        dir = m_Scale_Vec3(-MOVE_SPEED, &dir);
-        player.pos = m_Add_Vec3(&player.pos, &dir);
-    }
-    if (moveUp)
-    {
-        Vec3 up = {0.0, MOVE_SPEED, 0.0};
-        player.pos = m_Add_Vec3(&player.pos, &up);
-        player.target = m_Add_Vec3(&player.target, &up);
-    }
-    if (moveDown)
-    {
-        Vec3 down = {0.0, -MOVE_SPEED, 0.0};
-        player.pos = m_Add_Vec3(&player.pos, &down);
-        player.target = m_Add_Vec3(&player.target, &down);
-    }
-    if (tumbleLeft)
-    {
-        const Vec3 up = (Vec3){0, 1.0, 0.0};
-        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
-        dir = m_Normalize_Vec3(&dir);
-        Vec3 left = m_Cross(&up, &dir);
-        left = m_Scale_Vec3(MOVE_SPEED, &left);
-        player.pos = m_Add_Vec3(&player.pos, &left);
-    }
-    if (tumbleRight)
-    {
-        const Vec3 up = (Vec3){0, 1.0, 0.0};
-        Vec3 dir = m_Sub_Vec3(&player.target, &player.pos);
-        dir = m_Normalize_Vec3(&dir);
-        Vec3 right = m_Cross(&dir, &up);
-        right = m_Scale_Vec3(MOVE_SPEED, &right);
-        player.pos = m_Add_Vec3(&player.pos, &right);
-    }
 }
 
 static void handleMouseMovement(void)
@@ -324,21 +272,13 @@ void g_Init(void)
     brushRadius = 0.01;
     mode = MODE_DO_NOTHING;
     gameState.shouldRun = true;
-    viewMat = r_GetXform(R_XFORM_VIEW);
-    viewInvMat = r_GetXform(R_XFORM_VIEW_INV);
-    projInvMat = r_GetXform(R_XFORM_PROJ_INV);
     brush = r_GetBrush();
     uboPlayer = r_GetPlayer();
+    firstFrame = true;
 
     slider0 = obdn_u_CreateSlider(0, 40, NULL);
-}
 
-void g_BindToView(Mat4* view, Mat4* viewInv)
-{
-    assert(view);
-    viewMat = view;
-    if (viewInv)
-        viewInvMat = viewInv;
+    r_BindScene(&scene);
 }
 
 void g_BindToBrush(Brush* br)
@@ -351,10 +291,15 @@ void g_BindToPlayer(UboPlayer* ubo)
     uboPlayer = ubo;
 }
 
-
 void g_Update(void)
 {
-    assert(viewMat);
+    scene.dirt = 0;
+    if (firstFrame)
+    {
+        scene.proj = m_BuildPerspective(0.01, 30);
+        scene.dirt |= SCENE_PROJ_BIT;
+        firstFrame = false;
+    }
     assert(brush);
     assert(uboPlayer);
     //assert(sizeof(struct Player) == sizeof(UboPlayer));
@@ -368,8 +313,8 @@ void g_Update(void)
         setViewerPivotByIntersection();
     handleMouseMovement();
     pivotChanged = false;
-    *viewMat    = generatePlayerView();
-    *viewInvMat = m_Invert4x4(viewMat);
+    scene.view = generatePlayerView();
+    scene.dirt |= SCENE_VIEW_BIT;
     brush->r = brushColor.x[0];
     brush->g = brushColor.x[1];
     brush->b = brushColor.x[2];
