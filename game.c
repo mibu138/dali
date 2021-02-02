@@ -1,5 +1,6 @@
 #include "game.h"
 #include "coal/m_math.h"
+#include "obsidian/r_render.h"
 #include "render.h"
 #include "layer.h"
 #include "common.h"
@@ -53,7 +54,11 @@ static Mode  mode;
 Parms parms;
 
 static pthread_mutex_t viewLock;
+static pthread_mutex_t projLock;
 static Mat4            view;
+static Mat4            proj;
+bool projDirty;
+bool windowDirty;
 
 // order matters here since we memcpy to a matching ubo
 static struct Player {
@@ -221,6 +226,8 @@ bool g_Responder(const Obdn_I_Event *event)
         {
             mousePos.x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH;
             mousePos.y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT;
+            printf("mouseData y: %d\n", event->data.mouseData.y);
+            printf("mousePosN y: %f\n", mousePos.y);
         } break;
         case OBDN_I_MOUSEDOWN: switch (mode) 
         {
@@ -268,6 +275,7 @@ void g_Init(void)
 {
     view = m_Ident_Mat4();
     pthread_mutex_init(&viewLock, NULL);
+    pthread_mutex_init(&projLock, NULL);
 
     player.pos = (Vec3){0, 0., 3};
     player.target = (Vec3){0, 0, 0};
@@ -320,6 +328,19 @@ void g_Update(void)
         scene.view = view;
         pthread_mutex_unlock(&viewLock);
     }
+    if (projDirty)
+    {
+        pthread_mutex_lock(&projLock);
+        scene.proj = proj;
+        projDirty = false;
+        pthread_mutex_unlock(&projLock);
+        scene.dirt |= SCENE_PROJ_BIT;
+    }
+    if (windowDirty)
+    {
+        obdn_r_RecreateSwapchain();
+        windowDirty = false;
+    }
     scene.dirt |= SCENE_VIEW_BIT;
     brush->r = brushColor.x[0];
     brush->g = brushColor.x[1];
@@ -352,4 +373,20 @@ void g_UpdateView(const Mat4* m)
     pthread_mutex_lock(&viewLock);
     view = *m;
     pthread_mutex_unlock(&viewLock);
+}
+
+void g_UpdateProg(const Mat4* m)
+{
+    pthread_mutex_lock(&projLock);
+    proj = *m;
+    projDirty = true;
+    pthread_mutex_unlock(&projLock);
+}
+
+void g_UpdateWindow(uint32_t width, uint32_t height)
+{
+    // TODO: make this safe some how... 
+    OBDN_WINDOW_WIDTH = width;
+    OBDN_WINDOW_HEIGHT = height;
+    windowDirty = true;
 }

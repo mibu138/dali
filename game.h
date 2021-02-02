@@ -3,6 +3,7 @@
 
 #include "common.h"
 #include <coal/coal.h>
+#include <stdint.h>
 
 typedef struct {
     bool shouldRun;
@@ -19,5 +20,7 @@ void g_Update(void);
 void g_SetColor(const float r, const float g, const float b);
 void g_SetRadius(const float r);
 void g_UpdateView(const Mat4* m);
+void g_UpdateProg(const Mat4* m);
+void g_UpdateWindow(uint32_t width, uint32_t height);
 
 #endif /* end of include guard: G_GAME_H */
