@@ -226,8 +226,6 @@ bool g_Responder(const Obdn_I_Event *event)
         {
             mousePos.x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH;
             mousePos.y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT;
-            printf("mouseData y: %d\n", event->data.mouseData.y);
-            printf("mousePosN y: %f\n", mousePos.y);
         } break;
         case OBDN_I_MOUSEDOWN: switch (mode) 
         {

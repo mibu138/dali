@@ -1449,7 +1449,7 @@ static void comp(const VkCommandBuffer cmdBuf)
 
 static void rasterize(const VkCommandBuffer cmdBuf)
 {
-    VkClearValue clearValueColor =     {0.002f, 0.003f, 0.009f, 1.0f};
+    VkClearValue clearValueColor =     {0.0f, 0.0f, 0.0f, 0.0f};
     VkClearValue clearValueDepth = {1.0, 0};
 
     VkClearValue clears[] = {clearValueColor, clearValueDepth};
