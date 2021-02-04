@@ -206,8 +206,10 @@ static void initPaintImages(void)
 
 static void initRenderPasses(void)
 {
-    obdn_r_CreateRenderPass_ColorDepth(VK_ATTACHMENT_LOAD_OP_CLEAR, 
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, 
+    obdn_r_CreateRenderPass_ColorDepth(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, 
+            VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,
             obdn_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
 
     {
@@ -1812,7 +1814,6 @@ Brush* r_GetBrush(void)
     assert (brushRegion.hostData);
     return (Brush*)brushRegion.hostData;
 }
-
 
 void r_SetPaintMode(const PaintMode mode)
 {

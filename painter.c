@@ -33,7 +33,6 @@ void painter_Init(void)
 #else
     obdn_v_config.validationEnabled = false;
 #endif
-    parms.copySwapToHost = true;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     if (!parms.copySwapToHost)
         obdn_d_Init(1000, 1000, NULL);
