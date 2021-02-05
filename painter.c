@@ -25,7 +25,7 @@
 //#define NS_TARGET 500000000
 #define NS_PER_S  1000000000
 
-void painter_Init(void)
+void painter_Init(bool houdiniMode)
 {
     obdn_v_config.rayTraceEnabled = true;
 #ifndef NDEBUG
@@ -33,6 +33,7 @@ void painter_Init(void)
 #else
     obdn_v_config.validationEnabled = false;
 #endif
+    parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     if (!parms.copySwapToHost)
         obdn_d_Init(1000, 1000, NULL);
@@ -106,7 +107,7 @@ void painter_StartLoop(void)
         vkDeviceWaitIdle(device);
 
         painter_ShutDown();
-        painter_Init();
+        painter_Init(parms.copySwapToHost);
         Obdn_R_Primitive cube = obdn_r_CreateCubePrim(true);
         r_LoadPrim(cube);
         printf("RESTART!\n");

@@ -4,7 +4,7 @@
 #include <obsidian/r_geo.h>
 #include <obsidian/f_file.h>
 
-void painter_Init(void);
+void painter_Init(bool houdiniMode);
 void painter_LoadFprim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_ReloadPrim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_StartLoop(void);

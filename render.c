@@ -99,6 +99,7 @@ static VkFramebuffer   compositeFrameBuffer;
 static VkFramebuffer   backgroundFrameBuffer;
 static VkFramebuffer   foregroundFrameBuffer;
 static VkFramebuffer   swapchainFrameBuffers[OBDN_FRAME_COUNT];
+static VkFramebuffer   postFrameBuffers[OBDN_FRAME_COUNT];
 
 static const VkFormat depthFormat   = VK_FORMAT_D32_SFLOAT;
 static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
@@ -106,6 +107,7 @@ static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 static VkRenderPass singleCompositeRenderPass;
 static VkRenderPass compositeRenderPass;
 static VkRenderPass swapchainRenderPass;
+static VkRenderPass postRenderPass;
 
 static Obdn_R_AccelerationStructure bottomLevelAS;
 static Obdn_R_AccelerationStructure topLevelAS;
@@ -120,7 +122,8 @@ static const Scene* scene;
 // swap to host stuff
 
 static bool            copySwapToHost;
-static BufferRegion    swapHostBuffer;
+static BufferRegion    swapHostBufferColor;
+static BufferRegion    swapHostBufferDepth;
 static Command         copyToHostCommand;
 static pthread_mutex_t swapHostLock;
 
@@ -142,7 +145,7 @@ static void initOffscreenAttachments(void)
     depthAttachment = obdn_v_CreateImage(
             OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT,
             depthFormat,
-            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+            VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_DEPTH_BIT, 
             VK_SAMPLE_COUNT_1_BIT,
@@ -207,10 +210,14 @@ static void initPaintImages(void)
 static void initRenderPasses(void)
 {
     obdn_r_CreateRenderPass_ColorDepth(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
+            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, 
             VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,
             obdn_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
+
+    obdn_r_CreateRenderPass_Color(VK_ATTACHMENT_LOAD_OP_LOAD, 
+            VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            obdn_r_GetSwapFormat(), &postRenderPass);
 
     {
         const VkAttachmentDescription attachmentA = {
@@ -408,18 +415,18 @@ static void initRenderPasses(void)
 
         const VkSubpassDependency dependencies[] = {{
             .srcSubpass = VK_SUBPASS_EXTERNAL,
-            .dstSubpass = 0,
-            .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-            .srcAccessMask = 0,
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+                .dstSubpass = 0,
+                .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+                .srcAccessMask = 0,
+                .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
         },{
             .srcSubpass = 0,
-            .dstSubpass = VK_SUBPASS_EXTERNAL,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+                .dstSubpass = VK_SUBPASS_EXTERNAL,
+                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+                .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+                .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
+                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
         }};
 
         const VkAttachmentDescription attachments[] = {
@@ -757,7 +764,7 @@ static void initRasterPipelines(void)
         .fragShader = SPVDIR"/raster-frag.spv"
     },{
         // post
-        .renderPass = swapchainRenderPass,
+        .renderPass = postRenderPass,
         .layout     = pipelineLayouts[LAYOUT_POST],
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .frontFace   = VK_FRONT_FACE_CLOCKWISE,
@@ -861,7 +868,7 @@ static void initSwapchainDependentFramebuffers(void)
 
         const VkImageView offscreenAttachments[] = {frame->view, depthAttachment.view};
 
-        const VkFramebufferCreateInfo framebufferInfo = {
+        VkFramebufferCreateInfo framebufferInfo = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
             .height = OBDN_WINDOW_HEIGHT,
@@ -872,6 +879,11 @@ static void initSwapchainDependentFramebuffers(void)
         };
 
         V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapchainFrameBuffers[i]) );
+
+        framebufferInfo.renderPass = postRenderPass;
+        framebufferInfo.attachmentCount = 1;
+
+        V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &postFrameBuffers[i]) );
     }
 }
 
@@ -940,6 +952,7 @@ static void cleanUpSwapchainDependent(void)
     for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
         vkDestroyFramebuffer(device, swapchainFrameBuffers[i], NULL);
+        vkDestroyFramebuffer(device, postFrameBuffers[i], NULL);
     }
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_RASTER], NULL);
     graphicsPipelines[PIPELINE_RASTER] = VK_NULL_HANDLE;
@@ -1010,7 +1023,7 @@ static void onLayerChange(L_LayerId newLayerId)
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
             0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers), barriers);
 
-    obdn_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, prevLayerBuffer);
+    obdn_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, VK_IMAGE_ASPECT_COLOR_BIT, prevLayerBuffer);
 
     vkCmdClearColorImage(cmd.buffer, imageC.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
     vkCmdClearColorImage(cmd.buffer, imageD.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
@@ -1179,9 +1192,11 @@ static void onRecreateSwapchain(void)
 
     if (copySwapToHost)
     {
-        obdn_v_FreeBufferRegion(&swapHostBuffer);
+        obdn_v_FreeBufferRegion(&swapHostBufferColor);
+        obdn_v_FreeBufferRegion(&swapHostBufferDepth);
         const uint64_t size = obdn_r_GetFrame(obdn_r_GetCurrentFrameIndex())->size;
-        swapHostBuffer = obdn_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        swapHostBufferColor = obdn_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     }
 }
 
@@ -1234,7 +1249,7 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
     if (toHost)
-        obdn_v_CmdCopyImageToBuffer(cmdBuf, &imageB, bufferRegion);
+        obdn_v_CmdCopyImageToBuffer(cmdBuf, &imageB, VK_IMAGE_ASPECT_COLOR_BIT, bufferRegion);
     else
         obdn_v_CmdCopyBufferToImage(cmdBuf, bufferRegion, &imageB);
 
@@ -1456,15 +1471,6 @@ static void rasterize(const VkCommandBuffer cmdBuf)
 
     VkClearValue clears[] = {clearValueColor, clearValueDepth};
 
-    const VkRenderPassBeginInfo rpass = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = 2,
-        .pClearValues = clears,
-        .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
-        .renderPass =  swapchainRenderPass,
-        .framebuffer = swapchainFrameBuffers[obdn_r_GetCurrentFrameIndex()]
-    };
-
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_RASTER]);
 
     vkCmdBindDescriptorSets(
@@ -1474,9 +1480,31 @@ static void rasterize(const VkCommandBuffer cmdBuf)
         0, 1, &description.descriptorSets[DESC_SET_RASTER], 
         0, NULL);
 
-    vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
+    {
+        const VkRenderPassBeginInfo rpass = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .clearValueCount = 2,
+            .pClearValues = clears,
+            .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
+            .renderPass =  swapchainRenderPass,
+            .framebuffer = swapchainFrameBuffers[obdn_r_GetCurrentFrameIndex()]
+        };
 
-        obdn_r_DrawPrim(cmdBuf, &renderPrim);
+        vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
+
+            obdn_r_DrawPrim(cmdBuf, &renderPrim);
+            
+        vkCmdEndRenderPass(cmdBuf);
+    }
+    {
+        const VkRenderPassBeginInfo rpass = {
+            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
+            .clearValueCount = 1,
+            .pClearValues = &clearValueColor,
+            .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
+            .renderPass =  postRenderPass,
+            .framebuffer = postFrameBuffers[obdn_r_GetCurrentFrameIndex()]
+        };
 
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_POST]);
 
@@ -1487,9 +1515,12 @@ static void rasterize(const VkCommandBuffer cmdBuf)
             0, 1, &description.descriptorSets[DESC_SET_POST],
             0, NULL);
 
-        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
+        vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
 
-    vkCmdEndRenderPass(cmdBuf);
+            vkCmdDraw(cmdBuf, 3, 1, 0, 0);
+
+        vkCmdEndRenderPass(cmdBuf);
+    }
 }
 
 static void updateRenderCommands(const int8_t frameIndex)
@@ -1600,7 +1631,8 @@ void r_InitRenderer(void)
     if (copySwapToHost)
     {
         VkDeviceSize swapImageSize = obdn_r_GetFrame(0)->size;
-        swapHostBuffer = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        swapHostBufferColor = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
         int r = pthread_mutex_init(&swapHostLock, NULL);
         assert(r == 0);
@@ -1640,9 +1672,10 @@ void r_Render(void)
 
         const Image* swapImage = obdn_r_GetFrame(i);
 
-        assert(swapImage->size == swapHostBuffer.size);
+        assert(swapImage->size == swapHostBufferColor.size);
 
-        obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, &swapHostBuffer);
+        obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, VK_IMAGE_ASPECT_COLOR_BIT, &swapHostBufferColor);
+        obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, &depthAttachment, VK_IMAGE_ASPECT_DEPTH_BIT, &swapHostBufferDepth);
 
         //Obdn_V_Barrier barrier = {
         //    .srcStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT,
@@ -1781,6 +1814,7 @@ void r_CleanUp(void)
     }
     memset(&description, 0, sizeof(description));
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
+    vkDestroyRenderPass(device, postRenderPass, NULL);
     vkDestroyRenderPass(device, compositeRenderPass, NULL);
     vkDestroyRenderPass(device, singleCompositeRenderPass, NULL);
     vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
@@ -1793,14 +1827,15 @@ void r_CleanUp(void)
     l_CleanUp();
 }
 
-void* r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize)
+void r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize, void** colorData, void** depthData)
 {
     pthread_mutex_lock(&swapHostLock);
     printf("Acquired swap buffer lock...\n");
     *width = OBDN_WINDOW_WIDTH;
     *height = OBDN_WINDOW_HEIGHT;
     *elementSize = 4;
-    return swapHostBuffer.hostData;
+    *colorData = swapHostBufferColor.hostData;
+    *depthData = swapHostBufferDepth.hostData;
 }
 
 void r_ReleaseSwapBuffer(void)

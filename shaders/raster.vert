@@ -22,4 +22,5 @@ void main()
     outColor = vec3(1, 1, 1);
     outNormal = mat3(matrices.view) * mat3(matrices.model) * normal;
     outUvw = vec3(uvw, 0);
+    gl_Position.z = (gl_Position.z + gl_Position.w) / 2.0; // for opengl compatibility
 }

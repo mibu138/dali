@@ -6,8 +6,7 @@
 
 int main(int argc, char *argv[])
 {
-    parms.copySwapToHost = false;
-    painter_Init();
+    painter_Init(false);
     Obdn_F_Primitive fprim;
     obdn_f_ReadPrimitive("data/flip-uv.tnt", &fprim);
     Obdn_R_Primitive m = obdn_f_CreateRPrimFromFPrim(&fprim);
