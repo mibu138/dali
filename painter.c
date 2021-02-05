@@ -1,6 +1,7 @@
 #include "painter.h"
 #include "game.h"
 #include "common.h"
+#include "obsidian/t_def.h"
 #include "render.h"
 #include "obsidian/f_file.h"
 #include "obsidian/r_geo.h"
@@ -42,7 +43,9 @@ void painter_Init(bool houdiniMode)
         OBDN_WINDOW_WIDTH = 1000;
         OBDN_WINDOW_HEIGHT = 1000;
     }
-    obdn_v_Init();
+    const char* exnames[] = {VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME};
+    obdn_v_Init(OBDN_256_MiB, OBDN_256_MiB, OBDN_1_GiB * 2, OBDN_1_GiB * 2, 
+            OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
