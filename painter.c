@@ -44,7 +44,7 @@ void painter_Init(bool houdiniMode)
         OBDN_WINDOW_HEIGHT = 1000;
     }
     const char* exnames[] = {VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME};
-    obdn_v_Init(OBDN_1_GiB, OBDN_256_MiB, OBDN_1_GiB * 2, OBDN_1_GiB * 2, 
+    obdn_v_Init(OBDN_1_GiB, OBDN_256_MiB, OBDN_1_GiB * 2, OBDN_1_GiB * 2, OBDN_1_MiB,
             OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
