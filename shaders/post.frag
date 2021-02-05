@@ -16,11 +16,10 @@ layout(set = 0, binding = 0) uniform Brush {
 
 void main()
 {
-    //vec2 brushPos = vec2(brush.pos[0], brush.pos[1]);
     vec2 brushPos = vec2(brush.x, brush.y);
     float d = distance(uv, brushPos);
-    if (d < brush.radius)
-        outColor = vec4(0.7, 0.8, 0.4, 1);
-    else
-        outColor = vec4(0, 0, 0, 0);
+    float outer = 1 - step(brush.radius, d);
+    float inner = 1 - step(brush.radius - 0.002, d);
+    float c = outer - inner;
+    outColor = vec4(1, 1, 1, c);
 }
