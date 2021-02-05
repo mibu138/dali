@@ -18,8 +18,8 @@ void main()
 {
     vec2 brushPos = vec2(brush.x, brush.y);
     float d = distance(uv, brushPos);
-    float outer = 1 - step(brush.radius, d);
-    float inner = 1 - step(brush.radius - 0.002, d);
+    float outer = step(d, brush.radius);
+    float inner = step(d, brush.radius - 0.002);
     float c = outer - inner;
     outColor = vec4(1, 1, 1, c);
 }
