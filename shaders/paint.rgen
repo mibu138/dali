@@ -28,11 +28,15 @@ layout(set = 2, binding = 0) uniform Brush {
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
+float rand(vec2 co){
+    return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453) - 0.5;
+}
 void main() 
 {
     if (brush.mode > 0) // not painting
         return;
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5);
+    const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy), rand(gl_LaunchIDEXT.xy * 41.45234));
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + jitter;
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
     vec2 brushPos = vec2(brush.x, brush.y);
     brushPos = brushPos * 2.0 - 1.0;

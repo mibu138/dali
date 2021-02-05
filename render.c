@@ -150,7 +150,7 @@ static void initOffscreenAttachments(void)
             VK_IMAGE_ASPECT_DEPTH_BIT, 
             VK_SAMPLE_COUNT_1_BIT,
             1,
-            graphicsQueueFamilyIndex);
+            OBDN_V_MEMORY_DEVICE_TYPE);
 }
 
 static void initPaintImages(void)
@@ -162,7 +162,7 @@ static void initPaintImages(void)
             VK_SAMPLE_COUNT_1_BIT,
             1,
             VK_FILTER_LINEAR, 
-            graphicsQueueFamilyIndex);
+            OBDN_V_MEMORY_DEVICE_TYPE);
 
     imageB = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
@@ -171,7 +171,7 @@ static void initPaintImages(void)
             VK_SAMPLE_COUNT_1_BIT,
             1,
             VK_FILTER_LINEAR, 
-            graphicsQueueFamilyIndex);
+            OBDN_V_MEMORY_DEVICE_TYPE);
 
     imageC = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
@@ -180,7 +180,7 @@ static void initPaintImages(void)
             VK_SAMPLE_COUNT_1_BIT,
             1,
             VK_FILTER_LINEAR, 
-            graphicsQueueFamilyIndex);
+            OBDN_V_MEMORY_DEVICE_TYPE);
     
     imageD = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
@@ -189,7 +189,7 @@ static void initPaintImages(void)
             VK_SAMPLE_COUNT_1_BIT,
             1,
             VK_FILTER_LINEAR, 
-            graphicsQueueFamilyIndex);
+            OBDN_V_MEMORY_DEVICE_TYPE);
 
     obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
     obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageB);
