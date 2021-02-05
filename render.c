@@ -67,6 +67,11 @@ static BufferRegion  matrixRegion;
 static BufferRegion  brushRegion;
 static BufferRegion  selectionRegion;
 
+typedef struct {
+    float x;
+    float y;
+} PaintJitterSeed;
+
 static Obdn_R_Primitive     renderPrim;
 
 static VkPipelineLayout           pipelineLayouts[OBDN_MAX_PIPELINES];
@@ -524,12 +529,20 @@ static void initDescSetsAndPipeLayouts(void)
 
     obdn_r_CreateDescriptorSets(OBDN_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
 
+    VkPushConstantRange pcRange = {
+        .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        .offset     = 0,
+        .size       = sizeof(PaintJitterSeed),
+    }; 
+
     const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = descriptorSetLayouts,
     },{
         .descriptorSetCount = 3, 
         .descriptorSetLayouts = descriptorSetLayouts,
+        .pushConstantCount = 1,
+        .pushConstantsRanges = &pcRange
     },{
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
@@ -1418,6 +1431,13 @@ static void paint(const VkCommandBuffer cmdBuf)
 
     const VkStridedDeviceAddressRegionKHR callableShaderBindingTable = {
     };
+
+    PaintJitterSeed seed = {
+        .x = coal_Rand(),
+        .y = coal_Rand()
+    };
+
+    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(PaintJitterSeed), &seed);
 
     vkCmdTraceRaysKHR(cmdBuf, &raygenShaderBindingTable,
             &missShaderBindingTable, &hitShaderBindingTable,
