@@ -147,6 +147,7 @@ static void updateRenderCommands(const int8_t frameIndex);
 
 static void initOffscreenAttachments(void)
 {
+    Obdn_V_MemoryType memType = parms.copySwapToHost ? OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE : OBDN_V_MEMORY_DEVICE_TYPE;
     depthAttachment = obdn_v_CreateImage(
             OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT,
             depthFormat,
@@ -155,7 +156,7 @@ static void initOffscreenAttachments(void)
             VK_IMAGE_ASPECT_DEPTH_BIT, 
             VK_SAMPLE_COUNT_1_BIT,
             1,
-            OBDN_V_MEMORY_DEVICE_TYPE);
+            memType);
 }
 
 static void initPaintImages(void)
