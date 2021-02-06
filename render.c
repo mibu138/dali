@@ -1869,6 +1869,13 @@ void r_AcquireSwapBufferFast(uint32_t* width, uint32_t* height, uint32_t* elemen
     *height = OBDN_WINDOW_HEIGHT;
     *elementSize = 4;
 
+    uint32_t frameId = obdn_r_GetCurrentFrameIndex();
+    *colorOffset = obdn_r_GetFrame(frameId)->offset;
+    *depthOffset = depthAttachment.offset;
+}
+
+bool r_GetExtMemoryFd(int* fd, uint64_t* size)
+{
     // fast path
     VkMemoryGetFdInfoKHR fdInfo = {
         .sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
@@ -1878,9 +1885,10 @@ void r_AcquireSwapBufferFast(uint32_t* width, uint32_t* height, uint32_t* elemen
 
     V_ASSERT( vkGetMemoryFdKHR(device, &fdInfo, fd) );
 
-    uint32_t frameId = obdn_r_GetCurrentFrameIndex();
-    *colorOffset = obdn_r_GetFrame(frameId)->offset;
-    *depthOffset = depthAttachment.offset;
+    *size = obdn_v_GetMemorySize(OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE);
+
+    assert(*size);
+    return true;
 }
 
 void r_ReleaseSwapBuffer(void)

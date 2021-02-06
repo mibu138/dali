@@ -43,12 +43,16 @@ void painter_Init(bool houdiniMode)
         OBDN_WINDOW_WIDTH = 1000;
         OBDN_WINDOW_HEIGHT = 1000;
     }
-    const char* exnames[] = {VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, VK_KHR_EXTERNAL_MEMORY_CAPABILITIES_EXTENSION_NAME};
+    const char* exnames[] = {VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, 
+        VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME};
     obdn_v_Init(OBDN_1_GiB, OBDN_256_MiB, OBDN_1_GiB * 2, OBDN_1_GiB * 2, OBDN_100_MiB,
             OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
+    int fd;
+    uint64_t size;
+    r_GetExtMemoryFd(&fd, &size);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     obdn_i_Subscribe(g_Responder);

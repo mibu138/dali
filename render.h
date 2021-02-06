@@ -64,5 +64,6 @@ void r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSiz
 void r_AcquireSwapBufferFast(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
         int* fd, uint64_t* colorOffset, uint64_t* depthOffset);
 void r_ReleaseSwapBuffer(void);
+bool r_GetExtMemoryFd(int* fd, uint64_t* size);
 
 #endif /* end of include guard: R_COMMANDS_H */
