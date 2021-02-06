@@ -1848,7 +1848,8 @@ void r_CleanUp(void)
     l_CleanUp();
 }
 
-void r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize, void** colorData, void** depthData)
+void r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
+        void** colorData, void** depthData)
 {
     pthread_mutex_lock(&swapHostLock);
     printf("Acquired swap buffer lock...\n");
@@ -1857,6 +1858,29 @@ void r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSiz
     *elementSize = 4;
     *colorData = swapHostBufferColor.hostData;
     *depthData = swapHostBufferDepth.hostData;
+}
+
+void r_AcquireSwapBufferFast(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
+        int* fd, uint64_t* colorOffset, uint64_t* depthOffset)
+{
+    pthread_mutex_lock(&swapHostLock);
+    printf("Acquired swap buffer lock...\n");
+    *width = OBDN_WINDOW_WIDTH;
+    *height = OBDN_WINDOW_HEIGHT;
+    *elementSize = 4;
+
+    // fast path
+    VkMemoryGetFdInfoKHR fdInfo = {
+        .sType = VK_STRUCTURE_TYPE_MEMORY_GET_FD_INFO_KHR,
+        .memory = obdn_v_GetDeviceMemory(OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE),
+        .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT,
+    };
+
+    V_ASSERT( vkGetMemoryFdKHR(device, &fdInfo, fd) );
+
+    uint32_t frameId = obdn_r_GetCurrentFrameIndex();
+    *colorOffset = obdn_r_GetFrame(frameId)->offset;
+    *depthOffset = depthAttachment.offset;
 }
 
 void r_ReleaseSwapBuffer(void)
