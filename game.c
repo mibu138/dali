@@ -45,16 +45,12 @@ typedef enum {
     MODE_VIEW,
 } Mode;
 
-static float brushX;
-static float brushY;
 static Vec3  brushColor;
 static float brushRadius;
 static Mode  mode;
 
 Parms parms;
 
-static pthread_mutex_t viewLock;
-static pthread_mutex_t projLock;
 static Mat4            view;
 static Mat4            proj;
 bool projDirty;
@@ -271,15 +267,13 @@ bool g_Responder(const Obdn_I_Event *event)
 
 void g_Init(void)
 {
+    obdn_i_Subscribe(g_Responder);
+
     view = m_Ident_Mat4();
-    pthread_mutex_init(&viewLock, NULL);
-    pthread_mutex_init(&projLock, NULL);
 
     player.pos = (Vec3){0, 0., 3};
     player.target = (Vec3){0, 0, 0};
     player.pivot = player.target;
-    brushX = 0;
-    brushY = 0;
     brushColor = (Vec3){0.1, 0.95, 0.3};
     brushRadius = 0.01;
     mode = MODE_DO_NOTHING;
@@ -322,16 +316,12 @@ void g_Update(void)
         scene.view = generatePlayerView();
     else
     {
-        pthread_mutex_lock(&viewLock);
         scene.view = view;
-        pthread_mutex_unlock(&viewLock);
     }
     if (projDirty)
     {
-        pthread_mutex_lock(&projLock);
         scene.proj = proj;
         projDirty = false;
-        pthread_mutex_unlock(&projLock);
         scene.dirt |= SCENE_PROJ_BIT;
     }
     if (windowDirty)
@@ -363,22 +353,20 @@ void g_CleanUp(void)
 {
     brush = NULL;
     slider0 = NULL;
+    obdn_i_Unsubscribe(g_Responder);
+    memset(&mousePos, 0, sizeof(mousePos));
 }
 
 // can be called from other thread
 void g_UpdateView(const Mat4* m)
 {
-    pthread_mutex_lock(&viewLock);
     view = *m;
-    pthread_mutex_unlock(&viewLock);
 }
 
 void g_UpdateProg(const Mat4* m)
 {
-    pthread_mutex_lock(&projLock);
     proj = *m;
     projDirty = true;
-    pthread_mutex_unlock(&projLock);
 }
 
 void g_UpdateWindow(uint32_t width, uint32_t height)

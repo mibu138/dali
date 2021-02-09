@@ -54,6 +54,7 @@ enum {
 enum {
     PIPELINE_RAY_TRACE,
     PIPELINE_SELECT,
+    RT_PIPELINE_COUNT
 };
 
 enum {
@@ -77,7 +78,7 @@ static Obdn_R_Primitive     renderPrim;
 static VkPipelineLayout           pipelineLayouts[OBDN_MAX_PIPELINES];
 static VkPipeline                 graphicsPipelines[OBDN_MAX_PIPELINES];
 static VkPipeline                 raytracePipelines[OBDN_MAX_PIPELINES];
-static Obdn_R_ShaderBindingTable shaderBindingTables[OBDN_MAX_PIPELINES];
+static Obdn_R_ShaderBindingTable  shaderBindingTables[OBDN_MAX_PIPELINES];
 
 static VkDescriptorSetLayout descriptorSetLayouts[OBDN_MAX_DESCRIPTOR_SETS];
 static Obdn_R_Description   description;
@@ -127,10 +128,11 @@ static const Scene* scene;
 // swap to host stuff
 
 static bool            copySwapToHost;
+static bool            fastPath;
 static BufferRegion    swapHostBufferColor;
 static BufferRegion    swapHostBufferDepth;
 static Command         copyToHostCommand;
-static pthread_mutex_t swapHostLock;
+static VkSemaphore     extFrameReadSemaphore;
 
 // swap to host stuff
 
@@ -824,6 +826,8 @@ static void initRayTracePipelinesAndShaderBindingTables(void)
         }
     }};
 
+    assert(OBDN_ARRAY_SIZE(pipeInfosRT) == RT_PIPELINE_COUNT);
+
     obdn_r_CreateRayTracePipelines(OBDN_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines, shaderBindingTables);
 }
 
@@ -973,6 +977,11 @@ static void cleanUpSwapchainDependent(void)
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_POST], NULL);
     graphicsPipelines[PIPELINE_POST] = VK_NULL_HANDLE;
     obdn_v_FreeImage(&depthAttachment);
+    if (copySwapToHost)
+    {
+        obdn_v_FreeBufferRegion(&swapHostBufferColor);
+        obdn_v_FreeBufferRegion(&swapHostBufferDepth);
+    }
 }
 
 static void onLayerChange(L_LayerId newLayerId)
@@ -1206,8 +1215,6 @@ static void onRecreateSwapchain(void)
 
     if (copySwapToHost)
     {
-        obdn_v_FreeBufferRegion(&swapHostBufferColor);
-        obdn_v_FreeBufferRegion(&swapHostBufferDepth);
         const uint64_t size = obdn_r_GetFrame(obdn_r_GetCurrentFrameIndex())->size;
         swapHostBufferColor = obdn_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
@@ -1655,8 +1662,10 @@ void r_InitRenderer(void)
         swapHostBufferColor = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
-        int r = pthread_mutex_init(&swapHostLock, NULL);
-        assert(r == 0);
+        VkSemaphoreCreateInfo semCI = {
+            .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
+        vkCreateSemaphore(device, &semCI, NULL, &extFrameReadSemaphore);
+        fastPath = false;
         printf(">> SwapHostBuffer created\n");
     }
 }
@@ -1688,37 +1697,38 @@ void r_Render(void)
     waitSemaphore = obdn_u_Render(renderCommands[i].semaphore);
     if (copySwapToHost)
     {
-        obdn_v_ResetCommand(&copyToHostCommand);
-        obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
+        if (fastPath)
+        {
+            obdn_v_ResetCommand(&copyToHostCommand);
+            obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
+            obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
+            obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, waitSemaphore, 
+                    VK_NULL_HANDLE,
+                    copyToHostCommand.fence, 
+                    copyToHostCommand.buffer);
+            obdn_v_WaitForFence(&copyToHostCommand.fence);
+        }
+        else
+        {
+            obdn_v_ResetCommand(&copyToHostCommand);
+            obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
 
-        const Image* swapImage = obdn_r_GetFrame(i);
+            const Image* swapImage = obdn_r_GetFrame(i);
 
-        assert(swapImage->size == swapHostBufferColor.size);
+            assert(swapImage->size == swapHostBufferColor.size);
 
-        obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, VK_IMAGE_ASPECT_COLOR_BIT, &swapHostBufferColor);
-        obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, &depthAttachment, VK_IMAGE_ASPECT_DEPTH_BIT, &swapHostBufferDepth);
+            obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, VK_IMAGE_ASPECT_COLOR_BIT, &swapHostBufferColor);
+            obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, &depthAttachment, VK_IMAGE_ASPECT_DEPTH_BIT, &swapHostBufferDepth);
 
-        //Obdn_V_Barrier barrier = {
-        //    .srcStageFlags = VK_PIPELINE_STAGE_TRANSFER_BIT,
-        //    .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-        //    .dstStageFlags = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-        //    .dstAccessMask = 0, 
-        //};
+            obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
 
-        //obdn_v_CmdTransitionImageLayout(copyToHostCommand.buffer, barrier, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
-        //        VK_IMAGE_LAYOUT_PRESENT_SRC_KHR, 1, swapImage->handle);
+            obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, waitSemaphore, 
+                    VK_NULL_HANDLE,
+                    copyToHostCommand.fence, 
+                    copyToHostCommand.buffer);
 
-        obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
-
-        pthread_mutex_lock(&swapHostLock);
-
-        obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, waitSemaphore, 
-                VK_NULL_HANDLE,
-                copyToHostCommand.fence, 
-                copyToHostCommand.buffer);
-
-        obdn_v_WaitForFence(&copyToHostCommand.fence);
-        pthread_mutex_unlock(&swapHostLock);
+            obdn_v_WaitForFence(&copyToHostCommand.fence);
+        }
     }
     else   
         obdn_r_PresentFrame(waitSemaphore);
@@ -1844,15 +1854,26 @@ void r_CleanUp(void)
     obdn_v_DestroyCommand(releaseImageCommand);
     obdn_v_DestroyCommand(transferImageCommand);
     obdn_v_DestroyCommand(acquireImageCommand);
+    if (copySwapToHost)
+    {
+        vkDestroySemaphore(device, extFrameReadSemaphore, NULL);
+        obdn_v_DestroyCommand(copyToHostCommand);
+    }
+    obdn_v_FreeBufferRegion(&matrixRegion);
+    obdn_v_FreeBufferRegion(&brushRegion);
+    obdn_v_FreeBufferRegion(&selectionRegion);
+    for (int i = 0; i < RT_PIPELINE_COUNT; i++)
+    {
+        obdn_r_DestroyShaderBindingTable(&shaderBindingTables[i]);
+    }
     r_ClearPrim();
     l_CleanUp();
+    u_CleanUp();
 }
 
-void r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
+void r_GetSwapBufferData(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
         void** colorData, void** depthData)
 {
-    pthread_mutex_lock(&swapHostLock);
-    printf("Acquired swap buffer lock...\n");
     *width = OBDN_WINDOW_WIDTH;
     *height = OBDN_WINDOW_HEIGHT;
     *elementSize = 4;
@@ -1860,11 +1881,9 @@ void r_AcquireSwapBuffer(uint32_t* width, uint32_t* height, uint32_t* elementSiz
     *depthData = swapHostBufferDepth.hostData;
 }
 
-void r_AcquireSwapBufferFast(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
-        int* fd, uint64_t* colorOffset, uint64_t* depthOffset)
+void r_GetColorDepthExternal(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
+        uint64_t* colorOffset, uint64_t* depthOffset)
 {
-    pthread_mutex_lock(&swapHostLock);
-    printf("Acquired swap buffer lock...\n");
     *width = OBDN_WINDOW_WIDTH;
     *height = OBDN_WINDOW_HEIGHT;
     *elementSize = 4;
@@ -1891,10 +1910,24 @@ bool r_GetExtMemoryFd(int* fd, uint64_t* size)
     return true;
 }
 
-void r_ReleaseSwapBuffer(void)
+bool r_GetSemaphoreFds(int* obdnFrameDoneFD_0, int* obdnFrameDoneFD_1, int* extTextureReadFD)
 {
-    pthread_mutex_unlock(&swapHostLock);
-    printf("Released swap buffer lock.\n");
+    VkSemaphoreGetFdInfoKHR fdInfo = {
+        .sType = VK_STRUCTURE_TYPE_SEMAPHORE_GET_FD_INFO_KHR,
+        .handleType = VK_EXTERNAL_SEMAPHORE_HANDLE_TYPE_OPAQUE_FD_BIT };
+
+    VkResult r;
+    fdInfo.semaphore = extFrameReadSemaphore;
+    r = vkGetSemaphoreFdKHR(device, &fdInfo, extTextureReadFD);
+    if (r != VK_SUCCESS) {printf("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
+    fdInfo.semaphore = obdn_u_GetSemaphore(0);
+    r = vkGetSemaphoreFdKHR(device, &fdInfo, obdnFrameDoneFD_0);
+    if (r != VK_SUCCESS) {printf("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
+    fdInfo.semaphore = obdn_u_GetSemaphore(1);
+    r = vkGetSemaphoreFdKHR(device, &fdInfo, obdnFrameDoneFD_1);
+    if (r != VK_SUCCESS) {printf("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
+
+    return true;
 }
 
 Brush* r_GetBrush(void)
@@ -1930,4 +1963,9 @@ void r_BackUpLayer(void)
 void r_Undo(void)
 {
     needsToUndo = true;
+}
+
+void r_SetExtFastPath(bool isFast)
+{
+    fastPath = isFast;
 }

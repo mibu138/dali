@@ -5,11 +5,13 @@
 #include <obsidian/f_file.h>
 
 void painter_Init(bool houdiniMode);
+void painter_LocalInit(void);
 void painter_LoadFprim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_ReloadPrim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_StartLoop(void);
 void painter_StopLoop(void);
 bool painter_ShouldRun(void);
+void painter_LocalCleanUp(void);
 void painter_ShutDown(void);
 void painter_SetColor(const float r, const float g, const float b);
 void painter_SetRadius(const float r);

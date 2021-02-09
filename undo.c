@@ -3,6 +3,7 @@
 #include "layer.h"
 #include "render.h"
 #include <stdio.h>
+#include <string.h>
 
 #define MAX_UNDOS 8
 #define MAX_STACKS 4
@@ -77,6 +78,21 @@ void u_InitUndo(const uint32_t size)
 
     l_RegisterLayerChangeFn(onLayerChange);
     onLayerChange(0);
+}
+
+void u_CleanUp(void)
+{
+    for (int i = 0; i < MAX_STACKS; i++)
+    {
+        for (int j = 0; j < MAX_UNDOS; j++)
+        {
+            obdn_v_FreeBufferRegion(&undoStacks[i].bufferRegions[j]);
+        }
+    }
+    curStackIndex = 0;
+    memset(stackNotUsedCounters, 0, sizeof(stackNotUsedCounters));
+    memset(layerCache, 0, sizeof(layerCache));
+    memset(undoStacks, 0, sizeof(undoStacks));
 }
 
 Obdn_V_BufferRegion* u_GetNextBuffer(void)

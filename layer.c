@@ -47,6 +47,12 @@ void l_RegisterLayerChangeFn(L_LayerChangeFn const fn)
 
 void l_CleanUp()
 {
+    obdn_v_FreeBufferRegion(&layerStack.backBuffer);
+    obdn_v_FreeBufferRegion(&layerStack.frontBuffer);
+    for (int i = 0; i < layerStack.layerCount; i++)
+    {
+        obdn_v_FreeBufferRegion(&layerStack.layers[i].bufferRegion);
+    }
     memset(&layerStack, 0, sizeof(layerStack));
     memset(onLayerChangeFns, 0, sizeof(onLayerChangeFns));
     layerChangeFnCount = 0;

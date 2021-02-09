@@ -6,6 +6,7 @@
 #include "obsidian/f_file.h"
 #include "obsidian/r_geo.h"
 
+#include <pthread.h>
 #include <stdio.h>
 #include <assert.h>
 #include <string.h>
@@ -43,19 +44,21 @@ void painter_Init(bool houdiniMode)
         OBDN_WINDOW_WIDTH = 1000;
         OBDN_WINDOW_HEIGHT = 1000;
     }
-    const char* exnames[] = {VK_KHR_EXTERNAL_MEMORY_EXTENSION_NAME, 
-        VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME};
+    const char* exnames[] = {
+        VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
+        VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
     obdn_v_Init(OBDN_1_GiB, OBDN_256_MiB, OBDN_1_GiB * 2, OBDN_1_GiB * 2, OBDN_100_MiB,
             OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
-    int fd;
-    uint64_t size;
-    r_GetExtMemoryFd(&fd, &size);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
-    obdn_i_Subscribe(g_Responder);
+    painter_LocalInit();
+}
+
+void painter_LocalInit(void)
+{
     r_InitRenderer();
     g_Init();
 }
@@ -73,7 +76,7 @@ void painter_ReloadPrim(Obdn_F_Primitive* fprim)
     r_ClearPrim();
 
     painter_LoadFprim(fprim);
-    painter_StartLoop();
+    //painter_StartLoop();
 }
 
 void painter_StartLoop(void)
@@ -130,13 +133,20 @@ void painter_StopLoop(void)
 
 void painter_ShutDown(void)
 {
-    vkDeviceWaitIdle(device);
-    r_CleanUp();
+    painter_LocalCleanUp();
     obdn_i_CleanUp();
     obdn_r_CleanUp();
-    obdn_d_CleanUp();
+    if (!parms.copySwapToHost)
+        obdn_d_CleanUp();
     obdn_u_CleanUp();
     obdn_v_CleanUp();
+}
+
+void painter_LocalCleanUp(void)
+{
+    vkDeviceWaitIdle(device);
+    g_CleanUp();
+    r_CleanUp();
 }
 
 bool painter_ShouldRun(void)
@@ -153,3 +163,4 @@ void painter_SetRadius(const float r)
 {
     g_SetRadius(r);
 }
+
