@@ -351,9 +351,9 @@ void g_SetRadius(const float r)
 
 void g_CleanUp(void)
 {
-    brush = NULL;
-    slider0 = NULL;
+    obdn_u_DestroyWidget(slider0);
     obdn_i_Unsubscribe(g_Responder);
+    brush = NULL;
     memset(&mousePos, 0, sizeof(mousePos));
 }
 

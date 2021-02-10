@@ -1817,6 +1817,7 @@ void r_ClearPaintImage(void)
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
+    obdn_r_UnregisterSwapchainRecreateFn(onRecreateSwapchain);
     for (int i = 0; i < OBDN_MAX_PIPELINES; i++) 
     {
         if (graphicsPipelines[i] != VK_NULL_HANDLE)
