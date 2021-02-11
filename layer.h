@@ -6,7 +6,6 @@
 #define MAX_LAYERS 64
 
 typedef uint16_t L_LayerId;
-typedef void (*L_LayerChangeFn)(L_LayerId newLayerId);
 
 typedef struct {
     Obdn_V_BufferRegion bufferRegion;

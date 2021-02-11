@@ -65,7 +65,8 @@ enum {
     PIPELINE_POST,
     PIPELINE_COMP_1,
     PIPELINE_COMP_2,
-    PIPELINE_COMP_SINGLE
+    PIPELINE_COMP_SINGLE,
+    G_PIPELINE_COUNT
 };
 
 enum {
@@ -93,9 +94,9 @@ typedef struct {
 static Obdn_R_Primitive     renderPrim;
 
 static VkPipelineLayout           pipelineLayouts[OBDN_MAX_PIPELINES];
-static VkPipeline                 graphicsPipelines[OBDN_MAX_PIPELINES];
-static VkPipeline                 raytracePipelines[OBDN_MAX_PIPELINES];
-static Obdn_R_ShaderBindingTable  shaderBindingTables[OBDN_MAX_PIPELINES];
+static VkPipeline                 graphicsPipelines[G_PIPELINE_COUNT];
+static VkPipeline                 raytracePipelines[RT_PIPELINE_COUNT];
+static Obdn_R_ShaderBindingTable  shaderBindingTables[RT_PIPELINE_COUNT];
 
 static VkDescriptorSetLayout descriptorSetLayouts[OBDN_MAX_DESCRIPTOR_SETS];
 static Obdn_R_Description   description;
@@ -868,7 +869,7 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
-        .blendMode   = blendMode,
+        .blendMode   = OBDN_R_BLEND_MODE_OVER,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp2-frag.spv"
     };
@@ -880,7 +881,7 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
-        .blendMode   = blendMode,
+        .blendMode   = OBDN_R_BLEND_MODE_OVER,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
     };
@@ -890,6 +891,13 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
     };
 
     obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
+}
+
+static void destroyPaintPipelines(void)
+{
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_1], NULL);
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_2], NULL);
+    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_SINGLE], NULL);
 }
 
 static void initSwapchainDependentFramebuffers(void)
@@ -1336,21 +1344,21 @@ static bool undo(void)
     return true;
 }
 
-static void updateView()
+static void updateView(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->view = scene->view;
     matrices->viewInv = m_Invert4x4(&scene->view);
 }
 
-static void updateProj()
+static void updateProj(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->proj = scene->proj;
     matrices->projInv = m_Invert4x4(&scene->proj);
 }
 
-static void updateBrush()
+static void updateBrush(void)
 {
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
     brush->r = scene->brush_r;
@@ -1360,6 +1368,17 @@ static void updateBrush()
     brush->radius = scene->brush_radius;
     brush->x = scene->brush_x;
     brush->y = scene->brush_y;
+}
+
+static void updatePaintMode(void)
+{
+    vkDeviceWaitIdle(device);
+    destroyPaintPipelines();
+    switch (scene->paint_mode)
+    {
+        case PAINT_MODE_OVER:  initPaintPipelines(OBDN_R_BLEND_MODE_OVER); break;
+        case PAINT_MODE_ERASE: initPaintPipelines(OBDN_R_BLEND_MODE_ERASE); break;
+    }
 }
 
 static VkSemaphore syncScene(const uint32_t frameIndex)
@@ -1392,6 +1411,10 @@ static VkSemaphore syncScene(const uint32_t frameIndex)
         if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
         {
             onLayerChange(scene->layer);
+        }
+        if (scene->dirt & SCENE_PAINT_MODE_BIT)
+        {
+            updatePaintMode();
         }
     }
     return semaphore;
@@ -1857,12 +1880,19 @@ void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
     obdn_r_UnregisterSwapchainRecreateFn(onRecreateSwapchain);
-    for (int i = 0; i < OBDN_MAX_PIPELINES; i++) 
+    for (int i = 0; i < G_PIPELINE_COUNT; i++) 
     {
         if (graphicsPipelines[i] != VK_NULL_HANDLE)
             vkDestroyPipeline(device, graphicsPipelines[i], NULL);
+    }
+    for (int i = 0; i < RT_PIPELINE_COUNT; i++)
+    {
+        obdn_r_DestroyShaderBindingTable(&shaderBindingTables[i]);
         if (raytracePipelines[i] != VK_NULL_HANDLE)
             vkDestroyPipeline(device, raytracePipelines[i], NULL);
+    }
+    for (int i = 0; i < OBDN_MAX_PIPELINES; i++)
+    {
         if (pipelineLayouts[i])
             vkDestroyPipelineLayout(device, pipelineLayouts[i], NULL);
     }
@@ -1902,10 +1932,6 @@ void r_CleanUp(void)
     obdn_v_FreeBufferRegion(&matrixRegion);
     obdn_v_FreeBufferRegion(&brushRegion);
     obdn_v_FreeBufferRegion(&selectionRegion);
-    for (int i = 0; i < RT_PIPELINE_COUNT; i++)
-    {
-        obdn_r_DestroyShaderBindingTable(&shaderBindingTables[i]);
-    }
     r_ClearPrim();
     l_CleanUp();
     u_CleanUp();

@@ -90,8 +90,6 @@ static Mat4 generatePlayerView(void)
 
 static void setPaintMode(PaintMode mode)
 {
-    scene.paint_mode = mode;
-    dirt |= SCENE_PAINT_MODE_BIT;
 }
 
 static void setBrushActive(bool active)
@@ -202,16 +200,18 @@ bool g_Responder(const Obdn_I_Event *event)
     {
         case OBDN_I_KEYDOWN: switch (event->data.keyCode)
         {
-            case OBDN_KEY_E: g_SetBrushColor(0, 0, 1); break;
+            case OBDN_KEY_E: g_SetPaintMode(PAINT_MODE_ERASE); break;
+            case OBDN_KEY_O: g_SetPaintMode(PAINT_MODE_OVER); break;
             case OBDN_KEY_Z: dirt |= SCENE_UNDO_BIT; break;
-            case OBDN_KEY_Q: g_SetBrushColor(1, 0, 0); break;
+            case OBDN_KEY_R: g_SetBrushColor(1, 0, 0); break;
+            case OBDN_KEY_G: g_SetBrushColor(0, 1, 0); break;
+            case OBDN_KEY_B: g_SetBrushColor(0, 0, 1); break;
             case OBDN_KEY_P: r_SavePaintImage(); break;
-            case OBDN_KEY_J: incrementLayer(); break;
-            case OBDN_KEY_K: decrementLayer(); break;
+            case OBDN_KEY_J: decrementLayer(); break;
+            case OBDN_KEY_K: incrementLayer(); break;
             case OBDN_KEY_L: l_CreateLayer(); break;
             case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
             case OBDN_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
-            case OBDN_KEY_R:    parms.shouldRun = false; parms.restart = true; break;
             case OBDN_KEY_C: r_ClearPaintImage(); break;
             case OBDN_KEY_I: break;
             default: return true;
@@ -234,8 +234,7 @@ bool g_Responder(const Obdn_I_Event *event)
                 drag.active = true;
                 const Vec2 p = {
                     .x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH,
-                    .y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT
-                };
+                    .y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT };
                 drag.startPos = p;
                 if (event->data.mouseData.buttonCode == OBDN_MOUSE_LEFT)
                 {
@@ -373,4 +372,10 @@ void g_SetBrushPos(float x, float y)
     scene.brush_x = x;
     scene.brush_y = y;
     dirt |= SCENE_BRUSH_BIT;
+}
+
+void g_SetPaintMode(PaintMode mode)
+{
+    scene.paint_mode = mode;
+    dirt |= SCENE_PAINT_MODE_BIT;
 }
