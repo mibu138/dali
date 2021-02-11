@@ -195,7 +195,7 @@ bool g_Responder(const Obdn_I_Event *event)
             case OBDN_KEY_Z: r_Undo(); break;
             case OBDN_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
             case OBDN_KEY_P: r_SavePaintImage(); break;
-            case OBDN_KEY_J: l_SetActiveLayer(l_GetActiveLayerId() -1); break;
+            case OBDN_KEY_J: l_SetActiveLayer(l_GetActiveLayerId() - 1); break;
             case OBDN_KEY_L: l_CreateLayer(); break;
             case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
             case OBDN_KEY_CTRL: tumbleDown = true; break;

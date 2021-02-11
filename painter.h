@@ -5,7 +5,7 @@
 #include <obsidian/f_file.h>
 
 void painter_Init(bool houdiniMode);
-void painter_LocalInit(void);
+void painter_LocalInit(uint32_t texSize);
 void painter_LoadFprim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_ReloadPrim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_StartLoop(void);

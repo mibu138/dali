@@ -47,7 +47,7 @@ void painter_Init(bool houdiniMode)
     const char* exnames[] = {
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
-    obdn_v_Init(OBDN_1_GiB, OBDN_256_MiB, OBDN_1_GiB * 2, OBDN_1_GiB * 2, OBDN_100_MiB,
+    obdn_v_Init(OBDN_1_GiB, OBDN_256_MiB, OBDN_1_GiB * 1, OBDN_1_GiB * 2, OBDN_100_MiB,
             OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
@@ -55,12 +55,12 @@ void painter_Init(bool houdiniMode)
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     if (!parms.copySwapToHost)
-        painter_LocalInit();
+        painter_LocalInit(4096);
 }
 
-void painter_LocalInit(void)
+void painter_LocalInit(uint32_t texSize)
 {
-    r_InitRenderer();
+    r_InitRenderer(texSize);
     g_Init();
 }
 

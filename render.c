@@ -88,7 +88,7 @@ static Obdn_V_Image   depthAttachment;
 static uint32_t graphicsQueueFamilyIndex;
 static uint32_t transferQueueFamilyIndex;
 
-#define TEXTURE_SIZE 0x1000 // 0x1000 = 4096
+static uint32_t textureSize = 0x1000; // 0x1000 = 4096
 
 static Command releaseImageCommand;
 static Command transferImageCommand;
@@ -163,7 +163,7 @@ static void initOffscreenAttachments(void)
 
 static void initPaintImages(void)
 {
-    imageA = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageA = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -172,7 +172,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             OBDN_V_MEMORY_DEVICE_TYPE);
 
-    imageB = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageB = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -181,7 +181,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             OBDN_V_MEMORY_DEVICE_TYPE);
 
-    imageC = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageC = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -190,7 +190,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             OBDN_V_MEMORY_DEVICE_TYPE);
     
-    imageD = obdn_v_CreateImageAndSampler(TEXTURE_SIZE, TEXTURE_SIZE, textureFormat, 
+    imageD = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -841,7 +841,7 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
+        .viewportDim = {textureSize, textureSize},
         .blendMode   = blendMode,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
@@ -853,7 +853,7 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .subpass = 1,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
+        .viewportDim = {textureSize, textureSize},
         .blendMode   = blendMode,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp2-frag.spv"
@@ -865,7 +865,7 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {TEXTURE_SIZE, TEXTURE_SIZE},
+        .viewportDim = {textureSize, textureSize},
         .blendMode   = blendMode,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
@@ -916,8 +916,8 @@ static void initNonSwapchainDependentFramebuffers(void)
         VkFramebufferCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = TEXTURE_SIZE,
-            .width  = TEXTURE_SIZE,
+            .height = textureSize,
+            .width  = textureSize,
             .renderPass = compositeRenderPass,
             .attachmentCount = 5,
             .pAttachments = attachments
@@ -935,8 +935,8 @@ static void initNonSwapchainDependentFramebuffers(void)
         VkFramebufferCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = TEXTURE_SIZE,
-            .width  = TEXTURE_SIZE,
+            .height = textureSize,
+            .width  = textureSize,
             .renderPass = singleCompositeRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments
@@ -954,8 +954,8 @@ static void initNonSwapchainDependentFramebuffers(void)
         VkFramebufferCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = TEXTURE_SIZE,
-            .width  = TEXTURE_SIZE,
+            .height = textureSize,
+            .width  = textureSize,
             .renderPass = singleCompositeRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments
@@ -1086,7 +1086,7 @@ static void onLayerChange(L_LayerId newLayerId)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .clearValueCount = 1,
             .pClearValues = &clear,
-            .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
+            .renderArea = {{0, 0}, {textureSize, textureSize}},
             .renderPass =  singleCompositeRenderPass,
             .framebuffer = backgroundFrameBuffer,
         };
@@ -1121,7 +1121,7 @@ static void onLayerChange(L_LayerId newLayerId)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .clearValueCount = 1,
             .pClearValues = &clear,
-            .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
+            .renderArea = {{0, 0}, {textureSize, textureSize}},
             .renderPass =  singleCompositeRenderPass,
             .framebuffer = foregroundFrameBuffer,
         };
@@ -1465,7 +1465,7 @@ static void comp(const VkCommandBuffer cmdBuf)
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .clearValueCount = OBDN_ARRAY_SIZE(clears),
         .pClearValues = clears,
-        .renderArea = {{0, 0}, {TEXTURE_SIZE, TEXTURE_SIZE}},
+        .renderArea = {{0, 0}, {textureSize, textureSize}},
         .renderPass =  compositeRenderPass,
         .framebuffer = compositeFrameBuffer
     };
@@ -1615,8 +1615,11 @@ static void updateRenderCommands(const int8_t frameIndex)
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
-void r_InitRenderer(void)
+void r_InitRenderer(uint32_t texSize)
 {
+    assert(texSize > 0);
+    assert(texSize % 256 == 0);
+    textureSize = texSize;
     curLayerId = 0;
     needsToBackupLayer = false;
     graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);

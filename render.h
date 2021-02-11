@@ -45,7 +45,7 @@ typedef struct {
     Scene_DirtMask dirt;
 } Scene;
 
-void         r_InitRenderer(void);
+void         r_InitRenderer(uint32_t texSize);
 void         r_Render(void);
 int          r_GetSelectionPos(Vec3* v);
 Brush*       r_GetBrush(void);
