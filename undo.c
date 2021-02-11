@@ -18,6 +18,8 @@ typedef struct UndoStack {
     Obdn_V_BufferRegion bufferRegions[MAX_UNDOS];
 } UndoStack;
 
+static const Scene* scene;
+
 uint8_t   curStackIndex;
 uint8_t   stackNotUsedCounters[MAX_STACKS];
 L_LayerId layerCache[MAX_STACKS];
@@ -61,7 +63,6 @@ static void onLayerChange(L_LayerId newLayerId)
         curStackIndex = leastRecentlyUsedStack;
         layerCache[curStackIndex] = newLayerId; 
         undoStacks[curStackIndex].cur = undoStacks[curStackIndex].trl;
-        r_BackUpLayer();
     }
     stackNotUsedCounters[curStackIndex] = 0;
     assert(curStackIndex < MAX_STACKS);
@@ -76,7 +77,6 @@ void u_InitUndo(const uint32_t size)
         initStack(i, size);
     }
 
-    l_RegisterLayerChangeFn(onLayerChange);
     onLayerChange(0);
 }
 
@@ -125,4 +125,26 @@ Obdn_V_BufferRegion* u_GetLastBuffer(void)
     undoStack->cur = undoStack->cur % MAX_UNDOS;
     printf("%s: cur: %d\n", __PRETTY_FUNCTION__, undoStack->cur);
     return &undoStack->bufferRegions[stackIndex];
+}
+
+bool u_LayerInCache(L_LayerId layer)
+{
+    for (int i = 0; i < MAX_STACKS; i++)
+    {
+        if (layerCache[i] == layer)
+            return true;
+    }
+    return false;
+}
+
+void u_BindScene(const Scene* scene_)
+{
+    scene = scene_;
+}
+
+void u_Update(void)
+{
+    assert(scene);
+    if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
+        onLayerChange(scene->layer);
 }

@@ -2,15 +2,8 @@
 #define VIEWER_R_COMMANDS_H
 
 #include <obsidian/r_geo.h>
+#include "layer.h"
 #include "common.h"
-
-typedef struct {
-    Mat4 model;
-    Mat4 view;
-    Mat4 proj;
-    Mat4 viewInv;
-    Mat4 projInv;
-} UboMatrices;
 
 typedef struct {
     float x;
@@ -27,11 +20,14 @@ typedef enum {
 typedef Obdn_Mask Scene_DirtMask;
 
 typedef enum {
-    SCENE_VIEW_BIT       = (Scene_DirtMask)1 << 0,
-    SCENE_PROJ_BIT       = (Scene_DirtMask)1 << 1,
-    SCENE_BRUSH_BIT      = (Scene_DirtMask)1 << 2,
-    SCENE_PAINT_MODE_BIT = (Scene_DirtMask)1 << 3,
-    SCENE_WINDOW_BIT     = (Scene_DirtMask)1 << 4
+    SCENE_VIEW_BIT          = (Scene_DirtMask)1 << 0,
+    SCENE_PROJ_BIT          = (Scene_DirtMask)1 << 1,
+    SCENE_BRUSH_BIT         = (Scene_DirtMask)1 << 2,
+    SCENE_PAINT_MODE_BIT    = (Scene_DirtMask)1 << 3,
+    SCENE_WINDOW_BIT        = (Scene_DirtMask)1 << 4,
+    SCENE_UNDO_BIT          = (Scene_DirtMask)1 << 5,
+    SCENE_LAYER_BACKUP_BIT  = (Scene_DirtMask)1 << 6,
+    SCENE_LAYER_CHANGED_BIT = (Scene_DirtMask)1 << 7,
 } Scene_DirtyBits;
 
 typedef struct {
@@ -46,6 +42,7 @@ typedef struct {
     bool           brush_active;
     PaintMode      paint_mode;
     Scene_DirtMask dirt;
+    L_LayerId      layer;
     uint32_t       window_width;
     uint32_t       window_height;
 } Scene;
@@ -58,7 +55,6 @@ void         r_LoadPrim(Obdn_R_Primitive prim);
 void         r_ClearPrim(void);
 void         r_ClearPaintImage(void);
 void         r_SavePaintImage(void);
-void         r_Undo(void);
 void         r_BackUpLayer(void);
 void         r_CleanUp(void);
 void         r_BindScene(const Scene* scene);

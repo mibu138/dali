@@ -34,6 +34,14 @@ typedef struct {
     int   mode;
 } UboBrush;
 
+typedef struct {
+    Mat4 model;
+    Mat4 view;
+    Mat4 proj;
+    Mat4 viewInv;
+    Mat4 projInv;
+} UboMatrices;
+
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;
 
@@ -128,9 +136,6 @@ static Obdn_R_AccelerationStructure bottomLevelAS;
 static Obdn_R_AccelerationStructure topLevelAS;
 
 static L_LayerId curLayerId;
-
-static bool needsToBackupLayer;
-static bool needsToUndo;
 
 static const Scene* scene;
 
@@ -1232,6 +1237,7 @@ static void onRecreateSwapchain(void)
 
 static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
 {
+
     obdn_v_WaitForFence(&acquireImageCommand.fence);
 
     obdn_v_ResetCommand(&releaseImageCommand);
@@ -1356,8 +1362,9 @@ static void updateBrush()
     brush->y = scene->brush_y;
 }
 
-static void syncScene(const uint32_t frameIndex)
+static VkSemaphore syncScene(const uint32_t frameIndex)
 {
+    VkSemaphore semaphore = VK_NULL_HANDLE;
     if (scene->dirt)
     {
         if (scene->dirt & SCENE_VIEW_BIT)
@@ -1372,7 +1379,22 @@ static void syncScene(const uint32_t frameIndex)
             OBDN_WINDOW_HEIGHT = scene->window_height;
             obdn_r_RecreateSwapchain();
         }
+        if (scene->dirt & SCENE_UNDO_BIT)
+        {
+            if (undo())
+                semaphore = acquireImageCommand.semaphore;
+        }
+        if (scene->dirt & SCENE_LAYER_BACKUP_BIT)
+        {
+            backupLayer();
+            semaphore = acquireImageCommand.semaphore;
+        }
+        if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
+        {
+            onLayerChange(scene->layer);
+        }
     }
+    return semaphore;
 }
 
 static void rayTraceSelect(const VkCommandBuffer cmdBuf)
@@ -1650,7 +1672,6 @@ void r_InitRenderer(uint32_t texSize)
     assert(texSize % 256 == 0);
     textureSize = texSize;
     curLayerId = 0;
-    needsToBackupLayer = false;
     graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);
     transferQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_TRANSFER_TYPE);
 
@@ -1684,7 +1705,6 @@ void r_InitRenderer(uint32_t texSize)
     assert(imageA.size > 0);
 
     l_Init(imageA.size); // eventually will move this out
-    l_RegisterLayerChangeFn(onLayerChange);
     u_InitUndo(imageB.size);
     onLayerChange(0);
     
@@ -1705,21 +1725,8 @@ void r_InitRenderer(uint32_t texSize)
 void r_Render(void)
 {
     uint32_t i = obdn_r_RequestFrame();
-    syncScene(i);
 
-    VkSemaphore waitSemaphore = 0;
-    if (needsToBackupLayer)
-    {
-        backupLayer();
-        waitSemaphore = acquireImageCommand.semaphore;
-        needsToBackupLayer = false;
-    }
-    if (needsToUndo)
-    {
-        if (undo())
-            waitSemaphore = acquireImageCommand.semaphore;
-        needsToUndo = false;
-    }
+    VkSemaphore waitSemaphore = syncScene(i);
     obdn_v_WaitForFence(&renderCommands[i].fence);
     obdn_v_ResetCommand(&renderCommands[i]);
     updateRenderCommands(i);
@@ -1961,17 +1968,6 @@ bool r_GetSemaphoreFds(int* obdnFrameDoneFD_0, int* obdnFrameDoneFD_1, int* extT
     if (r != VK_SUCCESS) {printf("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
 
     return true;
-}
-
-
-void r_BackUpLayer(void)
-{
-    needsToBackupLayer = true;
-}
-
-void r_Undo(void)
-{
-    needsToUndo = true;
 }
 
 void r_SetExtFastPath(bool isFast)

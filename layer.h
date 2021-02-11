@@ -14,12 +14,13 @@ typedef struct {
 
 // returns number of layer or -1 on failure
 void        l_Init(const VkDeviceSize size);
-void        l_RegisterLayerChangeFn(L_LayerChangeFn const fn);
 void        l_CleanUp(void);
 int         l_CreateLayer(void);
 void        l_SetActiveLayer(uint16_t id);
-uint16_t    l_GetActiveLayerId(void);
+L_LayerId   l_GetActiveLayerId(void);
 int         l_GetLayerCount(void);
 L_Layer*    l_GetLayer(L_LayerId id);
+bool        l_IncrementLayer(L_LayerId* const id);
+bool        l_DecrementLayer(L_LayerId* const id);
 
 #endif /* end of include guard: LAYER_H */

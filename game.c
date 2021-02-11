@@ -3,6 +3,7 @@
 #include "obsidian/r_render.h"
 #include "render.h"
 #include "layer.h"
+#include "undo.h"
 #include "common.h"
 #include "obsidian/t_utils.h"
 #include <assert.h>
@@ -171,6 +172,30 @@ static void handleMouseMovement(void)
     }
 }
 
+static void incrementLayer(void)
+{
+    L_LayerId id;
+    if (l_IncrementLayer(&id))
+    {
+        scene.layer = id;
+        dirt |= SCENE_LAYER_CHANGED_BIT;
+        if (!u_LayerInCache(id))
+            dirt |= SCENE_LAYER_BACKUP_BIT;
+    }
+}
+
+static void decrementLayer(void)
+{
+    L_LayerId id;
+    if (l_DecrementLayer(&id))
+    {
+        scene.layer = id;
+        dirt |= SCENE_LAYER_CHANGED_BIT;
+        if (!u_LayerInCache(id))
+            dirt |= SCENE_LAYER_BACKUP_BIT;
+    }
+}
+
 bool g_Responder(const Obdn_I_Event *event)
 {
     switch (event->type) 
@@ -178,16 +203,15 @@ bool g_Responder(const Obdn_I_Event *event)
         case OBDN_I_KEYDOWN: switch (event->data.keyCode)
         {
             case OBDN_KEY_E: g_SetBrushColor(0, 0, 1); break;
-            case OBDN_KEY_B: r_BackUpLayer(); break;
-            case OBDN_KEY_Z: r_Undo(); break;
+            case OBDN_KEY_Z: dirt |= SCENE_UNDO_BIT; break;
             case OBDN_KEY_Q: g_SetBrushColor(1, 0, 0); break;
             case OBDN_KEY_P: r_SavePaintImage(); break;
-            case OBDN_KEY_J: l_SetActiveLayer(l_GetActiveLayerId() - 1); break;
+            case OBDN_KEY_J: incrementLayer(); break;
+            case OBDN_KEY_K: decrementLayer(); break;
             case OBDN_KEY_L: l_CreateLayer(); break;
             case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
             case OBDN_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case OBDN_KEY_R:    parms.shouldRun = false; parms.restart = true; break;
-            case OBDN_KEY_K: l_SetActiveLayer(l_GetActiveLayerId() + 1);
             case OBDN_KEY_C: r_ClearPaintImage(); break;
             case OBDN_KEY_I: break;
             default: return true;
@@ -234,7 +258,7 @@ bool g_Responder(const Obdn_I_Event *event)
         {
             switch (mode) 
             {
-                case MODE_PAINT: mode = MODE_DO_NOTHING; r_BackUpLayer(); break;
+                case MODE_PAINT: mode = MODE_DO_NOTHING; dirt |= SCENE_LAYER_BACKUP_BIT; break;
                 case MODE_VIEW:  drag.active = false; break;
                 default: break;
             }
@@ -267,6 +291,7 @@ void g_Init(void)
         slider0 = obdn_u_CreateSlider(0, 40, NULL);
 
     r_BindScene(&scene);
+    u_BindScene(&scene);
 }
 
 void g_Update(void)
@@ -295,8 +320,9 @@ void g_Update(void)
 
     // this allows us to clear the dirt mask for the next frame while the render still knows what changed
     scene.dirt = dirt;
-    printf("scene.dirt %d\n", scene.dirt);
     dirt = 0;
+
+    u_Update();
 }
 
 void g_SetBrushColor(const float r, const float g, const float b)

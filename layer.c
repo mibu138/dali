@@ -20,10 +20,6 @@ struct {
 
 static VkDeviceSize textureSize;
 
-#define MAX_LAYER_CHANGE_FNS 8
-uint8_t         layerChangeFnCount;
-L_LayerChangeFn onLayerChangeFns[MAX_LAYER_CHANGE_FNS];
-
 void l_Init(const VkDeviceSize size)
 {
     textureSize = size;
@@ -39,12 +35,6 @@ void l_Init(const VkDeviceSize size)
     l_CreateLayer(); // create one layer to start
 }
 
-void l_RegisterLayerChangeFn(L_LayerChangeFn const fn)
-{
-    onLayerChangeFns[layerChangeFnCount++] = fn;
-    assert(layerChangeFnCount < MAX_LAYER_CHANGE_FNS);
-}
-
 void l_CleanUp()
 {
     obdn_v_FreeBufferRegion(&layerStack.backBuffer);
@@ -54,8 +44,6 @@ void l_CleanUp()
         obdn_v_FreeBufferRegion(&layerStack.layers[i].bufferRegion);
     }
     memset(&layerStack, 0, sizeof(layerStack));
-    memset(onLayerChangeFns, 0, sizeof(onLayerChangeFns));
-    layerChangeFnCount = 0;
 }
 
 int l_CreateLayer(void)
@@ -72,28 +60,12 @@ int l_CreateLayer(void)
     return curId;
 }
 
-void l_SetActiveLayer(L_LayerId id)
-{
-    if (id >= layerStack.layerCount)
-    {
-        printf("Not enough layers.\n");
-        return;
-    }
-    assert(id < layerStack.layerCount);
-    layerStack.activeLayer = id;
-    printf("Setting layer to: %d\n", id);
-    for (int i = 0; i < layerChangeFnCount; i++) 
-    {
-        onLayerChangeFns[i](id);
-    }
-}
-
 int l_GetLayerCount(void)
 {
     return layerStack.layerCount;
 }
 
-uint16_t l_GetActiveLayerId(void)
+LayerId l_GetActiveLayerId(void)
 {
     return layerStack.activeLayer;
 }
@@ -104,4 +76,26 @@ Layer* l_GetLayer(LayerId id)
     return &layerStack.layers[id];
 }
 
+bool l_IncrementLayer(LayerId* const id)
+{
+    *id = layerStack.activeLayer + 1;
+    if (*id >= layerStack.layerCount)
+        return false;
+    else 
+    {
+        layerStack.activeLayer = *id;
+        return true;
+    }
+}
 
+bool l_DecrementLayer(LayerId* const id)
+{
+    *id = layerStack.activeLayer - 1;
+    if (*id >= layerStack.layerCount) // negatives will wrap around
+        return false;
+    else 
+    {
+        layerStack.activeLayer = *id;
+        return true;
+    }
+}
