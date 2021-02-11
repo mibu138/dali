@@ -13,16 +13,6 @@
 #include <obsidian/u_ui.h>
 #include <pthread.h>
 
-
-static bool zoomIn;
-static bool zoomOut;
-static bool tumbleUp;
-static bool tumbleDown;
-static bool tumbleLeft;
-static bool tumbleRight;
-static bool moveUp;
-static bool moveDown;
-
 static bool pivotChanged;
 
 typedef enum {
@@ -45,16 +35,9 @@ typedef enum {
     MODE_VIEW,
 } Mode;
 
-static Vec3  brushColor;
-static float brushRadius;
 static Mode  mode;
 
 Parms parms;
-
-static Mat4            view;
-static Mat4            proj;
-bool projDirty;
-bool windowDirty;
 
 // order matters here since we memcpy to a matching ubo
 static struct Player {
@@ -65,9 +48,8 @@ static struct Player {
 
 G_GameState gameState;
 
-Scene scene;
-
-Brush* brush;
+Scene          scene;
+Scene_DirtMask dirt;
 
 bool firstFrame;
 
@@ -104,6 +86,19 @@ static Mat4 generatePlayerView(void)
     return m_Invert4x4(&m);
     //return m;
 }
+
+static void setPaintMode(PaintMode mode)
+{
+    scene.paint_mode = mode;
+    dirt |= SCENE_PAINT_MODE_BIT;
+}
+
+static void setBrushActive(bool active)
+{
+    scene.brush_active = active;
+    dirt |= SCENE_BRUSH_BIT;
+}
+
 
 static void handleMouseMovement(void)
 {
@@ -158,7 +153,7 @@ static void handleMouseMovement(void)
             case ZOOM: 
             {
                 float deltaX = mousePos.x - drag.startPos.x;
-                float deltaY = mousePos.y - drag.startPos.y;
+                //float deltaY = mousePos.y - drag.startPos.y;
                 //float scale = -1 * (deltaX + deltaY * -1);
                 float scale = -1 * deltaX;
                 Vec3 temp = m_Sub_Vec3(&cached.pos, &cached.pivot);
@@ -182,23 +177,14 @@ bool g_Responder(const Obdn_I_Event *event)
     {
         case OBDN_I_KEYDOWN: switch (event->data.keyCode)
         {
-            case OBDN_KEY_W: zoomIn = true; break;
-            //case OBDN_KEY_S: zoomOut = true; break;
-            //case OBDN_KEY_S: brushColor = (Vec3){1, 1, 1}; r_SetPaintMode(PAINT_MODE_ERASE); break;
-            case OBDN_KEY_A: tumbleLeft = true; break;
-            //case OBDN_KEY_D: tumbleRight = true; break;
-            case OBDN_KEY_D: r_SetPaintMode(PAINT_MODE_OVER); break;
-            //case OBDN_KEY_E: moveUp = true; break;
-            //case OBDN_KEY_Q: moveDown = true; break;
-            case OBDN_KEY_E: brushColor = (Vec3){0, 0, 1}; break;
+            case OBDN_KEY_E: g_SetBrushColor(0, 0, 1); break;
             case OBDN_KEY_B: r_BackUpLayer(); break;
             case OBDN_KEY_Z: r_Undo(); break;
-            case OBDN_KEY_Q: brushColor = (Vec3){1, 0, 0}; break;
+            case OBDN_KEY_Q: g_SetBrushColor(1, 0, 0); break;
             case OBDN_KEY_P: r_SavePaintImage(); break;
             case OBDN_KEY_J: l_SetActiveLayer(l_GetActiveLayerId() - 1); break;
             case OBDN_KEY_L: l_CreateLayer(); break;
             case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
-            case OBDN_KEY_CTRL: tumbleDown = true; break;
             case OBDN_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case OBDN_KEY_R:    parms.shouldRun = false; parms.restart = true; break;
             case OBDN_KEY_K: l_SetActiveLayer(l_GetActiveLayerId() + 1);
@@ -208,14 +194,7 @@ bool g_Responder(const Obdn_I_Event *event)
         } break;
         case OBDN_I_KEYUP:   switch (event->data.keyCode)
         {
-            case OBDN_KEY_W: zoomIn = false; break;
-            case OBDN_KEY_S: zoomOut = false; break;
-            case OBDN_KEY_A: tumbleLeft = false; break;
-            case OBDN_KEY_D: tumbleRight = false; break;
-            case OBDN_KEY_E: moveUp = false; break;
-            case OBDN_KEY_Q: moveDown = false; break;
             case OBDN_KEY_SPACE: mode = MODE_DO_NOTHING; break;
-            case OBDN_KEY_CTRL: tumbleDown = false; break;
             default: return true;
         } break;
         case OBDN_I_MOTION: 
@@ -269,110 +248,103 @@ void g_Init(void)
 {
     obdn_i_Subscribe(g_Responder);
 
-    view = m_Ident_Mat4();
+    Mat4 initView = m_Ident_Mat4();
+    Mat4 initProj = m_BuildPerspective(0.01, 50);
+    g_SetView(&initView);
+    g_SetProj(&initProj);
 
     player.pos = (Vec3){0, 0., 3};
     player.target = (Vec3){0, 0, 0};
     player.pivot = player.target;
-    brushColor = (Vec3){0.1, 0.95, 0.3};
-    brushRadius = 0.01;
+    g_SetBrushColor(0.1, 0.95, 0.3);
+    g_SetBrushRadius(0.01);
     mode = MODE_DO_NOTHING;
+    setBrushActive(false);
     gameState.shouldRun = true;
-    brush = r_GetBrush();
-    firstFrame = true;
+    setPaintMode(PAINT_MODE_OVER);
 
-    slider0 = obdn_u_CreateSlider(0, 40, NULL);
+    if (!parms.copySwapToHost)
+        slider0 = obdn_u_CreateSlider(0, 40, NULL);
 
     r_BindScene(&scene);
 }
 
-void g_BindToBrush(Brush* br)
-{
-    brush = br;
-}
-
 void g_Update(void)
 {
-    scene.dirt = 0;
-    if (firstFrame)
-    {
-        scene.proj = m_BuildPerspective(0.01, 30);
-        scene.dirt |= SCENE_PROJ_BIT;
-        firstFrame = false;
-    }
-    assert(brush);
     //assert(sizeof(struct Player) == sizeof(UboPlayer));
     //handleKeyMovement();
-    vkDeviceWaitIdle(device);
-    brushRadius = slider0->data.slider.sliderPos * 0.1; // TODO: find a better way
+    if (slider0)
+        g_SetBrushRadius(slider0->data.slider.sliderPos * 0.1); // TODO: find a better way
     //
-    brush->x = mousePos.x;
-    brush->y = mousePos.y;
+    g_SetBrushPos(mousePos.x, mousePos.y);
     if (pivotChanged)
+    {
         setViewerPivotByIntersection();
-    handleMouseMovement();
-    pivotChanged = false;
+    }
     if (!parms.copySwapToHost)
-        scene.view = generatePlayerView();
-    else
     {
-        scene.view = view;
+        handleMouseMovement();
+        pivotChanged = false; //TODO must set to false after handleMouseMovement since it checks this... should find a better way
+        Mat4 view = generatePlayerView();
+        g_SetView(&view);
     }
-    if (projDirty)
-    {
-        scene.proj = proj;
-        projDirty = false;
-        scene.dirt |= SCENE_PROJ_BIT;
-    }
-    if (windowDirty)
-    {
-        obdn_r_RecreateSwapchain();
-        windowDirty = false;
-    }
-    scene.dirt |= SCENE_VIEW_BIT;
-    brush->r = brushColor.x[0];
-    brush->g = brushColor.x[1];
-    brush->b = brushColor.x[2];
-    brush->mode = mode;
-    brush->radius = brushRadius;
+    if (MODE_PAINT == mode)
+        setBrushActive(true);
+    else 
+        setBrushActive(false);
+
+    // this allows us to clear the dirt mask for the next frame while the render still knows what changed
+    scene.dirt = dirt;
+    printf("scene.dirt %d\n", scene.dirt);
+    dirt = 0;
 }
 
-void g_SetColor(const float r, const float g, const float b)
+void g_SetBrushColor(const float r, const float g, const float b)
 {
-    brushColor.x[0] = r;
-    brushColor.x[1] = g;
-    brushColor.x[2] = b;
+    scene.brush_r = r;
+    scene.brush_g = g;
+    scene.brush_b = b;
+    dirt |= SCENE_BRUSH_BIT;
 }
 
-void g_SetRadius(const float r)
+void g_SetBrushRadius(const float r)
 {
-    brushRadius = r;
+    scene.brush_radius = r;
+    dirt |= SCENE_BRUSH_BIT;
 }
 
 void g_CleanUp(void)
 {
     obdn_u_DestroyWidget(slider0);
     obdn_i_Unsubscribe(g_Responder);
-    brush = NULL;
+    memset(&scene, 0, sizeof(scene));
     memset(&mousePos, 0, sizeof(mousePos));
 }
 
 // can be called from other thread
-void g_UpdateView(const Mat4* m)
+void g_SetView(const Mat4* m)
 {
-    view = *m;
+    scene.view = *m;
+    dirt |= SCENE_VIEW_BIT;
 }
 
-void g_UpdateProg(const Mat4* m)
+void g_SetProj(const Mat4* m)
 {
-    proj = *m;
-    projDirty = true;
+    scene.proj = *m;
+    dirt |= SCENE_PROJ_BIT;
 }
 
-void g_UpdateWindow(uint32_t width, uint32_t height)
+void g_SetWindow(uint32_t width, uint32_t height)
 {
     // TODO: make this safe some how... 
-    OBDN_WINDOW_WIDTH = width;
-    OBDN_WINDOW_HEIGHT = height;
-    windowDirty = true;
+    scene.window_width  = width;
+    scene.window_height = height;
+    dirt |= SCENE_WINDOW_BIT;
+}
+
+void g_SetBrushPos(float x, float y)
+{
+    scene.brush_x = x;
+    scene.brush_y = y;
+    dirt |= SCENE_BRUSH_BIT;
 }

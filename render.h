@@ -27,9 +27,11 @@ typedef enum {
 typedef Obdn_Mask Scene_DirtMask;
 
 typedef enum {
-    SCENE_VIEW_BIT  = (Scene_DirtMask)1 << 0,
-    SCENE_PROJ_BIT  = (Scene_DirtMask)1 << 1,
-    SCENE_BRUSH_BIT = (Scene_DirtMask)1 << 2
+    SCENE_VIEW_BIT       = (Scene_DirtMask)1 << 0,
+    SCENE_PROJ_BIT       = (Scene_DirtMask)1 << 1,
+    SCENE_BRUSH_BIT      = (Scene_DirtMask)1 << 2,
+    SCENE_PAINT_MODE_BIT = (Scene_DirtMask)1 << 3,
+    SCENE_WINDOW_BIT     = (Scene_DirtMask)1 << 4
 } Scene_DirtyBits;
 
 typedef struct {
@@ -41,19 +43,20 @@ typedef struct {
     float          brush_r;
     float          brush_g;
     float          brush_b;
-    int            brush_mode;
+    bool           brush_active;
+    PaintMode      paint_mode;
     Scene_DirtMask dirt;
+    uint32_t       window_width;
+    uint32_t       window_height;
 } Scene;
 
 void         r_InitRenderer(uint32_t texSize);
 void         r_Render(void);
 int          r_GetSelectionPos(Vec3* v);
-Brush*       r_GetBrush(void);
 VkDeviceSize r_GetTextureSize(void);
 void         r_LoadPrim(Obdn_R_Primitive prim);
 void         r_ClearPrim(void);
 void         r_ClearPaintImage(void);
-void         r_SetPaintMode(const PaintMode mode);
 void         r_SavePaintImage(void);
 void         r_Undo(void);
 void         r_BackUpLayer(void);

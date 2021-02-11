@@ -24,7 +24,16 @@
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
 
-typedef Brush UboBrush;
+typedef struct {
+    float x;
+    float y;
+    float radius;
+    float r;
+    float g;
+    float b;
+    int   mode;
+} UboBrush;
+
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;
 
@@ -223,9 +232,9 @@ static void initRenderPasses(void)
             VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,
             obdn_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
 
-    obdn_r_CreateRenderPass_Color(VK_ATTACHMENT_LOAD_OP_LOAD, 
+    obdn_r_CreateRenderPass_Color(
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            obdn_r_GetSwapFormat(), &postRenderPass);
+            VK_ATTACHMENT_LOAD_OP_LOAD, obdn_r_GetSwapFormat(), &postRenderPass);
 
     {
         const VkAttachmentDescription attachmentA = {
@@ -634,7 +643,7 @@ static void initNonMeshDescriptors(void)
     brushRegion = obdn_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
-    memset(brush, 0, sizeof(Brush));
+    memset(brush, 0, sizeof(UboBrush));
     brush->radius = 0.01;
     brush->mode = 1;
 
@@ -1335,6 +1344,18 @@ static void updateProj()
     matrices->projInv = m_Invert4x4(&scene->proj);
 }
 
+static void updateBrush()
+{
+    UboBrush* brush = (UboBrush*)brushRegion.hostData;
+    brush->r = scene->brush_r;
+    brush->g = scene->brush_g;
+    brush->b = scene->brush_b;
+    brush->mode = scene->brush_active ? 0 : 1; // active is 0 for some reason
+    brush->radius = scene->brush_radius;
+    brush->x = scene->brush_x;
+    brush->y = scene->brush_y;
+}
+
 static void syncScene(const uint32_t frameIndex)
 {
     if (scene->dirt)
@@ -1343,6 +1364,14 @@ static void syncScene(const uint32_t frameIndex)
             updateView();
         if (scene->dirt & SCENE_PROJ_BIT)
             updateProj();
+        if (scene->dirt & SCENE_BRUSH_BIT)
+            updateBrush();
+        if (scene->dirt & SCENE_WINDOW_BIT)
+        {
+            OBDN_WINDOW_WIDTH = scene->window_width;
+            OBDN_WINDOW_HEIGHT = scene->window_height;
+            obdn_r_RecreateSwapchain();
+        }
     }
 }
 
@@ -1701,7 +1730,7 @@ void r_Render(void)
     if (copySwapToHost)
     {
         if (fastPath)
-        {
+        { // this command only serves to signal the semaphore to avoid validation errors.
             obdn_v_ResetCommand(&copyToHostCommand);
             obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
             obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
@@ -1934,30 +1963,6 @@ bool r_GetSemaphoreFds(int* obdnFrameDoneFD_0, int* obdnFrameDoneFD_1, int* extT
     return true;
 }
 
-Brush* r_GetBrush(void)
-{
-    assert (brushRegion.hostData);
-    return (Brush*)brushRegion.hostData;
-}
-
-void r_SetPaintMode(const PaintMode mode)
-{
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_1], NULL);
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_2], NULL);
-
-    Obdn_R_BlendMode blendMode;
-    switch (mode)
-    {
-        case PAINT_MODE_OVER:  blendMode = OBDN_R_BLEND_MODE_OVER;  break;
-        case PAINT_MODE_ERASE: blendMode = OBDN_R_BLEND_MODE_ERASE; break;
-    }
-
-    initPaintPipelines(blendMode);
-    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
-    {
-        updateRenderCommands(i);
-    }
-}
 
 void r_BackUpLayer(void)
 {

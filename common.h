@@ -19,15 +19,5 @@ typedef struct {
 
 extern Parms parms; 
 
-typedef struct {
-    float x;
-    float y;
-    float radius;
-    float r;
-    float g;
-    float b;
-    int   mode;
-} Brush;
-
 #endif /* end of include guard: VIEWER_COMMON_H */
 

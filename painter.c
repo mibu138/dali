@@ -157,11 +157,11 @@ bool painter_ShouldRun(void)
 
 void painter_SetColor(const float r, const float g, const float b)
 {
-    g_SetColor(r, g, b);
+    g_SetBrushColor(r, g, b);
 }
 
 void painter_SetRadius(const float r)
 {
-    g_SetRadius(r);
+    g_SetBrushRadius(r);
 }
 

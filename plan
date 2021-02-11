@@ -13,3 +13,8 @@ Features from substance painter to add:
     Triplanar projection.
     Substance like brush?
     Bake maps? Curvature, position, etc.
+
+Thu 11 Feb 2021 12:06:49 PM EST
+I imagine people will be wanting to do most of their painting in masks to defer final color selection until render time.
+There is potential large memory savings to be had in this, as we get 4 8bit masks + 48 bytes (4 uniform color vecs) 
+for the price of 1 color + alpha. So solid fill color + mask will be very useful.
