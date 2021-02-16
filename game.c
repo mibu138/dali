@@ -201,7 +201,7 @@ bool g_Responder(const Obdn_I_Event *event)
         case OBDN_I_KEYDOWN: switch (event->data.keyCode)
         {
             case OBDN_KEY_E: g_SetPaintMode(PAINT_MODE_ERASE); break;
-            case OBDN_KEY_O: g_SetPaintMode(PAINT_MODE_OVER); break;
+            case OBDN_KEY_W: g_SetPaintMode(PAINT_MODE_OVER); break;
             case OBDN_KEY_Z: dirt |= SCENE_UNDO_BIT; break;
             case OBDN_KEY_R: g_SetBrushColor(1, 0, 0); break;
             case OBDN_KEY_G: g_SetBrushColor(0, 1, 0); break;

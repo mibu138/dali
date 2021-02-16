@@ -27,6 +27,16 @@
 //#define NS_TARGET 500000000
 #define NS_PER_S  1000000000
 
+static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
+{
+    *ms = (Obdn_V_MemorySizes){
+    .hostGraphicsBufferMemorySize          = OBDN_1_GiB,
+    .deviceGraphicsBufferMemorySize        = OBDN_256_MiB,
+    .deviceGraphicsImageMemorySize         = OBDN_1_GiB,
+    .hostTransferBufferMemorySize          = OBDN_1_GiB * 2,
+    .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
+};
+
 void painter_Init(bool houdiniMode)
 {
     obdn_v_config.rayTraceEnabled = true;
@@ -47,8 +57,9 @@ void painter_Init(bool houdiniMode)
     const char* exnames[] = {
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
-    obdn_v_Init(OBDN_1_GiB, OBDN_256_MiB, OBDN_1_GiB * 1, OBDN_1_GiB * 2, OBDN_100_MiB,
-            OBDN_ARRAY_SIZE(exnames), exnames);
+    Obdn_V_MemorySizes ms;
+    getMemorySizes4k(&ms);
+    obdn_v_Init(&ms, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
