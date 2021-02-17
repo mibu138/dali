@@ -57,6 +57,7 @@ bool firstFrame;
 const Vec3 UP_VEC = {0, 1, 0};
 
 static Obdn_U_Widget* slider0;
+static Obdn_U_Widget* text;
 
 static void setViewerPivotByIntersection(void)
 {
@@ -179,6 +180,9 @@ static void incrementLayer(void)
         dirt |= SCENE_LAYER_CHANGED_BIT;
         if (!u_LayerInCache(id))
             dirt |= SCENE_LAYER_BACKUP_BIT;
+        char str[10];
+        snprintf(str, 10, "Layer %d", id + 1);
+        obdn_u_UpdateText(str, text);
     }
 }
 
@@ -191,6 +195,9 @@ static void decrementLayer(void)
         dirt |= SCENE_LAYER_CHANGED_BIT;
         if (!u_LayerInCache(id))
             dirt |= SCENE_LAYER_BACKUP_BIT;
+        char str[10];
+        snprintf(str, 10, "Layer %d", id + 1);
+        obdn_u_UpdateText(str, text);
     }
 }
 
@@ -286,8 +293,9 @@ void g_Init(void)
     gameState.shouldRun = true;
     setPaintMode(PAINT_MODE_OVER);
 
+    text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
     if (!parms.copySwapToHost)
-        slider0 = obdn_u_CreateSlider(0, 40, NULL);
+        slider0 = obdn_u_CreateSlider(0, 80, NULL);
 
     r_BindScene(&scene);
     u_BindScene(&scene);
