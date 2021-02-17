@@ -65,9 +65,13 @@ enum {
     PIPELINE_POST,
     PIPELINE_COMP_1,
     PIPELINE_COMP_2,
+    PIPELINE_COMP_3,
+    PIPELINE_COMP_4,
     PIPELINE_COMP_SINGLE,
     G_PIPELINE_COUNT
 };
+
+_Static_assert(G_PIPELINE_COUNT < OBDN_MAX_PIPELINES, "must be less than max pipelines");
 
 enum {
     PIPELINE_RAY_TRACE,
@@ -330,17 +334,33 @@ static void initRenderPasses(void)
             .layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
         };
 
-        const VkAttachmentReference inputAttachments[] = {
-            referenceB2, referenceC2, referenceD2
-        };
-
         VkSubpassDescription subpass2 = {
             .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
             .colorAttachmentCount = 1,
             .pColorAttachments    = &referenceA2,
             .pDepthStencilAttachment = NULL,
-            .inputAttachmentCount = OBDN_ARRAY_SIZE(inputAttachments),
-            .pInputAttachments = inputAttachments,
+            .inputAttachmentCount = 1,
+            .pInputAttachments = &referenceC2,
+            .preserveAttachmentCount = 0,
+        };
+
+        VkSubpassDescription subpass3 = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments    = &referenceA2,
+            .pDepthStencilAttachment = NULL,
+            .inputAttachmentCount = 1,
+            .pInputAttachments = &referenceB2,
+            .preserveAttachmentCount = 0,
+        };
+
+        VkSubpassDescription subpass4 = {
+            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount = 1,
+            .pColorAttachments    = &referenceA2,
+            .pDepthStencilAttachment = NULL,
+            .inputAttachmentCount = 1,
+            .pInputAttachments = &referenceD2,
             .preserveAttachmentCount = 0,
         };
 
@@ -364,6 +384,24 @@ static void initRenderPasses(void)
 
         const VkSubpassDependency dependency3 = {
             .srcSubpass = 1,
+            .dstSubpass = 2,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+        };
+
+        const VkSubpassDependency dependency4 = {
+            .srcSubpass = 2,
+            .dstSubpass = 3,
+            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+        };
+
+        const VkSubpassDependency dependency5 = {
+            .srcSubpass = 3,
             .dstSubpass = VK_SUBPASS_EXTERNAL,
             .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
@@ -372,11 +410,11 @@ static void initRenderPasses(void)
         };
 
         VkSubpassDescription subpasses[] = {
-            subpass1, subpass2
+            subpass1, subpass2, subpass3, subpass4
         };
 
         VkSubpassDependency dependencies[] = {
-            dependency1, dependency2, dependency3
+            dependency1, dependency2, dependency3, dependency4, dependency5
         };
 
         VkAttachmentDescription attachments[] = {
@@ -857,7 +895,7 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
-        .blendMode   = blendMode,
+        .blendMode   = OBDN_R_BLEND_MODE_OVER,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
     };
@@ -869,9 +907,33 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
-        .blendMode   = OBDN_R_BLEND_MODE_OVER,
+        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = obdn_r_FullscreenTriVertShader(),
-        .fragShader = SPVDIR"/comp2-frag.spv"
+        .fragShader = SPVDIR"/comp2a-frag.spv"
+    };
+
+    const Obdn_R_GraphicsPipelineInfo pipeInfo3 = {
+        .layout  = pipelineLayouts[LAYOUT_COMP],
+        .renderPass = compositeRenderPass, 
+        .subpass = 2,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .viewportDim = {textureSize, textureSize},
+        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .fragShader = SPVDIR"/comp3a-frag.spv"
+    };
+
+    const Obdn_R_GraphicsPipelineInfo pipeInfo4 = {
+        .layout  = pipelineLayouts[LAYOUT_COMP],
+        .renderPass = compositeRenderPass, 
+        .subpass = 3,
+        .frontFace = VK_FRONT_FACE_CLOCKWISE,
+        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .viewportDim = {textureSize, textureSize},
+        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .fragShader = SPVDIR"/comp4a-frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfoSingle = {
@@ -881,13 +943,13 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
-        .blendMode   = OBDN_R_BLEND_MODE_OVER,
+        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo infos[] = {
-        pipeInfo1, pipeInfo2, pipeInfoSingle
+        pipeInfo1, pipeInfo2, pipeInfo3, pipeInfo4, pipeInfoSingle
     };
 
     obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
@@ -1560,6 +1622,18 @@ static void comp(const VkCommandBuffer cmdBuf)
         vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
 
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_2]);
+
+        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
+
+        vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_3]);
+
+        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
+
+        vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
+
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_4]);
 
         vkCmdDraw(cmdBuf, 3, 1, 0, 0);
 
