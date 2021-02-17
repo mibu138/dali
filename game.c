@@ -348,7 +348,9 @@ void g_SetBrushRadius(const float r)
 
 void g_CleanUp(void)
 {
-    obdn_u_DestroyWidget(slider0);
+    if (!parms.copySwapToHost)
+        obdn_u_DestroyWidget(slider0);
+    obdn_u_DestroyWidget(text);
     obdn_i_Unsubscribe(g_Responder);
     memset(&scene, 0, sizeof(scene));
     memset(&mousePos, 0, sizeof(mousePos));
