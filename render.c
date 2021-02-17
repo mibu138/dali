@@ -56,7 +56,6 @@ enum {
     DESC_SET_RASTER,
     DESC_SET_RAYTRACE,
     DESC_SET_POST,
-    DESC_SET_APPLY_PAINT,
     DESC_SET_COMP
 };
 
@@ -556,16 +555,13 @@ static void initDescSetsAndPipeLayouts(void)
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
             }}
-        },{ // apply
-            .bindingCount = 1,
+        },{ // comp 
+            .bindingCount = 4,
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            }}
-        },{ // comp
-            .bindingCount = 3,
-            .bindings = {{
+            },{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
@@ -603,8 +599,8 @@ static void initDescSetsAndPipeLayouts(void)
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
     },{
-        .descriptorSetCount = 2, 
-        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_APPLY_PAINT]
+        .descriptorSetCount = 1, 
+        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_COMP]
     }};
 
     obdn_r_CreatePipelineLayouts(OBDN_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
@@ -785,7 +781,7 @@ static void initNonMeshDescriptors(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            .dstSet = description.descriptorSets[DESC_SET_COMP], 
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
@@ -794,7 +790,7 @@ static void initNonMeshDescriptors(void)
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
             .dstSet = description.descriptorSets[DESC_SET_COMP], 
-            .dstBinding = 0,
+            .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
             .pImageInfo = &imageInfoC
@@ -802,7 +798,7 @@ static void initNonMeshDescriptors(void)
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
             .dstSet = description.descriptorSets[DESC_SET_COMP], 
-            .dstBinding = 1,
+            .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
             .pImageInfo = &imageInfoB
@@ -810,7 +806,7 @@ static void initNonMeshDescriptors(void)
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
             .dstSet = description.descriptorSets[DESC_SET_COMP], 
-            .dstBinding = 2,
+            .dstBinding = 3,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
             .pImageInfo = &imageInfoD
@@ -1181,7 +1177,7 @@ static void onLayerChange(L_LayerId newLayerId)
             cmd.buffer, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
             pipelineLayouts[LAYOUT_COMP], 
-            0, 1, &description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            0, 1, &description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
         vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_SINGLE]);
@@ -1216,7 +1212,7 @@ static void onLayerChange(L_LayerId newLayerId)
             cmd.buffer, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
             pipelineLayouts[LAYOUT_COMP], 
-            0, 1, &description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            0, 1, &description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
         vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_SINGLE]);
@@ -1612,7 +1608,7 @@ static void comp(const VkCommandBuffer cmdBuf)
             cmdBuf, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
             pipelineLayouts[LAYOUT_COMP], 
-            0, 2, &description.descriptorSets[DESC_SET_APPLY_PAINT], 
+            0, 1, &description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_1]);
