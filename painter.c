@@ -27,6 +27,8 @@
 //#define NS_TARGET 500000000
 #define NS_PER_S  1000000000
 
+static int8_t localFlag; // ensures we always pair a local cleanup with a local init... 
+
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
 {
     *ms = (Obdn_V_MemorySizes){
@@ -71,8 +73,10 @@ void painter_Init(bool houdiniMode)
 
 void painter_LocalInit(uint32_t texSize)
 {
+    printf(">>>> Painter local init\n");
     r_InitRenderer(texSize);
     g_Init();
+    localFlag = 1;
 }
 
 void painter_LoadFprim(Obdn_F_Primitive* fprim)
@@ -157,9 +161,14 @@ void painter_ShutDown(void)
 
 void painter_LocalCleanUp(void)
 {
-    vkDeviceWaitIdle(device);
-    g_CleanUp();
-    r_CleanUp();
+    if (localFlag)
+    {
+        printf(">>>> Painter local cleanup\n");
+        vkDeviceWaitIdle(device);
+        g_CleanUp();
+        r_CleanUp();
+    }
+    localFlag = 0;
 }
 
 bool painter_ShouldRun(void)

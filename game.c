@@ -388,4 +388,5 @@ void g_SetPaintMode(PaintMode mode)
 {
     scene.paint_mode = mode;
     dirt |= SCENE_PAINT_MODE_BIT;
+    dirt |= SCENE_BRUSH_BIT;
 }

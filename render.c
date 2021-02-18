@@ -49,7 +49,8 @@ enum {
     LAYOUT_RASTER,
     LAYOUT_RAYTRACE,
     LAYOUT_POST,
-    LAYOUT_COMP
+    LAYOUT_COMP,
+    LAYOUT_COUNT
 };
 
 enum {
@@ -891,7 +892,7 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
-        .blendMode   = OBDN_R_BLEND_MODE_OVER,
+        .blendMode   = blendMode,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/comp-frag.spv"
     };
@@ -953,9 +954,10 @@ static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
 
 static void destroyPaintPipelines(void)
 {
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_1], NULL);
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_2], NULL);
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_COMP_SINGLE], NULL);
+    for (int i = PIPELINE_COMP_1; i < G_PIPELINE_COUNT; i++)
+    {
+        vkDestroyPipeline(device, graphicsPipelines[i], NULL);
+    }
 }
 
 static void initSwapchainDependentFramebuffers(void)
@@ -1053,9 +1055,7 @@ static void cleanUpSwapchainDependent(void)
         vkDestroyFramebuffer(device, postFrameBuffers[i], NULL);
     }
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_RASTER], NULL);
-    graphicsPipelines[PIPELINE_RASTER] = VK_NULL_HANDLE;
     vkDestroyPipeline(device, graphicsPipelines[PIPELINE_POST], NULL);
-    graphicsPipelines[PIPELINE_POST] = VK_NULL_HANDLE;
     obdn_v_FreeImage(&depthAttachment);
     if (copySwapToHost)
     {
@@ -1416,12 +1416,21 @@ static void updateProj(void)
     matrices->projInv = m_Invert4x4(&scene->proj);
 }
 
+static void updateBrushColor(float r, float g, float b)
+{
+    UboBrush* brush = (UboBrush*)brushRegion.hostData;
+    brush->r = r;
+    brush->g = g;
+    brush->b = b;
+}
+
 static void updateBrush(void)
 {
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
-    brush->r = scene->brush_r;
-    brush->g = scene->brush_g;
-    brush->b = scene->brush_b;
+    if (scene->paint_mode != PAINT_MODE_ERASE)
+        updateBrushColor(scene->brush_r, scene->brush_g, scene->brush_b);
+    else
+        updateBrushColor(1, 1, 1); // must be white for erase to work
     brush->mode = scene->brush_active ? 0 : 1; // active is 0 for some reason
     brush->radius = scene->brush_radius;
     brush->x = scene->brush_x;
@@ -1950,21 +1959,18 @@ void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
     obdn_r_UnregisterSwapchainRecreateFn(onRecreateSwapchain);
-    for (int i = 0; i < G_PIPELINE_COUNT; i++) 
+    for (int i = PIPELINE_COMP_1; i < G_PIPELINE_COUNT; i++)  // first 2 handles in swapcleanup
     {
-        if (graphicsPipelines[i] != VK_NULL_HANDLE)
-            vkDestroyPipeline(device, graphicsPipelines[i], NULL);
+        vkDestroyPipeline(device, graphicsPipelines[i], NULL);
     }
     for (int i = 0; i < RT_PIPELINE_COUNT; i++)
     {
         obdn_r_DestroyShaderBindingTable(&shaderBindingTables[i]);
-        if (raytracePipelines[i] != VK_NULL_HANDLE)
-            vkDestroyPipeline(device, raytracePipelines[i], NULL);
+        vkDestroyPipeline(device, raytracePipelines[i], NULL);
     }
-    for (int i = 0; i < OBDN_MAX_PIPELINES; i++)
+    for (int i = 0; i < LAYOUT_COUNT; i++)
     {
-        if (pipelineLayouts[i])
-            vkDestroyPipelineLayout(device, pipelineLayouts[i], NULL);
+        vkDestroyPipelineLayout(device, pipelineLayouts[i], NULL);
     }
     for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
