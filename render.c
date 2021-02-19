@@ -74,14 +74,9 @@ enum {
 _Static_assert(G_PIPELINE_COUNT < OBDN_MAX_PIPELINES, "must be less than max pipelines");
 
 enum {
-    PIPELINE_RAY_TRACE,
+    PIPELINE_PAINT,
     PIPELINE_SELECT,
     RT_PIPELINE_COUNT
-};
-
-enum {
-    SBT_RAY_TRACE,
-    SBT_SELECT,
 };
 
 typedef Obdn_V_BufferRegion BufferRegion;
@@ -89,11 +84,6 @@ typedef Obdn_V_BufferRegion BufferRegion;
 static BufferRegion  matrixRegion;
 static BufferRegion  brushRegion;
 static BufferRegion  selectionRegion;
-
-typedef struct {
-    float x;
-    float y;
-} PaintJitterSeed;
 
 static Obdn_R_Primitive     renderPrim;
 
@@ -584,7 +574,7 @@ static void initDescSetsAndPipeLayouts(void)
     VkPushConstantRange pcRange = {
         .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
         .offset     = 0,
-        .size       = sizeof(PaintJitterSeed),
+        .size       = sizeof(float) * 2
     }; 
 
     const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
@@ -1493,104 +1483,31 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = obdn_v_GetPhysicalDeviceRayTracingProperties();
-    const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
-    const VkDeviceSize baseAlignment = shaderBindingTables[SBT_SELECT].bufferRegion.offset;
-    const VkDeviceSize rayGenOffset   = baseAlignment + 0;
-    const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
-    const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
-
-    assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
-
-    VkBufferDeviceAddressInfo addrInfo = {
-        .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = shaderBindingTables[SBT_SELECT].bufferRegion.buffer,
-    };
-
-    VkDeviceAddress address = vkGetBufferDeviceAddress(device, &addrInfo);
-
-    const VkStridedDeviceAddressRegionKHR raygenShaderBindingTable = {
-        .deviceAddress = address + rayGenOffset,
-        .size          = progSize,
-        .stride        = progSize 
-    };
-
-    const VkStridedDeviceAddressRegionKHR missShaderBindingTable = {
-        .deviceAddress = address + missOffset,
-        .size          = progSize,
-        .stride        = progSize
-    };
-
-    const VkStridedDeviceAddressRegionKHR hitShaderBindingTable = {
-        .deviceAddress = address + hitGroupOffset,
-        .size          = progSize,
-        .stride        = progSize 
-    };
-
-    const VkStridedDeviceAddressRegionKHR callableShaderBindingTable = {
-    };
-
-    vkCmdTraceRaysKHR(cmdBuf, &raygenShaderBindingTable,
-            &missShaderBindingTable, &hitShaderBindingTable,
-            &callableShaderBindingTable, 1, 
-            1, 1);
+    vkCmdTraceRaysKHR(cmdBuf, 
+            &shaderBindingTables[PIPELINE_SELECT].raygenTable,
+            &shaderBindingTables[PIPELINE_SELECT].missTable,
+            &shaderBindingTables[PIPELINE_SELECT].hitTable,
+            &shaderBindingTables[PIPELINE_SELECT].callableTable,
+            1, 1, 1);
 }
 
 static void paint(const VkCommandBuffer cmdBuf)
 {
-    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_RAY_TRACE]);
+    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_PAINT]);
 
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    const VkPhysicalDeviceRayTracingPipelinePropertiesKHR rtprops = obdn_v_GetPhysicalDeviceRayTracingProperties();
-    const VkDeviceSize progSize = rtprops.shaderGroupBaseAlignment;
-    const VkDeviceSize baseAlignment = shaderBindingTables[SBT_RAY_TRACE].bufferRegion.offset;
-    const VkDeviceSize rayGenOffset   = baseAlignment + 0;
-    const VkDeviceSize missOffset     = baseAlignment + 1u * progSize;
-    const VkDeviceSize hitGroupOffset = baseAlignment + 2u * progSize; // have to jump over 1 miss shaders
+    float jitterSeed[2] = {coal_Rand(), coal_Rand()};
 
-    assert( rayGenOffset % rtprops.shaderGroupBaseAlignment == 0 );
+    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(jitterSeed), &jitterSeed);
 
-    VkBufferDeviceAddressInfo addrInfo = {
-        .sType  = VK_STRUCTURE_TYPE_BUFFER_DEVICE_ADDRESS_INFO,
-        .buffer = shaderBindingTables[SBT_RAY_TRACE].bufferRegion.buffer,
-    };
-
-    VkDeviceAddress address = vkGetBufferDeviceAddress(device, &addrInfo);
-
-    const VkStridedDeviceAddressRegionKHR raygenShaderBindingTable = {
-        .deviceAddress = address + rayGenOffset,
-        .size          = progSize,
-        .stride        = progSize 
-    };
-
-    const VkStridedDeviceAddressRegionKHR missShaderBindingTable = {
-        .deviceAddress = address + missOffset,
-        .size          = progSize,
-        .stride        = progSize
-    };
-
-    const VkStridedDeviceAddressRegionKHR hitShaderBindingTable = {
-        .deviceAddress = address + hitGroupOffset,
-        .size          = progSize,
-        .stride        = progSize 
-    };
-
-    const VkStridedDeviceAddressRegionKHR callableShaderBindingTable = {
-    };
-
-    PaintJitterSeed seed = {
-        .x = coal_Rand(),
-        .y = coal_Rand()
-    };
-
-    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(PaintJitterSeed), &seed);
-
-    vkCmdTraceRaysKHR(cmdBuf, &raygenShaderBindingTable,
-            &missShaderBindingTable, &hitShaderBindingTable,
-            &callableShaderBindingTable, 2000, 
-            2000, 1);
+    vkCmdTraceRaysKHR(cmdBuf, 
+            &shaderBindingTables[PIPELINE_PAINT].raygenTable,
+            &shaderBindingTables[PIPELINE_PAINT].missTable,
+            &shaderBindingTables[PIPELINE_PAINT].hitTable,
+            &shaderBindingTables[PIPELINE_PAINT].callableTable,
+            2000, 2000, 1);
 }
 
 static void comp(const VkCommandBuffer cmdBuf)

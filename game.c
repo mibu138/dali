@@ -49,8 +49,8 @@ static struct Player {
 
 G_GameState gameState;
 
-Scene          scene;
-Scene_DirtMask dirt;
+static Scene          scene;
+static Scene_DirtMask dirt;
 
 bool firstFrame;
 
@@ -356,7 +356,6 @@ void g_CleanUp(void)
     memset(&mousePos, 0, sizeof(mousePos));
 }
 
-// can be called from other thread
 void g_SetView(const Mat4* m)
 {
     scene.view = *m;
