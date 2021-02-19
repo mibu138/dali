@@ -248,50 +248,50 @@ static void initRenderPasses(void)
 
     {
         const VkAttachmentDescription attachmentA = {
-            .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
-            .format = textureFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .flags         = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+            .format        = textureFormat,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp       = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .initialLayout = VK_IMAGE_LAYOUT_GENERAL,
-            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         };
 
         const VkAttachmentDescription attachmentB = {
-            .format = textureFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .format        = textureFormat,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
             .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .finalLayout   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
 
         const VkAttachmentDescription attachmentC = {
-            .format = textureFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .format        = textureFormat,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
             .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .finalLayout   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
 
         const VkAttachmentDescription attachmentD = {
-            .format = textureFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .format        = textureFormat,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
             .initialLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .finalLayout   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
 
         const VkAttachmentDescription attachmentA2 = {
-            .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
-            .format = textureFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .flags         = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
+            .format        = textureFormat,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR,
+            .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
             .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED,
-            .finalLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+            .finalLayout   = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         };
 
         const VkAttachmentReference referenceA1 = {
@@ -305,12 +305,12 @@ static void initRenderPasses(void)
         };
 
         VkSubpassDescription subpass1 = {
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
-            .pColorAttachments    = &referenceB1,
+            .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount    = 1,
+            .pColorAttachments       = &referenceB1,
             .pDepthStencilAttachment = NULL,
-            .inputAttachmentCount = 1,
-            .pInputAttachments = &referenceA1,
+            .inputAttachmentCount    = 1,
+            .pInputAttachments       = &referenceA1,
             .preserveAttachmentCount = 0,
         };
 
@@ -335,77 +335,77 @@ static void initRenderPasses(void)
         };
 
         VkSubpassDescription subpass2 = {
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
-            .pColorAttachments    = &referenceA2,
+            .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount    = 1,
+            .pColorAttachments       = &referenceA2,
             .pDepthStencilAttachment = NULL,
-            .inputAttachmentCount = 1,
-            .pInputAttachments = &referenceC2,
+            .inputAttachmentCount    = 1,
+            .pInputAttachments       = &referenceC2,
             .preserveAttachmentCount = 0,
         };
 
         VkSubpassDescription subpass3 = {
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
-            .pColorAttachments    = &referenceA2,
+            .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount    = 1,
+            .pColorAttachments       = &referenceA2,
             .pDepthStencilAttachment = NULL,
-            .inputAttachmentCount = 1,
-            .pInputAttachments = &referenceB2,
+            .inputAttachmentCount    = 1,
+            .pInputAttachments       = &referenceB2,
             .preserveAttachmentCount = 0,
         };
 
         VkSubpassDescription subpass4 = {
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
-            .pColorAttachments    = &referenceA2,
+            .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount    = 1,
+            .pColorAttachments       = &referenceA2,
             .pDepthStencilAttachment = NULL,
-            .inputAttachmentCount = 1,
-            .pInputAttachments = &referenceD2,
+            .inputAttachmentCount    = 1,
+            .pInputAttachments       = &referenceD2,
             .preserveAttachmentCount = 0,
         };
 
         const VkSubpassDependency dependency1 = {
-            .srcSubpass = VK_SUBPASS_EXTERNAL,
-            .dstSubpass = 0,
-            .srcStageMask = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
+            .srcSubpass    = VK_SUBPASS_EXTERNAL,
+            .dstSubpass    = 0,
+            .srcStageMask  = VK_PIPELINE_STAGE_RAY_TRACING_SHADER_BIT_KHR,
             .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .dstStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
         };
 
         const VkSubpassDependency dependency2 = {
-            .srcSubpass = 0,
-            .dstSubpass = 1,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcSubpass    = 0,
+            .dstSubpass    = 1,
+            .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
         };
 
         const VkSubpassDependency dependency3 = {
-            .srcSubpass = 1,
-            .dstSubpass = 2,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcSubpass    = 1,
+            .dstSubpass    = 2,
+            .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
         };
 
         const VkSubpassDependency dependency4 = {
-            .srcSubpass = 2,
-            .dstSubpass = 3,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcSubpass    = 2,
+            .dstSubpass    = 3,
+            .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
         };
 
         const VkSubpassDependency dependency5 = {
-            .srcSubpass = 3,
-            .dstSubpass = VK_SUBPASS_EXTERNAL,
-            .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcSubpass    = 3,
+            .dstSubpass    = VK_SUBPASS_EXTERNAL,
+            .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
             .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-            .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
             .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
         };
 
@@ -436,22 +436,21 @@ static void initRenderPasses(void)
 
     {
         const VkAttachmentDescription srcAttachment = {
-            .flags = VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT,
-            .format = textureFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_DONT_CARE,
+            .format        = textureFormat,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp       = VK_ATTACHMENT_STORE_OP_DONT_CARE,
             .initialLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-            .finalLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            .finalLayout   = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         };
 
         const VkAttachmentDescription dstAttachment = {
-            .format = textureFormat,
-            .samples = VK_SAMPLE_COUNT_1_BIT, // TODO look into what this means
-            .loadOp = VK_ATTACHMENT_LOAD_OP_LOAD,
-            .storeOp = VK_ATTACHMENT_STORE_OP_STORE,
+            .format        = textureFormat,
+            .samples       = VK_SAMPLE_COUNT_1_BIT,
+            .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
+            .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
             .initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            .finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+            .finalLayout   = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         };
 
         const VkAttachmentReference refSrc = {
@@ -465,29 +464,29 @@ static void initRenderPasses(void)
         };
 
         const VkSubpassDescription subpass = {
-            .pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS,
-            .colorAttachmentCount = 1,
-            .pColorAttachments    = &refDst,
+            .pipelineBindPoint       = VK_PIPELINE_BIND_POINT_GRAPHICS,
+            .colorAttachmentCount    = 1,
+            .pColorAttachments       = &refDst,
             .pDepthStencilAttachment = NULL,
-            .inputAttachmentCount = 1,
-            .pInputAttachments = &refSrc,
+            .inputAttachmentCount    = 1,
+            .pInputAttachments       = &refSrc,
             .preserveAttachmentCount = 0,
         };
 
         const VkSubpassDependency dependencies[] = {{
-            .srcSubpass = VK_SUBPASS_EXTERNAL,
-                .dstSubpass = 0,
-                .srcStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                .srcAccessMask = 0,
-                .dstStageMask = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+            .srcSubpass    = VK_SUBPASS_EXTERNAL,
+            .dstSubpass    = 0,
+            .srcStageMask  = VK_PIPELINE_STAGE_TRANSFER_BIT,
+            .srcAccessMask = 0,
+            .dstStageMask  = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
         },{
-            .srcSubpass = 0,
-                .dstSubpass = VK_SUBPASS_EXTERNAL,
-                .srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-                .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
-                .dstStageMask = VK_PIPELINE_STAGE_TRANSFER_BIT,
-                .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+            .srcSubpass    = 0,
+            .dstSubpass    = VK_SUBPASS_EXTERNAL,
+            .srcStageMask  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            .srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,
+            .dstStageMask  = VK_PIPELINE_STAGE_TRANSFER_BIT,
+            .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
         }};
 
         const VkAttachmentDescription attachments[] = {
