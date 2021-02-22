@@ -27,6 +27,9 @@
 //#define NS_TARGET 500000000
 #define NS_PER_S  1000000000
 
+#define DEF_WINDOW_WIDTH  1300
+#define DEF_WINDOW_HEIGHT 1300
+
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
 {
     *ms = (Obdn_V_MemorySizes){
@@ -48,9 +51,10 @@ void painter_Init(bool houdiniMode)
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     if (!parms.copySwapToHost)
-        obdn_d_Init(1000, 1000, NULL);
+        obdn_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     else
     {
+        // won't matter really. these will get s
         OBDN_WINDOW_WIDTH = 1000;
         OBDN_WINDOW_HEIGHT = 1000;
     }

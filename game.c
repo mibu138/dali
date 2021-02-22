@@ -201,6 +201,33 @@ static void decrementLayer(void)
     }
 }
 
+void g_Init(void)
+{
+    obdn_i_Subscribe(g_Responder);
+
+    Mat4 initView = m_Ident_Mat4();
+    Mat4 initProj = m_BuildPerspective(0.01, 50);
+    g_SetView(&initView);
+    g_SetProj(&initProj);
+
+    player.pos = (Vec3){0, 0., 3};
+    player.target = (Vec3){0, 0, 0};
+    player.pivot = player.target;
+    g_SetBrushColor(0.1, 0.95, 0.3);
+    g_SetBrushRadius(0.01);
+    mode = MODE_DO_NOTHING;
+    setBrushActive(false);
+    gameState.shouldRun = true;
+    setPaintMode(PAINT_MODE_OVER);
+
+    text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
+    if (!parms.copySwapToHost)
+        slider0 = obdn_u_CreateSlider(0, 80, NULL);
+
+    r_BindScene(&scene);
+    u_BindScene(&scene);
+}
+
 bool g_Responder(const Obdn_I_Event *event)
 {
     switch (event->type) 
@@ -274,33 +301,6 @@ bool g_Responder(const Obdn_I_Event *event)
     return true;
 }
 
-void g_Init(void)
-{
-    obdn_i_Subscribe(g_Responder);
-
-    Mat4 initView = m_Ident_Mat4();
-    Mat4 initProj = m_BuildPerspective(0.01, 50);
-    g_SetView(&initView);
-    g_SetProj(&initProj);
-
-    player.pos = (Vec3){0, 0., 3};
-    player.target = (Vec3){0, 0, 0};
-    player.pivot = player.target;
-    g_SetBrushColor(0.1, 0.95, 0.3);
-    g_SetBrushRadius(0.01);
-    mode = MODE_DO_NOTHING;
-    setBrushActive(false);
-    gameState.shouldRun = true;
-    setPaintMode(PAINT_MODE_OVER);
-
-    text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
-    if (!parms.copySwapToHost)
-        slider0 = obdn_u_CreateSlider(0, 80, NULL);
-
-    r_BindScene(&scene);
-    u_BindScene(&scene);
-}
-
 void g_Update(void)
 {
     //assert(sizeof(struct Player) == sizeof(UboPlayer));
@@ -325,7 +325,7 @@ void g_Update(void)
     else 
         setBrushActive(false);
 
-    // this allows us to clear the dirt mask for the next frame while the render still knows what changed
+    // the extra, local mask allows us to clear the dirt mask for the next frame while maintaining the current frame dirty bits
     scene.dirt = dirt;
     dirt = 0;
 
