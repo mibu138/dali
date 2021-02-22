@@ -5,7 +5,7 @@
 #include "layer.h"
 #include "render.h"
 
-void u_InitUndo(const uint32_t size);
+void u_InitUndo(const uint32_t size, const uint8_t maxStacks, const uint8_t maxUndos);
 void u_CleanUp(void);
 bool u_LayerInCache(L_LayerId layer);
 void u_BindScene(const Scene* scene_);
