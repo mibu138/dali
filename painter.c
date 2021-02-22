@@ -40,6 +40,26 @@ static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
     .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
 };
 
+static void getMemorySizes8k(Obdn_V_MemorySizes* ms)
+{
+    *ms = (Obdn_V_MemorySizes){
+    .hostGraphicsBufferMemorySize          = OBDN_1_GiB,
+    .deviceGraphicsBufferMemorySize        = OBDN_256_MiB,
+    .deviceGraphicsImageMemorySize         = OBDN_1_GiB * 2,
+    .hostTransferBufferMemorySize          = OBDN_1_GiB * 8,
+    .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
+};
+
+static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
+{
+    *ms = (Obdn_V_MemorySizes){
+    .hostGraphicsBufferMemorySize          = OBDN_1_GiB,
+    .deviceGraphicsBufferMemorySize        = OBDN_256_MiB,
+    .deviceGraphicsImageMemorySize         = OBDN_1_GiB * 4,
+    .hostTransferBufferMemorySize          = OBDN_1_GiB * 8,
+    .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
+};
+
 void painter_Init(bool houdiniMode)
 {
     obdn_v_config.rayTraceEnabled = true;
@@ -62,7 +82,7 @@ void painter_Init(bool houdiniMode)
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
     Obdn_V_MemorySizes ms;
-    getMemorySizes4k(&ms);
+    getMemorySizes8k(&ms);
     obdn_v_Init(&ms, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
@@ -70,7 +90,7 @@ void painter_Init(bool houdiniMode)
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     if (!parms.copySwapToHost)
-        painter_LocalInit(4096);
+        painter_LocalInit(8192);
 }
 
 void painter_LocalInit(uint32_t texSize)
