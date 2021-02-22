@@ -30,6 +30,11 @@
 #define DEF_WINDOW_WIDTH  1300
 #define DEF_WINDOW_HEIGHT 1300
 
+#define IMG_4K  4096
+#define IMG_8K  IMG_4K * 2
+#define IMG_16K IMG_8K * 2
+
+
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
 {
     *ms = (Obdn_V_MemorySizes){
@@ -82,7 +87,7 @@ void painter_Init(bool houdiniMode)
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
     Obdn_V_MemorySizes ms;
-    getMemorySizes8k(&ms);
+    getMemorySizes4k(&ms);
     obdn_v_Init(&ms, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
@@ -90,7 +95,7 @@ void painter_Init(bool houdiniMode)
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     if (!parms.copySwapToHost)
-        painter_LocalInit(8192);
+        painter_LocalInit(IMG_4K);
 }
 
 void painter_LocalInit(uint32_t texSize)
