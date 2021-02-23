@@ -61,7 +61,7 @@ static void getMemorySizes8k(Obdn_V_MemorySizes* ms)
 static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
 {
     *ms = (Obdn_V_MemorySizes){
-    .hostGraphicsBufferMemorySize          = OBDN_1_GiB * 4,
+    .hostGraphicsBufferMemorySize          = OBDN_1_GiB * 6,
     .deviceGraphicsBufferMemorySize        = OBDN_256_MiB * 2,
     .deviceGraphicsImageMemorySize         = OBDN_1_GiB * 6,
     .hostTransferBufferMemorySize          = OBDN_1_GiB * 8,
@@ -70,11 +70,12 @@ static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
 
 void painter_Init(bool houdiniMode)
 {
-    obdn_v_config.rayTraceEnabled = true;
+    Obdn_V_Config config = {};
+    config.rayTraceEnabled = true;
 #ifndef NDEBUG
-    obdn_v_config.validationEnabled = true;
+    config.validationEnabled = true;
 #else
-    obdn_v_config.validationEnabled = false;
+    config.validationEnabled = false;
 #endif
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -90,15 +91,14 @@ void painter_Init(bool houdiniMode)
     const char* exnames[] = {
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
-    Obdn_V_MemorySizes ms;
 #if   IMG_SIZE == IMG_4K
-    getMemorySizes4k(&ms);
+    getMemorySizes4k(&config.memorySizes);
 #elif IMG_SIZE == IMG_8K
-    getMemorySizes8k(&ms);
+    getMemorySizes8k(&config.memorySizes);
 #elif IMG_SIZE == IMG_16K
-    getMemorySizes16k(&ms);
+    getMemorySizes16k(&config.memorySizes);
 #endif
-    obdn_v_Init(&ms, OBDN_ARRAY_SIZE(exnames), exnames);
+    obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(xcbWindow.connection, xcbWindow.window);
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);

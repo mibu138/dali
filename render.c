@@ -19,6 +19,7 @@
 #include <obsidian/r_renderpass.h>
 #include <vulkan/vulkan_core.h>
 #include "undo.h"
+#include <stdlib.h>
 
 #include <pthread.h>
 
@@ -1684,10 +1685,15 @@ static void updateRenderCommands(const int8_t frameIndex)
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
-void r_InitRenderer(uint32_t texSize)
+#define IMG_4K  4096
+#define IMG_8K  IMG_4K * 2
+#define IMG_16K IMG_8K * 2
+
+void r_InitRenderer(const uint32_t texSize)
 {
     assert(texSize > 0);
     assert(texSize % 256 == 0);
+    assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K); // for now
     textureSize = texSize;
     curLayerId = 0;
     graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);
@@ -1723,7 +1729,15 @@ void r_InitRenderer(uint32_t texSize)
     assert(imageA.size > 0);
 
     l_Init(imageA.size); // eventually will move this out
-    u_InitUndo(imageB.size, 4, 8);
+    uint8_t maxUndoStacks, maxUndosPerStack;
+    switch (texSize)
+    {
+        case IMG_4K:  maxUndoStacks = 4; maxUndosPerStack = 8; break;
+        case IMG_8K:  maxUndoStacks = 2; maxUndosPerStack = 8; break;
+        case IMG_16K: maxUndoStacks = 1; maxUndosPerStack = 8; break;
+        default: abort();
+    }
+    u_InitUndo(imageA.size, maxUndoStacks, maxUndosPerStack);
     onLayerChange(0);
     
     if (copySwapToHost)
