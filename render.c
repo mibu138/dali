@@ -1723,7 +1723,7 @@ void r_InitRenderer(uint32_t texSize)
     assert(imageA.size > 0);
 
     l_Init(imageA.size); // eventually will move this out
-    u_InitUndo(imageB.size, 4, 8);
+    u_InitUndo(imageB.size, 1, 8);
     onLayerChange(0);
     
     if (copySwapToHost)

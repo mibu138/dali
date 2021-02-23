@@ -180,8 +180,8 @@ static void incrementLayer(void)
         dirt |= SCENE_LAYER_CHANGED_BIT;
         if (!u_LayerInCache(id))
             dirt |= SCENE_LAYER_BACKUP_BIT;
-        char str[10];
-        snprintf(str, 10, "Layer %d", id + 1);
+        char str[12];
+        snprintf(str, 12, "Layer %d", id + 1);
         obdn_u_UpdateText(str, text);
     }
 }
@@ -195,8 +195,8 @@ static void decrementLayer(void)
         dirt |= SCENE_LAYER_CHANGED_BIT;
         if (!u_LayerInCache(id))
             dirt |= SCENE_LAYER_BACKUP_BIT;
-        char str[10];
-        snprintf(str, 10, "Layer %d", id + 1);
+        char str[12];
+        snprintf(str, 12, "Layer %d", id + 1);
         obdn_u_UpdateText(str, text);
     }
 }

@@ -24,8 +24,6 @@
 #include <obsidian/u_ui.h>
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
-//#define NS_TARGET 500000000
-#define NS_PER_S  1000000000
 
 #define DEF_WINDOW_WIDTH  1300
 #define DEF_WINDOW_HEIGHT 1300
@@ -34,6 +32,11 @@
 #define IMG_8K  IMG_4K * 2
 #define IMG_16K IMG_8K * 2
 
+#define IMG_SIZE IMG_4K
+
+static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
+static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
+static void getMemorySizes16k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
 {
@@ -43,27 +46,27 @@ static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
     .deviceGraphicsImageMemorySize         = OBDN_1_GiB,
     .hostTransferBufferMemorySize          = OBDN_1_GiB * 2,
     .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
-};
+}
 
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms)
 {
     *ms = (Obdn_V_MemorySizes){
-    .hostGraphicsBufferMemorySize          = OBDN_1_GiB,
+    .hostGraphicsBufferMemorySize          = OBDN_1_GiB * 2,
     .deviceGraphicsBufferMemorySize        = OBDN_256_MiB,
     .deviceGraphicsImageMemorySize         = OBDN_1_GiB * 2,
-    .hostTransferBufferMemorySize          = OBDN_1_GiB * 8,
+    .hostTransferBufferMemorySize          = OBDN_1_GiB * 4,
     .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
-};
+}
 
 static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
 {
     *ms = (Obdn_V_MemorySizes){
-    .hostGraphicsBufferMemorySize          = OBDN_1_GiB,
-    .deviceGraphicsBufferMemorySize        = OBDN_256_MiB,
-    .deviceGraphicsImageMemorySize         = OBDN_1_GiB * 4,
+    .hostGraphicsBufferMemorySize          = OBDN_1_GiB * 4,
+    .deviceGraphicsBufferMemorySize        = OBDN_256_MiB * 2,
+    .deviceGraphicsImageMemorySize         = OBDN_1_GiB * 6,
     .hostTransferBufferMemorySize          = OBDN_1_GiB * 8,
     .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
-};
+}
 
 void painter_Init(bool houdiniMode)
 {
@@ -79,7 +82,7 @@ void painter_Init(bool houdiniMode)
         obdn_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     else
     {
-        // won't matter really. these will get s
+        // won't matter really. these will get set by the renderer on first update.
         OBDN_WINDOW_WIDTH = 1000;
         OBDN_WINDOW_HEIGHT = 1000;
     }
@@ -87,7 +90,13 @@ void painter_Init(bool houdiniMode)
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
     Obdn_V_MemorySizes ms;
+#if   IMG_SIZE == IMG_4K
     getMemorySizes4k(&ms);
+#elif IMG_SIZE == IMG_8K
+    getMemorySizes8k(&ms);
+#elif IMG_SIZE == IMG_16K
+    getMemorySizes16k(&ms);
+#endif
     obdn_v_Init(&ms, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
@@ -95,7 +104,15 @@ void painter_Init(bool houdiniMode)
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     if (!parms.copySwapToHost)
+    {
+#if   IMG_SIZE == IMG_4K
         painter_LocalInit(IMG_4K);
+#elif IMG_SIZE == IMG_8K
+        painter_LocalInit(IMG_8K);
+#elif IMG_SIZE == IMG_16K
+        painter_LocalInit(IMG_16K);
+#endif
+    }
 }
 
 void painter_LocalInit(uint32_t texSize)

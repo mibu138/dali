@@ -43,7 +43,7 @@ RMISS := $(patsubst %.rmiss,$(SPV)/%-rmiss.spv,$(notdir $(wildcard $(GLSL)/*.rmi
 debug: CFLAGS += -g -DVERBOSE=1
 debug: all
 
-release: CFLAGS += -DNDEBUG -O3
+release: CFLAGS += -DNDEBUG -O2
 release: all
 
 all: obsidian bin lib tags
