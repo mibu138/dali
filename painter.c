@@ -78,8 +78,9 @@ void painter_Init(bool houdiniMode)
 #endif
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    Obdn_D_XcbWindow xcbWindow;
     if (!parms.copySwapToHost)
-        obdn_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
+        xcbWindow = obdn_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     else
     {
         // won't matter really. these will get set by the renderer on first update.
@@ -99,7 +100,7 @@ void painter_Init(bool houdiniMode)
 #endif
     obdn_v_Init(&ms, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
-        obdn_v_InitSurfaceXcb(d_XcbWindow.connection, d_XcbWindow.window);
+        obdn_v_InitSurfaceXcb(xcbWindow.connection, xcbWindow.window);
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);

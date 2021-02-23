@@ -1459,14 +1459,14 @@ static VkSemaphore syncScene(const uint32_t frameIndex)
             if (undo())
                 semaphore = acquireImageCommand.semaphore;
         }
+        if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
+        {
+            onLayerChange(scene->layer);
+        }
         if (scene->dirt & SCENE_LAYER_BACKUP_BIT)
         {
             backupLayer();
             semaphore = acquireImageCommand.semaphore;
-        }
-        if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
-        {
-            onLayerChange(scene->layer);
         }
         if (scene->dirt & SCENE_PAINT_MODE_BIT)
         {
@@ -1723,7 +1723,7 @@ void r_InitRenderer(uint32_t texSize)
     assert(imageA.size > 0);
 
     l_Init(imageA.size); // eventually will move this out
-    u_InitUndo(imageB.size, 1, 8);
+    u_InitUndo(imageB.size, 4, 8);
     onLayerChange(0);
     
     if (copySwapToHost)
