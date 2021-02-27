@@ -51,7 +51,8 @@ static Scene_DirtMask dirt;
 
 static const Vec3 UP_VEC = {0, 1, 0};
 
-static Obdn_U_Widget* slider0;
+static Obdn_U_Widget* radiusSlider;
+static Obdn_U_Widget* opacitySlider;
 static Obdn_U_Widget* text;
 
 static void setViewerPivotByIntersection(void)
@@ -209,7 +210,12 @@ void g_Init(void)
 
     text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
     if (!parms.copySwapToHost)
-        slider0 = obdn_u_CreateSlider(0, 80, NULL);
+    {
+        radiusSlider = obdn_u_CreateSlider(40, 80, NULL);
+        obdn_u_CreateText(10, 60, "R: ", radiusSlider);
+        opacitySlider = obdn_u_CreateSlider(40, 120, NULL);
+        obdn_u_CreateText(10, 100, "O: ", opacitySlider);
+    }
 
     r_BindScene(&scene);
     u_BindScene(&scene);
@@ -292,8 +298,8 @@ void g_Update(void)
 {
     //assert(sizeof(struct Player) == sizeof(UboPlayer));
     //handleKeyMovement();
-    if (slider0)
-        g_SetBrushRadius(slider0->data.slider.sliderPos * 0.1); // TODO: find a better way
+    if (radiusSlider)
+        g_SetBrushRadius(radiusSlider->data.slider.sliderPos * 0.1); // TODO: find a better way
     //
     g_SetBrushPos(mousePos.x, mousePos.y);
     if (pivotChanged)
@@ -336,7 +342,10 @@ void g_SetBrushRadius(const float r)
 void g_CleanUp(void)
 {
     if (!parms.copySwapToHost)
-        obdn_u_DestroyWidget(slider0);
+    {
+        obdn_u_DestroyWidget(radiusSlider);
+        obdn_u_DestroyWidget(opacitySlider);
+    }
     obdn_u_DestroyWidget(text);
     obdn_i_Unsubscribe(g_Responder);
     memset(&scene, 0, sizeof(scene));
