@@ -19,5 +19,6 @@ void g_SetBrushPos(float x, float y);
 void g_SetPaintMode(PaintMode mode);
 void g_SetBrushColor(const float r, const float g, const float b);
 void g_SetBrushRadius(const float r);
+void g_SetBrushOpacity(float opacity);
 
 #endif /* end of include guard: G_GAME_H */

@@ -24,6 +24,7 @@ layout(set = 2, binding = 0) uniform Brush {
     float g;
     float b;
     int   mode;
+    float opacity;
 } brush;
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
@@ -45,7 +46,7 @@ void main()
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + jitter;
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
     vec2 brushPos = vec2(brush.x, brush.y);
-    brushPos = brushPos * 2.0 - 1.0;
+    brushPos = brushPos * 2.0 - 1.0; // map to -1, 1 range
     vec2 d = inUV * 2.0 - 1.0; //normalize to -1, 1 range
     d = d * brush.radius * 2.0; // map to -r to r
     const float dist = length(d);
@@ -77,8 +78,9 @@ void main()
     //vec4 color = vec4(brush.color[0], brush.color[1], brush.color[2], 1.0);
     //vec4 color = vec4(brush.col, 1.0);
     const float pressure = 1.0 - (dist / (brush.radius * 2.0));
-    const float value = smoothstep(0.0, 1, pressure);
-    vec4 color = vec4(brush.r, brush.g, brush.b, value);
+    float alpha = smoothstep(0.0, 1, pressure);
+    alpha *= brush.opacity;
+    vec4 color = vec4(brush.r, brush.g, brush.b, alpha);
 
     ivec2 texel = ivec2(prd.hitUv * vec2(imageSize(image)));
     //vec4 colorOrig = imageLoad(image, texel);

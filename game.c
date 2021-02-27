@@ -300,6 +300,8 @@ void g_Update(void)
     //handleKeyMovement();
     if (radiusSlider)
         g_SetBrushRadius(radiusSlider->data.slider.sliderPos * 0.1); // TODO: find a better way
+    if (opacitySlider)
+        g_SetBrushOpacity(opacitySlider->data.slider.sliderPos);
     //
     g_SetBrushPos(mousePos.x, mousePos.y);
     if (pivotChanged)
@@ -333,8 +335,9 @@ void g_SetBrushColor(const float r, const float g, const float b)
     dirt |= SCENE_BRUSH_BIT;
 }
 
-void g_SetBrushRadius(const float r)
+void g_SetBrushRadius(float r)
 {
+    if (r < 0.001) r = 0.001; // should not go to 0... may cause div by 0 in shader
     scene.brush_radius = r;
     dirt |= SCENE_BRUSH_BIT;
 }
@@ -383,5 +386,13 @@ void g_SetPaintMode(PaintMode mode)
 {
     scene.paint_mode = mode;
     dirt |= SCENE_PAINT_MODE_BIT;
+    dirt |= SCENE_BRUSH_BIT;
+}
+
+void g_SetBrushOpacity(float opacity)
+{
+    if (opacity < 0.0) opacity = 0.0;
+    if (opacity > 1.0) opacity = 1.0;
+    scene.brush_opacity = opacity;
     dirt |= SCENE_BRUSH_BIT;
 }

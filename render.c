@@ -33,6 +33,7 @@ typedef struct {
     float g;
     float b;
     int   mode;
+    float opacity;
 } UboBrush;
 
 typedef struct {
@@ -1426,6 +1427,7 @@ static void updateBrush(void)
     brush->radius = scene->brush_radius;
     brush->x = scene->brush_x;
     brush->y = scene->brush_y;
+    brush->opacity = scene->brush_opacity;
 }
 
 static void updatePaintMode(void)
