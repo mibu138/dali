@@ -23,10 +23,10 @@ static const Scene* scene;
 static uint8_t maxStacks;
 static uint8_t maxUndos;
 
-uint8_t   curStackIndex;
-uint8_t   stackNotUsedCounters[MAX_STACKS];
-L_LayerId layerCache[MAX_STACKS];
-UndoStack undoStacks[MAX_STACKS];
+static uint8_t   curStackIndex;
+static uint8_t   stackNotUsedCounters[MAX_STACKS];
+static L_LayerId layerCache[MAX_STACKS];
+static UndoStack undoStacks[MAX_STACKS];
 
 static void initStack(const uint8_t index, const uint32_t size)
 {

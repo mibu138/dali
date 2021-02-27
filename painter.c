@@ -32,11 +32,13 @@
 #define IMG_8K  IMG_4K * 2
 #define IMG_16K IMG_8K * 2
 
-#define IMG_SIZE IMG_16K
+#define IMG_SIZE IMG_4K
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes16k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
+
+extern Parms parms;
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
 {
@@ -136,7 +138,6 @@ void painter_ReloadPrim(Obdn_F_Primitive* fprim)
     r_ClearPrim();
 
     painter_LoadFprim(fprim);
-    //painter_StartLoop();
 }
 
 void painter_StartLoop(void)
@@ -209,11 +210,6 @@ void painter_LocalCleanUp(void)
     vkDeviceWaitIdle(device);
     g_CleanUp();
     r_CleanUp();
-}
-
-bool painter_ShouldRun(void)
-{
-    return gameState.shouldRun;
 }
 
 void painter_SetColor(const float r, const float g, const float b)

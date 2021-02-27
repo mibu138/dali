@@ -6,13 +6,7 @@
 #include <stdint.h>
 #include "render.h"
 
-typedef struct {
-    bool shouldRun;
-} G_GameState;
-
 struct Obdn_I_Event;
-
-extern G_GameState gameState;
 
 void g_Init(void);
 void g_CleanUp(void);

@@ -135,6 +135,7 @@ static L_LayerId curLayerId;
 
 static const Scene* scene;
 
+extern Parms parms;
 // swap to host stuff
 
 static bool            copySwapToHost;

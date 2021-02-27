@@ -40,21 +40,16 @@ static Mode  mode;
 
 Parms parms;
 
-// order matters here since we memcpy to a matching ubo
 static struct Player {
     Vec3 pos;
     Vec3 target;
     Vec3 pivot;
 } player;
 
-G_GameState gameState;
-
 static Scene          scene;
 static Scene_DirtMask dirt;
 
-bool firstFrame;
-
-const Vec3 UP_VEC = {0, 1, 0};
+static const Vec3 UP_VEC = {0, 1, 0};
 
 static Obdn_U_Widget* slider0;
 static Obdn_U_Widget* text;
@@ -86,11 +81,6 @@ static Mat4 generatePlayerView(void)
 {
     Mat4 m = m_LookAt(&player.pos, &player.target, &UP_VEC);
     return m_Invert4x4(&m);
-    //return m;
-}
-
-static void setPaintMode(PaintMode mode)
-{
 }
 
 static void setBrushActive(bool active)
@@ -98,7 +88,6 @@ static void setBrushActive(bool active)
     scene.brush_active = active;
     dirt |= SCENE_BRUSH_BIT;
 }
-
 
 static void handleMouseMovement(void)
 {
@@ -217,8 +206,6 @@ void g_Init(void)
     g_SetBrushRadius(0.01);
     mode = MODE_DO_NOTHING;
     setBrushActive(false);
-    gameState.shouldRun = true;
-    setPaintMode(PAINT_MODE_OVER);
 
     text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
     if (!parms.copySwapToHost)
@@ -241,11 +228,11 @@ bool g_Responder(const Obdn_I_Event *event)
             case OBDN_KEY_G: g_SetBrushColor(0, 1, 0); break;
             case OBDN_KEY_B: g_SetBrushColor(0, 0, 1); break;
             case OBDN_KEY_P: r_SavePaintImage(); break;
+            case OBDN_KEY_ESC: parms.shouldRun = false; break;
             case OBDN_KEY_J: decrementLayer(); break;
             case OBDN_KEY_K: incrementLayer(); break;
             case OBDN_KEY_L: l_CreateLayer(); break;
             case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
-            case OBDN_KEY_ESC: parms.shouldRun = false; gameState.shouldRun = false; break;
             case OBDN_KEY_C: r_ClearPaintImage(); break;
             case OBDN_KEY_I: break;
             default: return true;

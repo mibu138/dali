@@ -10,7 +10,6 @@ void painter_LoadFprim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_ReloadPrim(Obdn_F_Primitive* fprim); // frees fprim
 void painter_StartLoop(void);
 void painter_StopLoop(void);
-bool painter_ShouldRun(void);
 void painter_LocalCleanUp(void);
 void painter_ShutDown(void);
 void painter_SetColor(const float r, const float g, const float b);
