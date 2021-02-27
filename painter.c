@@ -32,7 +32,7 @@
 #define IMG_8K  IMG_4K * 2
 #define IMG_16K IMG_8K * 2
 
-#define IMG_SIZE IMG_4K
+#define IMG_SIZE IMG_16K
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));

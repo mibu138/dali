@@ -2,7 +2,7 @@ CC = gcc
 GLC = glslc
 
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
-LDFLAGS = -L/opt/hfs18.0/dsolib -L/home/michaelb/lib
+LDFLAGS = -L/opt/hfs18.6/dsolib -L/home/michaelb/lib
 INFLAGS = -I$(HOME)/dev
 LIBS = -lm -lcoal -lobsidian -lvulkan -lxcb -lxcb-keysyms -lfreetype
 GLFLAGS = --target-env=vulkan1.2
