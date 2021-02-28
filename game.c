@@ -53,6 +53,7 @@ static const Vec3 UP_VEC = {0, 1, 0};
 
 static Obdn_U_Widget* radiusSlider;
 static Obdn_U_Widget* opacitySlider;
+static Obdn_U_Widget* falloffSlider;
 static Obdn_U_Widget* text;
 
 static void setViewerPivotByIntersection(void)
@@ -215,6 +216,8 @@ void g_Init(void)
         obdn_u_CreateText(10, 60, "R: ", radiusSlider);
         opacitySlider = obdn_u_CreateSlider(40, 120, NULL);
         obdn_u_CreateText(10, 100, "O: ", opacitySlider);
+        falloffSlider = obdn_u_CreateSlider(40, 160, NULL);
+        obdn_u_CreateText(10, 140, "F: ", falloffSlider);
     }
 
     r_BindScene(&scene);
@@ -302,6 +305,8 @@ void g_Update(void)
         g_SetBrushRadius(radiusSlider->data.slider.sliderPos * 0.1); // TODO: find a better way
     if (opacitySlider)
         g_SetBrushOpacity(opacitySlider->data.slider.sliderPos);
+    if (falloffSlider)
+        g_SetBrushFallOff(falloffSlider->data.slider.sliderPos);
     //
     g_SetBrushPos(mousePos.x, mousePos.y);
     if (pivotChanged)
@@ -348,6 +353,7 @@ void g_CleanUp(void)
     {
         obdn_u_DestroyWidget(radiusSlider);
         obdn_u_DestroyWidget(opacitySlider);
+        obdn_u_DestroyWidget(falloffSlider);
     }
     obdn_u_DestroyWidget(text);
     obdn_i_Unsubscribe(g_Responder);
@@ -394,5 +400,13 @@ void g_SetBrushOpacity(float opacity)
     if (opacity < 0.0) opacity = 0.0;
     if (opacity > 1.0) opacity = 1.0;
     scene.brush_opacity = opacity;
+    dirt |= SCENE_BRUSH_BIT;
+}
+
+void g_SetBrushFallOff(float falloff)
+{
+    if (falloff < 0.0) falloff = 0.0;
+    if (falloff > 1.0) falloff = 1.0;
+    scene.brush_falloff = falloff;
     dirt |= SCENE_BRUSH_BIT;
 }

@@ -12,6 +12,8 @@ layout(set = 0, binding = 0) uniform Brush {
     float g;
     float b;
     int   mode;
+    float opacity;
+    float anti_falloff;
 } brush;
 
 void main()

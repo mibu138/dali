@@ -41,6 +41,7 @@ typedef struct {
     float          brush_b;
     bool           brush_active;
     float          brush_opacity;
+    float          brush_falloff;
     PaintMode      paint_mode;
     Scene_DirtMask dirt;
     L_LayerId      layer;
