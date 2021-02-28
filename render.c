@@ -137,6 +137,8 @@ static L_LayerId curLayerId;
 
 static const Scene* scene;
 
+static bool brushActive;
+
 extern Parms parms;
 // swap to host stuff
 
@@ -1424,6 +1426,9 @@ static void updateBrush(void)
         updateBrushColor(scene->brush_r, scene->brush_g, scene->brush_b);
     else
         updateBrushColor(1, 1, 1); // must be white for erase to work
+
+    brushActive = scene->brush_active;
+
     brush->mode = scene->brush_active ? 0 : 1; // active is 0 for some reason
     brush->radius = scene->brush_radius;
     brush->x = scene->brush_x;
@@ -1681,7 +1686,10 @@ static void updateRenderCommands(const int8_t frameIndex)
             0, 0, NULL, 
             0, NULL, 1, &imgBarrier1);
 
-    paint(cmdBuf);
+    if (brushActive)
+    {
+        paint(cmdBuf);
+    }
 
     comp(cmdBuf);
 
