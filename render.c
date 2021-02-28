@@ -32,7 +32,6 @@ typedef struct {
     float r;
     float g;
     float b;
-    int   mode;
     float opacity;
     float anti_falloff;
 } UboBrush;
@@ -681,7 +680,6 @@ static void initNonMeshDescriptors(void)
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
     memset(brush, 0, sizeof(UboBrush));
     brush->radius = 0.01;
-    brush->mode = 1;
 
     selectionRegion = obdn_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 
@@ -1429,7 +1427,6 @@ static void updateBrush(void)
 
     brushActive = scene->brush_active;
 
-    brush->mode = scene->brush_active ? 0 : 1; // active is 0 for some reason
     brush->radius = scene->brush_radius;
     brush->x = scene->brush_x;
     brush->y = scene->brush_y;

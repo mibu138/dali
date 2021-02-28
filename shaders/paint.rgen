@@ -4,6 +4,7 @@
 
 #include "raycommon.glsl"
 #include "common.glsl"
+#include "brush.glsl"
 
 layout(binding = 0, set = 0) uniform Camera {
     mat4 model;
@@ -16,17 +17,9 @@ layout(binding = 0, set = 0) uniform Camera {
 layout(binding = 0, set = 1) uniform accelerationStructureEXT topLevelAS;
 layout(binding = 1, set = 1, rgba32f) uniform image2D image;
 
-layout(set = 2, binding = 0) uniform Brush {
-    float x;
-    float y;
-    float radius;
-    float r;
-    float g;
-    float b;
-    int   mode;
-    float opacity;
-    float anti_falloff;
-} brush;
+layout(set = 2, binding = 0) uniform Block {
+    Brush brush;
+};
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
@@ -41,8 +34,6 @@ float rand(vec2 co){
 
 void main() 
 {
-    if (brush.mode > 0) // not painting
-        return;
     const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy * seed.x), rand(gl_LaunchIDEXT.xy * seed.y * 41.45234));
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + jitter;
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
@@ -51,8 +42,6 @@ void main()
     vec2 d = inUV * 2.0 - 1.0; //normalize to -1, 1 range
     d = d * brush.radius; // map to -r to r
     const float dist = length(d);
-    if (dist > brush.radius)
-        return;
     d += brushPos;
 
     vec4 origin = cam.viewInv * vec4(0, 0, 0, 1);

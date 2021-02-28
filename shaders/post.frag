@@ -1,20 +1,13 @@
 #version 460
+#include "brush.glsl"
 
 layout(location = 0) in vec2 uv;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 0) uniform Brush {
-    float x;
-    float y;
-    float radius;
-    float r;
-    float g;
-    float b;
-    int   mode;
-    float opacity;
-    float anti_falloff;
-} brush;
+layout(set = 0, binding = 0) uniform Block {
+    Brush brush;
+};
 
 void main()
 {

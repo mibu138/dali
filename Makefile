@@ -25,7 +25,8 @@ DEPS =  \
 		common.h \
 		shaders/common.glsl \
 		shaders/selcommon.glsl \
-		shaders/raycommon.glsl
+		shaders/raycommon.glsl \
+		shaders/brush.glsl
 
 OBJS =  \
 		$(O)/game.o \
