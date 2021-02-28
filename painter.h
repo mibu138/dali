@@ -8,7 +8,7 @@
 #define IMG_8K  IMG_4K * 2
 #define IMG_16K IMG_8K * 2
 
-#define IMG_SIZE IMG_8K
+#define IMG_SIZE IMG_16K
 
 void painter_Init(bool houdiniMode);
 void painter_LocalInit(uint32_t texSize);
