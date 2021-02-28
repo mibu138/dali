@@ -28,12 +28,6 @@
 #define DEF_WINDOW_WIDTH  1300
 #define DEF_WINDOW_HEIGHT 1300
 
-#define IMG_4K  4096
-#define IMG_8K  IMG_4K * 2
-#define IMG_16K IMG_8K * 2
-
-#define IMG_SIZE IMG_4K
-
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes16k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
@@ -142,7 +136,7 @@ void painter_ReloadPrim(Obdn_F_Primitive* fprim)
 
 void painter_StartLoop(void)
 {
-    Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 0, 0);
+    Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 1, 1);
 
     parms.shouldRun = true;
 
@@ -219,6 +213,15 @@ void painter_SetColor(const float r, const float g, const float b)
 
 void painter_SetRadius(const float r)
 {
-    g_SetBrushRadius(r);
+    g_SetBrushRadius(r * 0.1);
 }
 
+void painter_SetOpacity(const float o)
+{
+    g_SetBrushOpacity(o);
+}
+
+void painter_SetFallOff(const float f)
+{
+    g_SetBrushFallOff(f);
+}

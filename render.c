@@ -1813,6 +1813,7 @@ void r_Render(void)
     }
     else   
         obdn_r_PresentFrame(waitSemaphore);
+    obdn_v_WaitForFenceNoReset(&renderCommands[i].fence);
 }
 
 int r_GetSelectionPos(Vec3* v)
