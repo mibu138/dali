@@ -71,7 +71,6 @@ void main()
     vec4 color = vec4(brush.r, brush.g, brush.b, alpha);
 
     ivec2 texel = ivec2(prd.hitUv * vec2(imageSize(image)));
-    //vec4 colorOrig = imageLoad(image, texel);
-    //color = over(color, colorOrig);
+
     imageStore(image, texel, color);
 }
