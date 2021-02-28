@@ -139,6 +139,8 @@ static L_LayerId curLayerId;
 static const Scene* scene;
 
 static bool brushActive;
+static Vec2 prevBrushPos;
+static Vec2 brushPos;
 
 extern Parms parms;
 // swap to host stuff
@@ -158,7 +160,6 @@ static void updatePrimDescriptors(void);
 static void initNonMeshDescriptors(void);
 static void initDescSetsAndPipeLayouts(void);
 static void rayTraceSelect(const VkCommandBuffer cmdBuf);
-static void paint(const VkCommandBuffer cmdBuf);
 static void rasterize(const VkCommandBuffer cmdBuf);
 static void cleanUpSwapchainDependent(void);
 static void updateRenderCommands(const int8_t frameIndex);
@@ -621,7 +622,7 @@ static void initDescSetsAndPipeLayouts(void)
     VkPushConstantRange pcRange = {
         .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
         .offset     = 0,
-        .size       = sizeof(float) * 2
+        .size       = sizeof(float) * 4
     }; 
 
     const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
@@ -1487,6 +1488,11 @@ static void updateBrush(void)
 
     brushActive = scene->brush_active;
 
+    prevBrushPos.x = brushPos.x;
+    prevBrushPos.y = brushPos.y;
+    brushPos.x = scene->brush_x;
+    brushPos.y = scene->brush_y;
+
     brush->radius = scene->brush_radius;
     brush->x = scene->brush_x;
     brush->y = scene->brush_y;
@@ -1559,16 +1565,16 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
             1, 1, 1);
 }
 
-static void paint(const VkCommandBuffer cmdBuf)
+static void paint(const VkCommandBuffer cmdBuf, const float x, const float y)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_PAINT]);
 
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
             pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
 
-    float jitterSeed[2] = {coal_Rand(), coal_Rand()};
+    float pc[4] = {coal_Rand(), coal_Rand(), x, y};
 
-    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(jitterSeed), &jitterSeed);
+    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(pc), pc);
 
     vkCmdTraceRaysKHR(cmdBuf, 
             &shaderBindingTables[PIPELINE_PAINT].raygenTable,
@@ -1761,10 +1767,25 @@ static void updateRenderCommands(const int8_t frameIndex)
 
     if (brushActive)
     {
-        paint(cmdBuf);
-    }
 
-    applyPaint(cmdBuf);
+        for (int i = 0; i < 5; i++)
+        {
+            float t = (float)i / 5.0;
+            float xstep = t * (brushPos.x - prevBrushPos.x);
+            float ystep = t * (brushPos.y - prevBrushPos.y);
+            float x = prevBrushPos.x + xstep;
+            float y = prevBrushPos.y + ystep;
+
+            paint(cmdBuf, x, y);
+
+            applyPaint(cmdBuf);
+
+            vkCmdClearColorImage(cmdBuf, imageA.handle, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &imageRange);
+        }
+    }
+    else
+        applyPaint(cmdBuf);
+
     comp(cmdBuf);
 
     rasterize(cmdBuf);

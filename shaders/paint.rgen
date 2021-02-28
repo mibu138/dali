@@ -23,10 +23,12 @@ layout(set = 2, binding = 0) uniform Block {
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
-layout(push_constant) uniform Seed {
-    float x;
-    float y;
-} seed;
+layout(push_constant) uniform PC {
+    float seedx;
+    float seedy;
+    float brushx;
+    float brushy;
+} pc;
 
 float rand(vec2 co){
     return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453) - 0.5;
@@ -34,10 +36,10 @@ float rand(vec2 co){
 
 void main() 
 {
-    const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy * seed.x), rand(gl_LaunchIDEXT.xy * seed.y * 41.45234));
+    const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy * pc.seedx), rand(gl_LaunchIDEXT.xy * pc.seedy * 41.45234));
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + jitter;
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
-    vec2 brushPos = vec2(brush.x, brush.y);
+    vec2 brushPos = vec2(pc.brushx, pc.brushy);
     brushPos = brushPos * 2.0 - 1.0; // map to -1, 1 range
     vec2 d = inUV * 2.0 - 1.0; //normalize to -1, 1 range
     d = d * brush.radius; // map to -r to r
