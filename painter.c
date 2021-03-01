@@ -181,7 +181,6 @@ void painter_StopLoop(void)
 void painter_ShutDown(void)
 {
     printf("Painter shutdown\n");
-    painter_LocalCleanUp();
     obdn_i_CleanUp();
     obdn_r_CleanUp();
     if (!parms.copySwapToHost)

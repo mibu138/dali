@@ -13,6 +13,7 @@ int main(int argc, char *argv[])
     obdn_f_FreePrimitive(&fprim);
     r_LoadPrim(m);
     painter_StartLoop();
+    painter_LocalCleanUp();
     painter_ShutDown();
     return 0;
 }
