@@ -6,7 +6,7 @@
 
 int main(int argc, char *argv[])
 {
-    painter_Init(IMG_4K, false);
+    painter_Init(IMG_16K, false);
     Obdn_F_Primitive fprim;
     obdn_f_ReadPrimitive("data/flip-uv.tnt", &fprim);
     Obdn_R_Primitive m = obdn_f_CreateRPrimFromFPrim(&fprim);

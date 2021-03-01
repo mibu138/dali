@@ -8,6 +8,7 @@
 #include <memory.h>
 #include <assert.h>
 #include <string.h>
+#include <obsidian/private.h>
 #include <obsidian/r_render.h>
 #include <obsidian/v_video.h>
 #include <obsidian/t_def.h>
@@ -1768,10 +1769,12 @@ static void updateRenderCommands(const int8_t frameIndex)
 
     if (brushActive)
     {
-
-        for (int i = 0; i < 5; i++)
+        static const float unit = 0.005; //in screen space
+        const float brushDist = m_Distance(brushPos, prevBrushPos);
+        const int splatCount = MAX(brushDist / unit, 1);
+        for (int i = 0; i < splatCount; i++)
         {
-            float t = (float)i / 5.0;
+            float t = (float)i / splatCount;
             float xstep = t * (brushPos.x - prevBrushPos.x);
             float ystep = t * (brushPos.y - prevBrushPos.y);
             float x = prevBrushPos.x + xstep;
