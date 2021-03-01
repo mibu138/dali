@@ -2020,12 +2020,12 @@ void r_CleanUp(void)
     obdn_v_FreeImage(&imageB);
     obdn_v_FreeImage(&imageC);
     obdn_v_FreeImage(&imageD);
-    vkDestroyDescriptorPool(device, description.descriptorPool, NULL);
     for (int i = 0; i < description.descriptorSetCount; i++) 
     {
         if (descriptorSetLayouts[i])
             vkDestroyDescriptorSetLayout(device, descriptorSetLayouts[i], NULL);
     }
+    obdn_r_DestroyDescription(&description);
     memset(&description, 0, sizeof(description));
     vkDestroyRenderPass(device, swapchainRenderPass, NULL);
     vkDestroyRenderPass(device, postRenderPass, NULL);
