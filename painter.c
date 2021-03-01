@@ -64,8 +64,9 @@ static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
     .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
 }
 
-void painter_Init(bool houdiniMode)
+void painter_Init(uint32_t texSize, bool houdiniMode)
 {
+    assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K);
     Obdn_V_Config config = {};
     config.rayTraceEnabled = true;
 #ifndef NDEBUG
@@ -81,35 +82,25 @@ void painter_Init(bool houdiniMode)
     else
     {
         // won't matter really. these will get set by the renderer on first update.
-        OBDN_WINDOW_WIDTH = 1000;
+        OBDN_WINDOW_WIDTH  = 1000;
         OBDN_WINDOW_HEIGHT = 1000;
     }
     const char* exnames[] = {
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
-#if   IMG_SIZE == IMG_4K
-    getMemorySizes4k(&config.memorySizes);
-#elif IMG_SIZE == IMG_8K
-    getMemorySizes8k(&config.memorySizes);
-#elif IMG_SIZE == IMG_16K
-    getMemorySizes16k(&config.memorySizes);
-#endif
+    switch (texSize)
+    {
+        case IMG_4K:  getMemorySizes4k(&config.memorySizes);  break;
+        case IMG_8K:  getMemorySizes8k(&config.memorySizes);  break;
+        case IMG_16K: getMemorySizes16k(&config.memorySizes); break;
+    }
     obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(xcbWindow.connection, xcbWindow.window);
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
-    if (!parms.copySwapToHost)
-    {
-#if   IMG_SIZE == IMG_4K
-        painter_LocalInit(IMG_4K);
-#elif IMG_SIZE == IMG_8K
-        painter_LocalInit(IMG_8K);
-#elif IMG_SIZE == IMG_16K
-        painter_LocalInit(IMG_16K);
-#endif
-    }
+    painter_LocalInit(texSize);
 }
 
 void painter_LocalInit(uint32_t texSize)
@@ -172,7 +163,7 @@ void painter_StartLoop(void)
         vkDeviceWaitIdle(device);
 
         painter_ShutDown();
-        painter_Init(parms.copySwapToHost);
+        painter_Init(IMG_4K, parms.copySwapToHost); // note: will not match 8k or 16k
         Obdn_R_Primitive cube = obdn_r_CreateCubePrim(true);
         r_LoadPrim(cube);
         printf("RESTART!\n");

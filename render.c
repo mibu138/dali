@@ -19,6 +19,7 @@
 #include <obsidian/r_renderpass.h>
 #include <vulkan/vulkan_core.h>
 #include "undo.h"
+#include "painter.h"
 #include <stdlib.h>
 
 #include <pthread.h>
@@ -1792,10 +1793,6 @@ static void updateRenderCommands(const int8_t frameIndex)
 
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
-
-#define IMG_4K  4096
-#define IMG_8K  IMG_4K * 2
-#define IMG_16K IMG_8K * 2
 
 void r_InitRenderer(const uint32_t texSize)
 {

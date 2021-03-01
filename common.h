@@ -4,7 +4,6 @@
 #include <stdbool.h>
 
 typedef struct {
-    bool   renderNeedsUpdate;
     bool   shouldRun;
     bool   reload;
     bool   restart;
