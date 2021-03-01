@@ -1799,6 +1799,7 @@ void r_InitRenderer(const uint32_t texSize)
     assert(texSize > 0);
     assert(texSize % 256 == 0);
     assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K); // for now
+
     textureSize = texSize;
     curLayerId = 0;
     graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);

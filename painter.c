@@ -100,7 +100,8 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
     obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
-    painter_LocalInit(texSize);
+    if (!parms.copySwapToHost)
+        painter_LocalInit(texSize);
 }
 
 void painter_LocalInit(uint32_t texSize)
