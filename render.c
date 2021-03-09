@@ -188,7 +188,7 @@ static void initPaintImages(void)
             VK_IMAGE_ASPECT_COLOR_BIT,
             VK_SAMPLE_COUNT_1_BIT,
             1,
-            VK_FILTER_LINEAR, 
+            VK_FILTER_NEAREST, 
             OBDN_V_MEMORY_DEVICE_TYPE);
 
     imageB = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
@@ -1769,9 +1769,9 @@ static void updateRenderCommands(const int8_t frameIndex)
 
     if (brushActive)
     {
-        static const float unit = 0.005; //in screen space
+        static const float unit = 0.0025; //in screen space
         const float brushDist = m_Distance(brushPos, prevBrushPos);
-        const int splatCount = MAX(brushDist / unit, 1);
+        const int splatCount = MIN(MAX(brushDist / unit, 1), 8);
         for (int i = 0; i < splatCount; i++)
         {
             float t = (float)i / splatCount;

@@ -22,3 +22,5 @@ for the price of 1 color + alpha. So solid fill color + mask will be very useful
 Tue 23 Feb 2021 09:27:15 AM EST
 Should remove VLAs from code. It will force me to examine the arrays after which i may find the release build segfault bug, and they
 are apparently bad for performance anyway.
+
+

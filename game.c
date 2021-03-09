@@ -210,15 +210,15 @@ void g_Init(void)
     setBrushActive(false);
 
     text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
-    if (!parms.copySwapToHost)
-    {
+    //if (!parms.copySwapToHost)
+    //{
         radiusSlider = obdn_u_CreateSlider(40, 80, NULL);
         obdn_u_CreateText(10, 60, "R: ", radiusSlider);
         opacitySlider = obdn_u_CreateSlider(40, 120, NULL);
         obdn_u_CreateText(10, 100, "O: ", opacitySlider);
         falloffSlider = obdn_u_CreateSlider(40, 160, NULL);
         obdn_u_CreateText(10, 140, "F: ", falloffSlider);
-    }
+    //}
 
     r_BindScene(&scene);
     u_BindScene(&scene);
@@ -349,12 +349,12 @@ void g_SetBrushRadius(float r)
 
 void g_CleanUp(void)
 {
-    if (!parms.copySwapToHost)
-    {
+    //if (!parms.copySwapToHost)
+    //{
         obdn_u_DestroyWidget(radiusSlider);
         obdn_u_DestroyWidget(opacitySlider);
         obdn_u_DestroyWidget(falloffSlider);
-    }
+    //}
     obdn_u_DestroyWidget(text);
     obdn_i_Unsubscribe(g_Responder);
     memset(&scene, 0, sizeof(scene));
