@@ -17,7 +17,7 @@
 #include <stdbool.h>
 #include <obsidian/v_video.h>
 #include <obsidian/d_display.h>
-#include <obsidian/r_render.h>
+#include <obsidian/v_swapchain.h>
 #include <obsidian/r_raytrace.h>
 #include <obsidian/t_utils.h>
 #include <obsidian/i_input.h>
@@ -97,7 +97,7 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
     obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
     if (!parms.copySwapToHost)
         obdn_v_InitSurfaceXcb(xcbWindow.connection, xcbWindow.window);
-    obdn_r_Init(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
+    obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     if (!parms.copySwapToHost)
@@ -182,7 +182,7 @@ void painter_ShutDown(void)
 {
     printf("Painter shutdown\n");
     obdn_i_CleanUp();
-    obdn_r_CleanUp();
+    obdn_v_CleanUpSwapchain();
     if (!parms.copySwapToHost)
         obdn_d_CleanUp();
     obdn_u_CleanUp();

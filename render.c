@@ -9,7 +9,7 @@
 #include <assert.h>
 #include <string.h>
 #include <obsidian/private.h>
-#include <obsidian/r_render.h>
+#include <obsidian/v_swapchain.h>
 #include <obsidian/v_video.h>
 #include <obsidian/t_def.h>
 #include <obsidian/t_utils.h>
@@ -240,11 +240,11 @@ static void initRenderPasses(void)
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, 
             VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,
-            obdn_r_GetSwapFormat(), depthFormat, &swapchainRenderPass);
+            obdn_v_GetSwapFormat(), depthFormat, &swapchainRenderPass);
 
     obdn_r_CreateRenderPass_Color(
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_ATTACHMENT_LOAD_OP_LOAD, obdn_r_GetSwapFormat(), &postRenderPass);
+            VK_ATTACHMENT_LOAD_OP_LOAD, obdn_v_GetSwapFormat(), &postRenderPass);
 
     // apply paint renderpass
     {
@@ -864,6 +864,7 @@ static void initRasterPipelines(void)
         .vertexDescription = obdn_r_GetVertexDescription(3, attrSizes),
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .viewportDim = {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT},
         .vertShader = SPVDIR"/raster-vert.spv", 
         .fragShader = SPVDIR"/raster-frag.spv"
     },{
@@ -873,6 +874,7 @@ static void initRasterPipelines(void)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .frontFace   = VK_FRONT_FACE_CLOCKWISE,
         .blendMode   = OBDN_R_BLEND_MODE_OVER,
+        .viewportDim = {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT},
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/post-frag.spv"
     }};
@@ -1002,7 +1004,7 @@ static void initSwapchainDependentFramebuffers(void)
 {
     for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
-        const Obdn_R_Frame* frame = obdn_r_GetFrame(i);
+        const Obdn_R_Frame* frame = obdn_v_GetFrame(i);
 
         const VkImageView offscreenAttachments[] = {frame->view, depthAttachment.view};
 
@@ -1352,7 +1354,7 @@ static void onRecreateSwapchain(void)
 
     if (copySwapToHost)
     {
-        const uint64_t size = obdn_r_GetFrame(obdn_r_GetCurrentFrameIndex())->size;
+        const uint64_t size = obdn_v_GetFrame(obdn_v_GetCurrentFrameIndex())->size;
         swapHostBufferColor = obdn_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     }
@@ -1528,7 +1530,7 @@ static VkSemaphore syncScene(const uint32_t frameIndex)
         {
             OBDN_WINDOW_WIDTH = scene->window_width;
             OBDN_WINDOW_HEIGHT = scene->window_height;
-            obdn_r_RecreateSwapchain();
+            obdn_v_RecreateSwapchain();
         }
         if (scene->dirt & SCENE_UNDO_BIT)
         {
@@ -1676,7 +1678,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
             .pClearValues = clears,
             .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
             .renderPass =  swapchainRenderPass,
-            .framebuffer = swapchainFrameBuffers[obdn_r_GetCurrentFrameIndex()]
+            .framebuffer = swapchainFrameBuffers[obdn_v_GetCurrentFrameIndex()]
         };
 
         vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
@@ -1692,7 +1694,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
             .pClearValues = &clearValueColor,
             .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
             .renderPass =  postRenderPass,
-            .framebuffer = postFrameBuffers[obdn_r_GetCurrentFrameIndex()]
+            .framebuffer = postFrameBuffers[obdn_v_GetCurrentFrameIndex()]
         };
 
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_POST]);
@@ -1833,7 +1835,7 @@ void r_InitRenderer(const uint32_t texSize)
     initSwapchainDependentFramebuffers();
     initNonSwapchainDependentFramebuffers();
 
-    obdn_r_RegisterSwapchainRecreationFn(onRecreateSwapchain);
+    obdn_v_RegisterSwapchainRecreationFn(onRecreateSwapchain);
 
     assert(imageA.size > 0);
 
@@ -1851,7 +1853,7 @@ void r_InitRenderer(const uint32_t texSize)
     
     if (copySwapToHost)
     {
-        VkDeviceSize swapImageSize = obdn_r_GetFrame(0)->size;
+        VkDeviceSize swapImageSize = obdn_v_GetFrame(0)->size;
         swapHostBufferColor = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
@@ -1865,7 +1867,8 @@ void r_InitRenderer(const uint32_t texSize)
 
 void r_Render(void)
 {
-    uint32_t i = obdn_r_RequestFrame();
+    Obdn_Mask dummyMask;
+    uint32_t i = obdn_v_RequestFrame(&dummyMask);
 
     VkSemaphore waitSemaphore = syncScene(i);
     obdn_v_WaitForFence(&renderCommands[i].fence);
@@ -1893,7 +1896,7 @@ void r_Render(void)
             obdn_v_ResetCommand(&copyToHostCommand);
             obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
 
-            const Image* swapImage = obdn_r_GetFrame(i);
+            const Image* swapImage = obdn_v_GetFrame(i);
 
             assert(swapImage->size == swapHostBufferColor.size);
 
@@ -1911,7 +1914,7 @@ void r_Render(void)
         }
     }
     else   
-        obdn_r_PresentFrame(waitSemaphore);
+        obdn_v_PresentFrame(waitSemaphore);
     obdn_v_WaitForFenceNoReset(&renderCommands[i].fence);
 }
 
@@ -1998,7 +2001,7 @@ void r_ClearPaintImage(void)
 void r_CleanUp(void)
 {
     cleanUpSwapchainDependent();
-    obdn_r_UnregisterSwapchainRecreateFn(onRecreateSwapchain);
+    obdn_v_UnregisterSwapchainRecreateFn(onRecreateSwapchain);
     for (int i = PIPELINE_COMP_1; i < G_PIPELINE_COUNT; i++)  // first 2 handles in swapcleanup
     {
         vkDestroyPipeline(device, graphicsPipelines[i], NULL);
@@ -2072,8 +2075,8 @@ void r_GetColorDepthExternal(uint32_t* width, uint32_t* height, uint32_t* elemen
     *height = OBDN_WINDOW_HEIGHT;
     *elementSize = 4;
 
-    uint32_t frameId = obdn_r_GetCurrentFrameIndex();
-    *colorOffset = obdn_r_GetFrame(frameId)->offset;
+    uint32_t frameId = obdn_v_GetCurrentFrameIndex();
+    *colorOffset = obdn_v_GetFrame(frameId)->offset;
     *depthOffset = depthAttachment.offset;
 }
 
