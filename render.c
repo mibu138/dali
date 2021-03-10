@@ -23,28 +23,11 @@
 #include "painter.h"
 #include <stdlib.h>
 
+#include "ubo-shared.h"
+
 #include <pthread.h>
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
-
-typedef struct {
-    float x;
-    float y;
-    float radius;
-    float r;
-    float g;
-    float b;
-    float opacity;
-    float anti_falloff;
-} UboBrush;
-
-typedef struct {
-    Mat4 model;
-    Mat4 view;
-    Mat4 proj;
-    Mat4 viewInv;
-    Mat4 projInv;
-} UboMatrices;
 
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;
@@ -93,8 +76,6 @@ static Obdn_R_Primitive     renderPrim;
 
 static VkPipelineLayout           pipelineLayouts[OBDN_MAX_PIPELINES];
 static VkPipeline                 graphicsPipelines[G_PIPELINE_COUNT];
-static VkPipeline                 raytracePipelines[RT_PIPELINE_COUNT];
-static Obdn_R_ShaderBindingTable  shaderBindingTables[RT_PIPELINE_COUNT];
 
 static VkDescriptorSetLayout descriptorSetLayouts[OBDN_MAX_DESCRIPTOR_SETS];
 static Obdn_R_Description   description;
@@ -102,47 +83,18 @@ static Obdn_R_Description   description;
 static Obdn_V_Image   depthAttachment;
 
 static uint32_t graphicsQueueFamilyIndex;
-static uint32_t transferQueueFamilyIndex;
 
-static uint32_t textureSize = 0x1000; // 0x1000 = 4096
+static Command renderCommand;
 
-static Command releaseImageCommand;
-static Command transferImageCommand;
-static Command acquireImageCommand;
-
-static Command renderCommands[OBDN_FRAME_COUNT];
-
-static Image   imageA; // will use for brush and then as final frambuffer target
-static Image   imageB;
-static Image   imageC; // primarily background layers
-static Image   imageD; // primarily foreground layers
-
-static VkFramebuffer   applyPaintFrameBuffer;
-static VkFramebuffer   compositeFrameBuffer;
-static VkFramebuffer   backgroundFrameBuffer;
-static VkFramebuffer   foregroundFrameBuffer;
 static VkFramebuffer   swapchainFrameBuffers[OBDN_FRAME_COUNT];
 static VkFramebuffer   postFrameBuffers[OBDN_FRAME_COUNT];
 
 static const VkFormat depthFormat   = VK_FORMAT_D32_SFLOAT;
-static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-static VkRenderPass singleCompositeRenderPass;
-static VkRenderPass applyPaintRenderPass;
-static VkRenderPass compositeRenderPass;
 static VkRenderPass swapchainRenderPass;
 static VkRenderPass postRenderPass;
 
-static Obdn_R_AccelerationStructure bottomLevelAS;
-static Obdn_R_AccelerationStructure topLevelAS;
-
-static L_LayerId curLayerId;
-
 static const Scene* scene;
-
-static bool brushActive;
-static Vec2 prevBrushPos;
-static Vec2 brushPos;
 
 extern Parms parms;
 // swap to host stuff
@@ -178,60 +130,6 @@ static void initOffscreenAttachments(void)
             VK_SAMPLE_COUNT_1_BIT,
             1,
             memType);
-}
-
-static void initPaintImages(void)
-{
-    imageA = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
-            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_SAMPLE_COUNT_1_BIT,
-            1,
-            VK_FILTER_NEAREST, 
-            OBDN_V_MEMORY_DEVICE_TYPE);
-
-    imageB = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
-            VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
-            VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_SAMPLE_COUNT_1_BIT,
-            1,
-            VK_FILTER_LINEAR, 
-            OBDN_V_MEMORY_DEVICE_TYPE);
-
-    imageC = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
-            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_SAMPLE_COUNT_1_BIT,
-            1,
-            VK_FILTER_LINEAR, 
-            OBDN_V_MEMORY_DEVICE_TYPE);
-    
-    imageD = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
-            VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
-            VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
-            VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_SAMPLE_COUNT_1_BIT,
-            1,
-            VK_FILTER_LINEAR, 
-            OBDN_V_MEMORY_DEVICE_TYPE);
-
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageB);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageC);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageD);
-
-    obdn_v_ClearColorImage(&imageA);
-    obdn_v_ClearColorImage(&imageB);
-    obdn_v_ClearColorImage(&imageC);
-    obdn_v_ClearColorImage(&imageD);
-
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageA);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageB);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageC);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageD);
 }
 
 static void initRenderPasses(void)
@@ -555,64 +453,18 @@ static void initDescSetsAndPipeLayouts(void)
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            },{ // attrib buffer
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{ // index buffer
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
+                .stageFlags = VK_SHADER_STAGE_VERTEX_BIT
             },{ // paint image
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
                 .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
-            }}
-        },{ // ray trace
-            .bindingCount = 4,
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            },{ // uv buffer
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
             }}
         },{ // post
             .bindingCount = 1,
             .bindings = {{
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            }}
-        },{ // comp 
-            .bindingCount = 4,
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT
             }}
         }
     };
@@ -621,26 +473,9 @@ static void initDescSetsAndPipeLayouts(void)
 
     obdn_r_CreateDescriptorSets(OBDN_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
 
-    VkPushConstantRange pcRange = {
-        .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
-        .offset     = 0,
-        .size       = sizeof(float) * 4
-    }; 
-
     const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
-        .descriptorSetCount = 1, 
+        .descriptorSetCount = 2, 
         .descriptorSetLayouts = descriptorSetLayouts,
-    },{
-        .descriptorSetCount = 3, 
-        .descriptorSetLayouts = descriptorSetLayouts,
-        .pushConstantCount = 1,
-        .pushConstantsRanges = &pcRange
-    },{
-        .descriptorSetCount = 1, 
-        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_POST]
-    },{
-        .descriptorSetCount = 1, 
-        .descriptorSetLayouts = &descriptorSetLayouts[DESC_SET_COMP]
     }};
 
     obdn_r_CreatePipelineLayouts(OBDN_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, pipelineLayouts);
@@ -720,61 +555,10 @@ static void initNonMeshDescriptors(void)
     matrices->viewInv = m_Ident_Mat4();
     matrices->projInv = m_Ident_Mat4();
 
-    brushRegion = obdn_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
-    UboBrush* brush = (UboBrush*)brushRegion.hostData;
-    memset(brush, 0, sizeof(UboBrush));
-    brush->radius = 0.01;
-
-    selectionRegion = obdn_v_RequestBufferRegion(sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
-
-
     VkDescriptorBufferInfo uniformInfoMatrices = {
         .range  = matrixRegion.size,
         .offset = matrixRegion.offset,
         .buffer = matrixRegion.buffer,
-    };
-
-    VkDescriptorBufferInfo uniformInfoBrush = {
-        .range  = brushRegion.size,
-        .offset = brushRegion.offset,
-        .buffer = brushRegion.buffer,
-    };
-
-    VkDescriptorBufferInfo storageBufInfoSelection= {
-        .range  = selectionRegion.size,
-        .offset = selectionRegion.offset,
-        .buffer = selectionRegion.buffer,
-    };
-
-    VkDescriptorImageInfo imageInfoAStorage = {
-        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .imageView   = imageA.view,
-        .sampler     = imageA.sampler
-    };
-
-    VkDescriptorImageInfo imageInfoA = {
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageA.view,
-        .sampler     = imageA.sampler
-    };
-
-    VkDescriptorImageInfo imageInfoB = {
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageB.view,
-        .sampler     = imageB.sampler
-    };
-
-    VkDescriptorImageInfo imageInfoC = {
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageC.view,
-        .sampler     = imageC.sampler
-    };
-
-    VkDescriptorImageInfo imageInfoD = {
-        .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageD.view,
-        .sampler     = imageD.sampler
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -785,70 +569,6 @@ static void initNonMeshDescriptors(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &uniformInfoMatrices
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_RASTER],
-            .dstBinding = 3,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-            .pImageInfo = &imageInfoA
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_RAYTRACE],
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-            .pImageInfo = &imageInfoAStorage
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_RAYTRACE],
-            .dstBinding = 2,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo = &storageBufInfoSelection
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_POST],
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-            .pBufferInfo = &uniformInfoBrush,
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
-            .dstBinding = 0,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-            .pImageInfo = &imageInfoA 
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
-            .dstBinding = 1,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-            .pImageInfo = &imageInfoC
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
-            .dstBinding = 2,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-            .pImageInfo = &imageInfoB
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
-            .dstBinding = 3,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-            .pImageInfo = &imageInfoD
     }};
 
     vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
@@ -880,116 +600,6 @@ static void initRasterPipelines(void)
     }};
 
     obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
-}
-
-static void initRayTracePipelinesAndShaderBindingTables(void)
-{
-    const Obdn_R_RayTracePipelineInfo pipeInfosRT[] = {{
-        // ray trace
-        .layout = pipelineLayouts[LAYOUT_RAYTRACE],
-        .raygenCount = 1,
-        .raygenShaders = (char*[]){
-            SPVDIR"/paint-rgen.spv",
-        },
-        .missCount = 1,
-        .missShaders = (char*[]){
-            SPVDIR"/paint-rmiss.spv",
-        },
-        .chitCount = 1,
-        .chitShaders = (char*[]){
-            SPVDIR"/paint-vec2-rchit.spv"
-        }
-    },{
-        // select
-        .layout = pipelineLayouts[LAYOUT_RAYTRACE],
-        .raygenCount = 1,
-        .raygenShaders = (char*[]){
-            SPVDIR"/select-rgen.spv",
-        },
-        .missCount = 1,
-        .missShaders = (char*[]){
-            SPVDIR"/select-rmiss.spv",
-        },
-        .chitCount = 1,
-        .chitShaders = (char*[]){
-            SPVDIR"/select-rchit.spv"
-        }
-    }};
-
-    assert(OBDN_ARRAY_SIZE(pipeInfosRT) == RT_PIPELINE_COUNT);
-
-    obdn_r_CreateRayTracePipelines(OBDN_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, raytracePipelines, shaderBindingTables);
-}
-
-static void initPaintPipelines(const Obdn_R_BlendMode blendMode)
-{
-    assert(blendMode != OBDN_R_BLEND_MODE_NONE);
-
-    const Obdn_R_GraphicsPipelineInfo pipeInfo1 = {
-        .layout  = pipelineLayouts[LAYOUT_COMP],
-        .renderPass = applyPaintRenderPass, 
-        .subpass = 0,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
-        .blendMode   = blendMode,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
-        .fragShader = SPVDIR"/comp-frag.spv"
-    };
-
-    const Obdn_R_GraphicsPipelineInfo pipeInfo2 = {
-        .layout  = pipelineLayouts[LAYOUT_COMP],
-        .renderPass = compositeRenderPass, 
-        .subpass = 0,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
-        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
-        .fragShader = SPVDIR"/comp2a-frag.spv"
-    };
-
-    const Obdn_R_GraphicsPipelineInfo pipeInfo3 = {
-        .layout  = pipelineLayouts[LAYOUT_COMP],
-        .renderPass = compositeRenderPass, 
-        .subpass = 1,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
-        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
-        .fragShader = SPVDIR"/comp3a-frag.spv"
-    };
-
-    const Obdn_R_GraphicsPipelineInfo pipeInfo4 = {
-        .layout  = pipelineLayouts[LAYOUT_COMP],
-        .renderPass = compositeRenderPass, 
-        .subpass = 2,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
-        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
-        .fragShader = SPVDIR"/comp4a-frag.spv"
-    };
-
-    const Obdn_R_GraphicsPipelineInfo pipeInfoSingle = {
-        .layout  = pipelineLayouts[LAYOUT_COMP],
-        .renderPass = singleCompositeRenderPass, 
-        .subpass = 0,
-        .frontFace = VK_FRONT_FACE_CLOCKWISE,
-        .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
-        .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
-        .fragShader = SPVDIR"/comp-frag.spv"
-    };
-
-    const Obdn_R_GraphicsPipelineInfo infos[] = {
-        pipeInfo1, pipeInfo2, pipeInfo3, pipeInfo4, pipeInfoSingle
-    };
-
-    obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(infos), infos, &graphicsPipelines[PIPELINE_COMP_1]);
 }
 
 static void destroyPaintPipelines(void)
@@ -1027,85 +637,6 @@ static void initSwapchainDependentFramebuffers(void)
     }
 }
 
-static void initNonSwapchainDependentFramebuffers(void)
-{
-    // applyPaintFrameBuffer 
-    {
-        const VkImageView attachments[] = {
-            imageA.view, imageB.view,
-        };
-
-        VkFramebufferCreateInfo info = {
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = applyPaintRenderPass,
-            .attachmentCount = 2,
-            .pAttachments = attachments
-        };
-
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &applyPaintFrameBuffer) );
-    }
-
-    // compositeFrameBuffer
-    {
-        const VkImageView attachments[] = {
-            imageB.view, imageC.view, imageD.view, imageA.view
-        };
-
-        VkFramebufferCreateInfo info = {
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = compositeRenderPass,
-            .attachmentCount = 4,
-            .pAttachments = attachments
-        };
-
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &compositeFrameBuffer) );
-    }
-
-    // backgroundFrameBuffer
-    {
-        const VkImageView attachments[] = {
-            imageA.view, imageC.view, 
-        };
-
-        VkFramebufferCreateInfo info = {
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = singleCompositeRenderPass,
-            .attachmentCount = 2,
-            .pAttachments = attachments
-        };
-
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &backgroundFrameBuffer) );
-    }
-
-    // foregroundFrameBuffer
-    {
-        const VkImageView attachments[] = {
-            imageA.view, imageD.view, 
-        };
-
-        VkFramebufferCreateInfo info = {
-            .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
-            .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = singleCompositeRenderPass,
-            .attachmentCount = 2,
-            .pAttachments = attachments
-        };
-
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &foregroundFrameBuffer) );
-    }
-}
-
 static void cleanUpSwapchainDependent(void)
 {
     for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
@@ -1121,227 +652,6 @@ static void cleanUpSwapchainDependent(void)
         obdn_v_FreeBufferRegion(&swapHostBufferColor);
         obdn_v_FreeBufferRegion(&swapHostBufferDepth);
     }
-}
-
-static void onLayerChange(L_LayerId newLayerId)
-{
-    printf("Begin %s\n", __PRETTY_FUNCTION__);
-
-    Obdn_V_Command cmd = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
-
-    obdn_v_BeginCommandBuffer(cmd.buffer);
-
-    BufferRegion* prevLayerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
-
-    VkImageSubresourceRange subResRange = {
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .baseArrayLayer = 0,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .layerCount = 1,
-    };
-
-    VkClearColorValue clearColor = {
-        .float32[0] = 0,
-        .float32[1] = 0,
-        .float32[2] = 0,
-        .float32[3] = 0,
-    };
-
-    VkImageMemoryBarrier barriers[] = {{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageA.handle,
-        .oldLayout = imageA.layout,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
-    },{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageB.handle,
-        .oldLayout = imageB.layout,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT
-    },{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageC.handle,
-        .oldLayout = imageC.layout,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
-    },{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageD.handle,
-        .oldLayout = imageD.layout,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = 0,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
-    }};
-
-    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers), barriers);
-
-    obdn_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, VK_IMAGE_ASPECT_COLOR_BIT, prevLayerBuffer);
-
-    vkCmdClearColorImage(cmd.buffer, imageC.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
-    vkCmdClearColorImage(cmd.buffer, imageD.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
-
-    VkImageMemoryBarrier barriers0[] = {{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageC.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-    },{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageD.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
-        .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
-    }};
-
-    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers0), barriers0);
-
-    curLayerId = newLayerId;
-
-    for (int l = 0; l < curLayerId; l++) 
-    {
-        BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
-
-        obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
-
-        VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
-
-        const VkRenderPassBeginInfo rpass = {
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .clearValueCount = 1,
-            .pClearValues = &clear,
-            .renderArea = {{0, 0}, {textureSize, textureSize}},
-            .renderPass =  singleCompositeRenderPass,
-            .framebuffer = backgroundFrameBuffer,
-        };
-
-        vkCmdBeginRenderPass(cmd.buffer, &rpass, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindDescriptorSets(
-            cmd.buffer, 
-            VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            pipelineLayouts[LAYOUT_COMP], 
-            0, 1, &description.descriptorSets[DESC_SET_COMP], 
-            0, NULL);
-
-        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_SINGLE]);
-
-        vkCmdDraw(cmd.buffer, 3, 1, 0, 0);
-
-        vkCmdEndRenderPass(cmd.buffer);
-    }
-
-    const int layerCount = l_GetLayerCount();
-
-    for (int l = curLayerId + 1; l < layerCount; l++) 
-    {
-        BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
-
-        obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
-
-        VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
-
-        const VkRenderPassBeginInfo rpass = {
-            .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-            .clearValueCount = 1,
-            .pClearValues = &clear,
-            .renderArea = {{0, 0}, {textureSize, textureSize}},
-            .renderPass =  singleCompositeRenderPass,
-            .framebuffer = foregroundFrameBuffer,
-        };
-
-        vkCmdBeginRenderPass(cmd.buffer, &rpass, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindDescriptorSets(
-            cmd.buffer, 
-            VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            pipelineLayouts[LAYOUT_COMP], 
-            0, 1, &description.descriptorSets[DESC_SET_COMP], 
-            0, NULL);
-
-        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_SINGLE]);
-
-        vkCmdDraw(cmd.buffer, 3, 1, 0, 0);
-
-        vkCmdEndRenderPass(cmd.buffer);
-    }
-
-    VkImageMemoryBarrier barrier1 = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageB.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT,
-        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
-    };
-
-    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            0, 0, NULL, 0, NULL, 1, &barrier1);
-
-    BufferRegion* layerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
-
-    obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageB);
-
-    VkImageMemoryBarrier barriers2[] = {{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageA.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-        .dstAccessMask = 0
-    },{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageB.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_MEMORY_READ_BIT,
-        .dstAccessMask = 0 
-    },{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageC.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
-        .dstAccessMask = 0 
-    },{
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageD.handle,
-        .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-        .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .subresourceRange = subResRange,
-        .srcAccessMask = VK_ACCESS_MEMORY_WRITE_BIT,
-        .dstAccessMask = 0 
-    }};
-
-    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers), barriers2);
-
-    obdn_v_EndCommandBuffer(cmd.buffer);
-
-    obdn_v_SubmitAndWait(&cmd, 0);
-
-    obdn_v_DestroyCommand(cmd);
-
-    printf("End %s\n", __PRETTY_FUNCTION__);
 }
 
 static void onRecreateSwapchain(void)
@@ -1360,106 +670,6 @@ static void onRecreateSwapchain(void)
     }
 }
 
-static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
-{
-    obdn_v_WaitForFence(&acquireImageCommand.fence);
-
-    obdn_v_ResetCommand(&releaseImageCommand);
-    obdn_v_ResetCommand(&transferImageCommand);
-    obdn_v_ResetCommand(&acquireImageCommand);
-
-    VkCommandBuffer cmdBuf = releaseImageCommand.buffer;
-
-    obdn_v_BeginCommandBuffer(cmdBuf);
-
-    const VkImageSubresourceRange range = {
-        .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
-        .baseMipLevel = 0,
-        .levelCount = 1,
-        .baseArrayLayer = 0,
-        .layerCount = 1
-    };
-
-    const VkImageLayout otherLayout     = toHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    const VkAccessFlags otherAccessMask = toHost ? VK_ACCESS_TRANSFER_READ_BIT : VK_ACCESS_TRANSFER_WRITE_BIT;
-
-    VkImageMemoryBarrier imgBarrier = {
-        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext = NULL,
-        .srcAccessMask = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-        .dstAccessMask = otherAccessMask,
-        .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .newLayout = otherLayout,
-        .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
-        .dstQueueFamilyIndex = transferQueueFamilyIndex,
-        .image = imageB.handle,
-        .subresourceRange = range
-    };
-
-    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
-
-    obdn_v_EndCommandBuffer(cmdBuf);
-
-    cmdBuf = transferImageCommand.buffer;
-
-    obdn_v_BeginCommandBuffer(cmdBuf);
-
-    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
-
-    if (toHost)
-        obdn_v_CmdCopyImageToBuffer(cmdBuf, &imageB, VK_IMAGE_ASPECT_COLOR_BIT, bufferRegion);
-    else
-        obdn_v_CmdCopyBufferToImage(cmdBuf, bufferRegion, &imageB);
-
-    imgBarrier.srcAccessMask = otherAccessMask;
-    imgBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-    imgBarrier.oldLayout = otherLayout;
-    imgBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imgBarrier.srcQueueFamilyIndex = transferQueueFamilyIndex;
-    imgBarrier.dstQueueFamilyIndex = graphicsQueueFamilyIndex;
-
-    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
-            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
-
-    obdn_v_EndCommandBuffer(cmdBuf);
-
-    cmdBuf = acquireImageCommand.buffer;
-
-    obdn_v_BeginCommandBuffer(cmdBuf);
-
-    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
-            VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
-
-    obdn_v_EndCommandBuffer(cmdBuf);
-
-    obdn_v_SubmitGraphicsCommand(0, 0, NULL, releaseImageCommand.semaphore, VK_NULL_HANDLE, releaseImageCommand.buffer);
-    
-    obdn_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
-
-    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-            transferImageCommand.semaphore, 
-            acquireImageCommand.semaphore, 
-            acquireImageCommand.fence, 
-            acquireImageCommand.buffer);
-}
-
-static void backupLayer(void)
-{
-    runUndoCommands(true, u_GetNextBuffer());
-    printf("%s\n",__PRETTY_FUNCTION__);
-}
-
-static bool undo(void)
-{
-    printf("%s\n",__PRETTY_FUNCTION__);
-    BufferRegion* buf = u_GetLastBuffer();
-    if (!buf) return false; // nothing to undo
-    runUndoCommands(false, buf);
-    return true;
-}
-
 static void updateView(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
@@ -1472,47 +682,6 @@ static void updateProj(void)
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->proj = scene->proj;
     matrices->projInv = m_Invert4x4(&scene->proj);
-}
-
-static void updateBrushColor(float r, float g, float b)
-{
-    UboBrush* brush = (UboBrush*)brushRegion.hostData;
-    brush->r = r;
-    brush->g = g;
-    brush->b = b;
-}
-
-static void updateBrush(void)
-{
-    UboBrush* brush = (UboBrush*)brushRegion.hostData;
-    if (scene->paint_mode != PAINT_MODE_ERASE)
-        updateBrushColor(scene->brush_r, scene->brush_g, scene->brush_b);
-    else
-        updateBrushColor(1, 1, 1); // must be white for erase to work
-
-    brushActive = scene->brush_active;
-
-    prevBrushPos.x = brushPos.x;
-    prevBrushPos.y = brushPos.y;
-    brushPos.x = scene->brush_x;
-    brushPos.y = scene->brush_y;
-
-    brush->radius = scene->brush_radius;
-    brush->x = scene->brush_x;
-    brush->y = scene->brush_y;
-    brush->opacity = scene->brush_opacity;
-    brush->anti_falloff = (1.0 - scene->brush_falloff) * scene->brush_radius;
-}
-
-static void updatePaintMode(void)
-{
-    vkDeviceWaitIdle(device);
-    destroyPaintPipelines();
-    switch (scene->paint_mode)
-    {
-        case PAINT_MODE_OVER:  initPaintPipelines(OBDN_R_BLEND_MODE_OVER); break;
-        case PAINT_MODE_ERASE: initPaintPipelines(OBDN_R_BLEND_MODE_ERASE); break;
-    }
 }
 
 static VkSemaphore syncScene(const uint32_t frameIndex)
@@ -1567,92 +736,6 @@ static void rayTraceSelect(const VkCommandBuffer cmdBuf)
             &shaderBindingTables[PIPELINE_SELECT].hitTable,
             &shaderBindingTables[PIPELINE_SELECT].callableTable,
             1, 1, 1);
-}
-
-static void paint(const VkCommandBuffer cmdBuf, const float x, const float y)
-{
-    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, raytracePipelines[PIPELINE_PAINT]);
-
-    vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
-            pipelineLayouts[LAYOUT_RAYTRACE], 0, 3, description.descriptorSets, 0, NULL);
-
-    float pc[4] = {coal_Rand(), coal_Rand(), x, y};
-
-    vkCmdPushConstants(cmdBuf, pipelineLayouts[LAYOUT_RAYTRACE], VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(pc), pc);
-
-    vkCmdTraceRaysKHR(cmdBuf, 
-            &shaderBindingTables[PIPELINE_PAINT].raygenTable,
-            &shaderBindingTables[PIPELINE_PAINT].missTable,
-            &shaderBindingTables[PIPELINE_PAINT].hitTable,
-            &shaderBindingTables[PIPELINE_PAINT].callableTable,
-            2000, 2000, 1);
-}
-
-static void applyPaint(const VkCommandBuffer cmdBuf)
-{
-    VkClearValue clear = {0, 0, 0, 0};
-
-    const VkRenderPassBeginInfo rpass = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = 1,
-        .pClearValues = &clear,
-        .renderArea = {{0, 0}, {textureSize, textureSize}},
-        .renderPass =  applyPaintRenderPass,
-        .framebuffer = applyPaintFrameBuffer 
-    };
-
-    vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindDescriptorSets(
-            cmdBuf, 
-            VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            pipelineLayouts[LAYOUT_COMP], 
-            0, 1, &description.descriptorSets[DESC_SET_COMP], 
-            0, NULL);
-
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_1]);
-
-        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
-
-    vkCmdEndRenderPass(cmdBuf);
-}
-
-static void comp(const VkCommandBuffer cmdBuf)
-{
-    VkClearValue clear = {0, 0, 0, 0};
-
-    VkClearValue clears[] = {
-        clear, clear, clear, clear
-    };
-
-    const VkRenderPassBeginInfo rpass = {
-        .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = OBDN_ARRAY_SIZE(clears),
-        .pClearValues = clears,
-        .renderArea = {{0, 0}, {textureSize, textureSize}},
-        .renderPass =  compositeRenderPass,
-        .framebuffer = compositeFrameBuffer
-    };
-
-    vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_2]);
-
-        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
-
-        vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_3]);
-
-        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
-
-        vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
-
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_COMP_4]);
-
-        vkCmdDraw(cmdBuf, 3, 1, 0, 0);
-
-    vkCmdEndRenderPass(cmdBuf);
 }
 
 static void rasterize(const VkCommandBuffer cmdBuf)
