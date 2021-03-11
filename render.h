@@ -47,7 +47,7 @@ typedef struct {
     L_LayerId      layer;
     uint32_t       window_width;
     uint32_t       window_height;
-} Scene;
+} PaintScene;
 
 void         r_InitRenderer(uint32_t texSize);
 void         r_Render(void);
@@ -59,7 +59,6 @@ void         r_ClearPaintImage(void);
 void         r_SavePaintImage(void);
 void         r_BackUpLayer(void);
 void         r_CleanUp(void);
-void         r_BindScene(const Scene* scene);
 
 void r_GetColorDepthExternal(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
         uint64_t* colorOffset, uint64_t* depthOffset);

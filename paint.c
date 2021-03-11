@@ -4,22 +4,12 @@
 #include <obsidian/r_pipeline.h>
 #include <obsidian/private.h>
 #include "layer.h"
+#include "paint.h"
 #include "undo.h"
 #include "obsidian/t_def.h"
 #include "ubo-shared.h"
 
 #define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
-
-typedef struct {
-    float x;
-    float y;
-    float radius;
-    float r;
-    float g;
-    float b;
-    float opacity;
-    float anti_falloff;
-} UboBrush;
 
 enum {
     DESC_SET_PRIM,
@@ -79,7 +69,7 @@ static VkRenderPass compositeRenderPass;
 
 static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-static const Scene* scene;
+static const PaintScene* scene;
 static const Obdn_R_Primitive* prim;
 
 static VkPipelineLayout pipelineLayout;
@@ -809,7 +799,7 @@ static void destroyCompPipelines(void)
     }
 }
 
-static void initNonSwapchainDependentFramebuffers(void)
+static void initFramebuffers(void)
 {
     // applyPaintFrameBuffer 
     {
@@ -1265,7 +1255,7 @@ static void updatePaintMode(void)
     }
 }
 
-static void paint(const VkCommandBuffer cmdBuf, const float x, const float y)
+static void splat(const VkCommandBuffer cmdBuf, const float x, const float y)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, paintPipeline);
 
@@ -1351,7 +1341,7 @@ static void comp(const VkCommandBuffer cmdBuf)
     vkCmdEndRenderPass(cmdBuf);
 }
 
-static VkSemaphore syncScene(const uint32_t frameIndex)
+static VkSemaphore syncScene()
 {
     VkSemaphore semaphore = VK_NULL_HANDLE;
     if (scene->dirt)
@@ -1362,12 +1352,6 @@ static VkSemaphore syncScene(const uint32_t frameIndex)
             updateProj();
         if (scene->dirt & SCENE_BRUSH_BIT)
             updateBrush();
-        if (scene->dirt & SCENE_WINDOW_BIT)
-        {
-            OBDN_WINDOW_WIDTH = scene->window_width;
-            OBDN_WINDOW_HEIGHT = scene->window_height;
-            obdn_v_RecreateSwapchain();
-        }
         if (scene->dirt & SCENE_UNDO_BIT)
         {
             if (undo())
@@ -1390,7 +1374,7 @@ static VkSemaphore syncScene(const uint32_t frameIndex)
     return semaphore;
 }
 
-static void updateCommands(const int8_t frameIndex)
+static void updateCommands()
 {
     VkCommandBuffer cmdBuf = paintCommand.buffer;
 
@@ -1458,7 +1442,7 @@ static void updateCommands(const int8_t frameIndex)
             float x = prevBrushPos.x + xstep;
             float y = prevBrushPos.y + ystep;
 
-            paint(cmdBuf, x, y);
+            splat(cmdBuf, x, y);
 
             applyPaint(cmdBuf);
 
@@ -1473,3 +1457,90 @@ static void updateCommands(const int8_t frameIndex)
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
+void p_SavePaintImage(void)
+{
+    printf("Please enter a file name with extension.\n");
+    char strbuf[32];
+    fgets(strbuf, 32, stdin);
+    uint8_t len = strlen(strbuf);
+    if (len < 5)
+    {
+        printf("Filename too small. Must include extension.\n");
+        return;
+    }
+    if (strbuf[len - 1] == '\n')  strbuf[--len] = '\0'; 
+    const char* ext = strbuf + len - 3;
+    OBDN_DEBUG_PRINT("%s", ext);
+    Obdn_V_ImageFileType fileType;
+    if (strncmp(ext, "png", 3) == 0) fileType = OBDN_V_IMAGE_FILE_TYPE_PNG;
+    else if (strncmp(ext, "jpg", 3) == 0) fileType = OBDN_V_IMAGE_FILE_TYPE_JPG;
+    else 
+    {
+        printf("Bad extension.\n");
+        return;
+    }
+    obdn_v_SaveImage(&imageA, fileType, strbuf);
+}
+
+VkSemaphore paint(VkSemaphore waitSemaphore)
+{
+    waitSemaphore = syncScene();
+    updateCommands();
+    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            waitSemaphore, paintCommand.semaphore, 
+            paintCommand.fence, paintCommand.buffer);
+    return paintCommand.semaphore;
+}
+
+void p_Init(const Obdn_R_Primitive* prim_, const uint32_t texSize)
+{
+    prim = prim_;
+
+    assert(prim->vertexRegion.size == 0);
+    obdn_r_BuildBlas(prim, &bottomLevelAS);
+    obdn_r_BuildTlas(&bottomLevelAS, &topLevelAS);
+
+    assert(texSize > 0);
+    assert(texSize % 256 == 0);
+    assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K); // for now
+
+    textureSize = texSize;
+    curLayerId = 0;
+    graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);
+    transferQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_TRANSFER_TYPE);
+
+    paintCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+
+    releaseImageCommand  = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+    transferImageCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_TRANSFER_TYPE);
+    acquireImageCommand  = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+
+    initPaintImages();
+
+    initRenderPasses();
+    initDescSetsAndPipeLayouts();
+    initUniformBuffers();
+    initPaintPipelineAndShaderBindingTable();
+    initCompPipelines(OBDN_R_BLEND_MODE_OVER);
+
+    initFramebuffers();
+
+    assert(imageA.size > 0);
+
+    l_Init(imageA.size); // eventually will move this out
+    uint8_t maxUndoStacks, maxUndosPerStack;
+    switch (texSize)
+    {
+        case IMG_4K:  maxUndoStacks = 4; maxUndosPerStack = 8; break;
+        case IMG_8K:  maxUndoStacks = 2; maxUndosPerStack = 8; break;
+        case IMG_16K: maxUndoStacks = 1; maxUndosPerStack = 8; break;
+        default: assert(0);
+    }
+    u_InitUndo(imageA.size, maxUndoStacks, maxUndosPerStack);
+    onLayerChange(0);
+
+    updateDescSetPrim();
+    updateDescSetPaint();
+    updateDescSetComp();
+
+}

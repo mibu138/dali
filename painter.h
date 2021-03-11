@@ -4,10 +4,6 @@
 #include <obsidian/f_prim.h>
 #include <stdbool.h>
 
-#define IMG_4K  4096
-#define IMG_8K  IMG_4K * 2
-#define IMG_16K IMG_8K * 2
-
 void painter_Init(uint32_t texSize, bool houdiniMode);
 void painter_LocalInit(uint32_t texSize);
 void painter_LoadFprim(Obdn_F_Primitive* fprim); // frees fprim

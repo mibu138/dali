@@ -8,7 +8,7 @@
 void u_InitUndo(const uint32_t size, const uint8_t maxStacks, const uint8_t maxUndos);
 void u_CleanUp(void);
 bool u_LayerInCache(L_LayerId layer);
-void u_BindScene(const Scene* scene_);
+void u_BindScene(const PaintScene* scene_);
 void u_Update(void);
 
 Obdn_V_BufferRegion* u_GetNextBuffer(void);

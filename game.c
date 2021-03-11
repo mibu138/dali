@@ -46,7 +46,7 @@ static struct Player {
     Vec3 pivot;
 } player;
 
-static Scene          scene;
+static PaintScene     scene;
 static Scene_DirtMask dirt;
 
 static const Vec3 UP_VEC = {0, 1, 0};
@@ -190,6 +190,32 @@ static void decrementLayer(void)
         snprintf(str, 12, "Layer %d", id + 1);
         obdn_u_UpdateText(str, text);
     }
+}
+
+static int getSelectionPos(Vec3* v)
+{
+    Obdn_V_Command cmd = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+
+    obdn_v_BeginCommandBuffer(cmd.buffer);
+
+    rayTraceSelect(cmd.buffer);
+
+    obdn_v_EndCommandBuffer(cmd.buffer);
+
+    obdn_v_SubmitAndWait(&cmd, 0);
+
+    obdn_v_DestroyCommand(cmd);
+
+    Selection* sel = (Selection*)selectionRegion.hostData;
+    if (sel->hit)
+    {
+        v->x[0] = sel->x;
+        v->x[1] = sel->y;
+        v->x[2] = sel->z;
+        return 1;
+    }
+    else
+        return 0;
 }
 
 void g_Init(void)
