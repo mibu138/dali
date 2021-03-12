@@ -7,7 +7,7 @@
 #include "common.h"
 
 void         r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene);
-void         r_Render(VkSemaphore waitSemaphore);
+void         r_Render(uint32_t frameIndex, VkSemaphore waitSemaphore);
 void         r_CleanUp(void);
 
 void r_GetColorDepthExternal(uint32_t* width, uint32_t* height, uint32_t* elementSize, 

@@ -118,7 +118,7 @@ void painter_LocalInit(uint32_t texSize)
 
 void painter_StartLoop(void)
 {
-    Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 1, 1);
+    Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 0, 1);
 
     parms.shouldRun = true;
 
@@ -133,7 +133,8 @@ void painter_StartLoop(void)
         g_Update();
         VkSemaphore s = VK_NULL_HANDLE;
         s = p_Paint(s);
-        r_Render(s);
+        uint32_t i = obdn_v_RequestFrame(&renderScene.dirt);
+        r_Render(i, s);
 
         obdn_FrameEnd(&loopData);
 

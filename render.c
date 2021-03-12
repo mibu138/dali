@@ -447,15 +447,12 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene)
     }
 }
 
-void r_Render(VkSemaphore waitSemaphore)
+void r_Render(uint32_t fi, VkSemaphore waitSemaphore)
 {
-    Obdn_Mask dummyMask;
-    uint32_t i = obdn_v_RequestFrame(&dummyMask);
-
-    syncScene(i);
+    syncScene(fi);
     obdn_v_WaitForFence(&renderCommand.fence);
     obdn_v_ResetCommand(&renderCommand);
-    updateRenderCommands(i);
+    updateRenderCommands(fi);
     obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
             waitSemaphore, renderCommand.semaphore, 
             renderCommand.fence, renderCommand.buffer);
@@ -478,7 +475,7 @@ void r_Render(VkSemaphore waitSemaphore)
             obdn_v_ResetCommand(&copyToHostCommand);
             obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
 
-            const Image* swapImage = obdn_v_GetFrame(i);
+            const Image* swapImage = obdn_v_GetFrame(fi);
 
             assert(swapImage->size == swapHostBufferColor.size);
 
