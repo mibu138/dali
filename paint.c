@@ -72,8 +72,6 @@ static VkRenderPass compositeRenderPass;
 
 static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-static const Obdn_R_Primitive* prim;
-
 static Obdn_S_Scene* renderScene;
 static const PaintScene* paintScene;
 
@@ -544,6 +542,8 @@ static void updateDescSetPrim(void)
         .accelerationStructureCount = 1,
         .pAccelerationStructures    = &topLevelAS.handle
     };
+
+    Obdn_R_Primitive* prim = &renderScene->prims[0].rprim;
 
     VkDescriptorBufferInfo uvBufInfo = {
         .offset = obdn_r_GetAttrOffset(prim, "uv"),
@@ -1257,6 +1257,21 @@ static void updatePaintMode(void)
     }
 }
 
+static void updatePrim(void)
+{
+    Obdn_R_Primitive* prim = &renderScene->prims[0].rprim;
+    assert(prim->vertexRegion.size);
+    if (bottomLevelAS.bufferRegion.size)
+        obdn_r_DestroyAccelerationStruct(&bottomLevelAS);
+    if (topLevelAS.bufferRegion.size)
+        obdn_r_DestroyAccelerationStruct(&topLevelAS);
+
+    obdn_r_BuildBlas(prim, &bottomLevelAS);
+    obdn_r_BuildTlas(&bottomLevelAS, &topLevelAS);
+
+    updateDescSetPrim();
+}
+
 static void splat(const VkCommandBuffer cmdBuf, const float x, const float y)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, paintPipeline);
@@ -1354,6 +1369,8 @@ static VkSemaphore syncScene()
             updateProj();
         if (paintScene->dirt & SCENE_BRUSH_BIT)
             updateBrush();
+        if (paintScene->dirt & OBDN_S_PRIMS_BIT)
+            updatePrim();
         if (paintScene->dirt & SCENE_UNDO_BIT)
         {
             if (undo())
@@ -1500,13 +1517,8 @@ VkSemaphore p_Paint(VkSemaphore waitSemaphore)
 void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSize)
 {
     assert(sScene->primCount > 0);
-    prim  = &sScene->prims[0].rprim;
     paintScene = pScene;
     renderScene = sScene;
-
-    assert(prim->vertexRegion.size);
-    obdn_r_BuildBlas(prim, &bottomLevelAS);
-    obdn_r_BuildTlas(&bottomLevelAS, &topLevelAS);
 
     assert(texSize > 0);
     assert(texSize % 256 == 0);
@@ -1547,7 +1559,6 @@ void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSi
     u_InitUndo(imageA.size, maxUndoStacks, maxUndosPerStack);
     onLayerChange(0);
 
-    updateDescSetPrim();
     updateDescSetPaint();
     updateDescSetComp();
 

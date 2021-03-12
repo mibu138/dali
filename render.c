@@ -214,6 +214,9 @@ static void updatePaintTexture(void)
 static void initRasterPipelines(void)
 {
     Obdn_R_AttributeSize attrSizes[3] = {12, 12, 8};
+
+    VkDynamicState dynamicStates[] = {VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR};
+
     const Obdn_R_GraphicsPipelineInfo pipeInfosGraph[] = {{
         // raster
         .renderPass = swapchainRenderPass, 
@@ -221,7 +224,8 @@ static void initRasterPipelines(void)
         .vertexDescription = obdn_r_GetVertexDescription(3, attrSizes),
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {renderScene->window[0], renderScene->window[1]},
+        .dynamicStateCount = LEN(dynamicStates),
+        .pDynamicStates = dynamicStates,
         .vertShader = SPVDIR"/raster-vert.spv", 
         .fragShader = SPVDIR"/raster-frag.spv"
     },{
@@ -231,7 +235,8 @@ static void initRasterPipelines(void)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .frontFace   = VK_FRONT_FACE_CLOCKWISE,
         .blendMode   = OBDN_R_BLEND_MODE_OVER,
-        .viewportDim = {renderScene->window[0], renderScene->window[1]},
+        .dynamicStateCount = LEN(dynamicStates),
+        .pDynamicStates = dynamicStates,
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/post-frag.spv"
     }};
@@ -250,8 +255,8 @@ static void initSwapchainDependentFramebuffers(void)
         VkFramebufferCreateInfo framebufferInfo = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = renderScene->window[0],
-            .width  = renderScene->window[1],
+            .height = renderScene->window[1],
+            .width  = renderScene->window[0],
             .renderPass = swapchainRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments 
@@ -273,8 +278,6 @@ static void cleanUpSwapchainDependent(void)
         vkDestroyFramebuffer(device, swapchainFrameBuffers[i], NULL);
         vkDestroyFramebuffer(device, postFrameBuffers[i], NULL);
     }
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_RASTER], NULL);
-    vkDestroyPipeline(device, graphicsPipelines[PIPELINE_POST], NULL);
     obdn_v_FreeImage(&depthAttachment);
     if (copySwapToHost)
     {
@@ -288,7 +291,6 @@ static void onRecreateSwapchain(void)
     cleanUpSwapchainDependent();
 
     initOffscreenAttachments();
-    initRasterPipelines();
     initSwapchainDependentFramebuffers();
 
     if (copySwapToHost)
@@ -401,6 +403,23 @@ static void updateRenderCommands(const int8_t frameIndex)
     VkCommandBuffer cmdBuf = renderCommand.buffer;
 
     obdn_v_BeginCommandBuffer(cmdBuf);
+
+    VkViewport vp = {
+        .width = renderScene->window[0],
+        .height = renderScene->window[1],
+        .maxDepth = 1.0,
+        .minDepth = 0.0,
+        .x = 0,
+        .y = 0,
+    };
+
+    VkRect2D scissor = {
+        .extent = {renderScene->window[0], renderScene->window[1]},
+        .offset = {0, 0}
+    };
+
+    vkCmdSetViewport(cmdBuf, 0, 1, &vp);
+    vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
 
     rasterize(cmdBuf);
 

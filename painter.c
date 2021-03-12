@@ -123,6 +123,9 @@ void painter_StartLoop(void)
 
     parms.shouldRun = true;
 
+    renderScene.dirt = ~0;
+    paintScene.dirt  = ~0;
+
     while( parms.shouldRun ) 
     {
         obdn_FrameStart(&loopData);
