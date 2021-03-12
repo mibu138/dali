@@ -72,9 +72,10 @@ static VkRenderPass compositeRenderPass;
 
 static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
-static const PaintScene* scene;
 static const Obdn_R_Primitive* prim;
+
 static Obdn_S_Scene* renderScene;
+static const PaintScene* paintScene;
 
 static VkPipelineLayout pipelineLayout;
 
@@ -992,7 +993,7 @@ static void onLayerChange(L_LayerId newLayerId)
             cmd.buffer, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
             pipelineLayout,
-            0, 1, &description.descriptorSets[DESC_SET_COMP], 
+            DESC_SET_COMP, 1, &description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
         vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_SINGLE]);
@@ -1028,7 +1029,7 @@ static void onLayerChange(L_LayerId newLayerId)
             cmd.buffer, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
             pipelineLayout,
-            0, 1, &description.descriptorSets[DESC_SET_COMP], 
+            DESC_SET_COMP, 1, &description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
         vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_SINGLE]);
@@ -1204,15 +1205,15 @@ static bool undo(void)
 static void updateView(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->view = scene->view;
-    matrices->viewInv = m_Invert4x4(&scene->view);
+    matrices->view = renderScene->camera.view;
+    matrices->viewInv = renderScene->camera.xform;
 }
 
 static void updateProj(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->proj = scene->proj;
-    matrices->projInv = m_Invert4x4(&scene->proj);
+    matrices->proj = renderScene->camera.proj;
+    matrices->projInv = m_Invert4x4(&renderScene->camera.proj);
 }
 
 static void updateBrushColor(float r, float g, float b)
@@ -1226,30 +1227,30 @@ static void updateBrushColor(float r, float g, float b)
 static void updateBrush(void)
 {
     UboBrush* brush = (UboBrush*)brushRegion.hostData;
-    if (scene->paint_mode != PAINT_MODE_ERASE)
-        updateBrushColor(scene->brush_r, scene->brush_g, scene->brush_b);
+    if (paintScene->paint_mode != PAINT_MODE_ERASE)
+        updateBrushColor(paintScene->brush_r, paintScene->brush_g, paintScene->brush_b);
     else
         updateBrushColor(1, 1, 1); // must be white for erase to work
 
-    brushActive = scene->brush_active;
+    brushActive = paintScene->brush_active;
 
     prevBrushPos.x = brushPos.x;
     prevBrushPos.y = brushPos.y;
-    brushPos.x = scene->brush_x;
-    brushPos.y = scene->brush_y;
+    brushPos.x = paintScene->brush_x;
+    brushPos.y = paintScene->brush_y;
 
-    brush->radius = scene->brush_radius;
-    brush->x = scene->brush_x;
-    brush->y = scene->brush_y;
-    brush->opacity = scene->brush_opacity;
-    brush->anti_falloff = (1.0 - scene->brush_falloff) * scene->brush_radius;
+    brush->radius = paintScene->brush_radius;
+    brush->x = paintScene->brush_x;
+    brush->y = paintScene->brush_y;
+    brush->opacity = paintScene->brush_opacity;
+    brush->anti_falloff = (1.0 - paintScene->brush_falloff) * paintScene->brush_radius;
 }
 
 static void updatePaintMode(void)
 {
     vkDeviceWaitIdle(device);
     destroyCompPipelines();
-    switch (scene->paint_mode)
+    switch (paintScene->paint_mode)
     {
         case PAINT_MODE_OVER:  initCompPipelines(OBDN_R_BLEND_MODE_OVER); break;
         case PAINT_MODE_ERASE: initCompPipelines(OBDN_R_BLEND_MODE_ERASE); break;
@@ -1345,29 +1346,29 @@ static void comp(const VkCommandBuffer cmdBuf)
 static VkSemaphore syncScene()
 {
     VkSemaphore semaphore = VK_NULL_HANDLE;
-    if (scene->dirt)
+    if (paintScene->dirt || renderScene->dirt)
     {
-        if (scene->dirt & SCENE_VIEW_BIT)
+        if (renderScene->dirt & OBDN_S_CAMERA_VIEW_BIT)
             updateView();
-        if (scene->dirt & SCENE_PROJ_BIT)
+        if (renderScene->dirt & OBDN_S_CAMERA_PROJ_BIT)
             updateProj();
-        if (scene->dirt & SCENE_BRUSH_BIT)
+        if (paintScene->dirt & SCENE_BRUSH_BIT)
             updateBrush();
-        if (scene->dirt & SCENE_UNDO_BIT)
+        if (paintScene->dirt & SCENE_UNDO_BIT)
         {
             if (undo())
                 semaphore = acquireImageCommand.semaphore;
         }
-        if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
+        if (paintScene->dirt & SCENE_LAYER_CHANGED_BIT)
         {
-            onLayerChange(scene->layer);
+            onLayerChange(paintScene->layer);
         }
-        if (scene->dirt & SCENE_LAYER_BACKUP_BIT)
+        if (paintScene->dirt & SCENE_LAYER_BACKUP_BIT)
         {
             backupLayer();
             semaphore = acquireImageCommand.semaphore;
         }
-        if (scene->dirt & SCENE_PAINT_MODE_BIT)
+        if (paintScene->dirt & SCENE_PAINT_MODE_BIT)
         {
             updatePaintMode();
         }
@@ -1499,7 +1500,7 @@ void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSi
 {
     assert(sScene->primCount > 0);
     prim  = &sScene->prims[0].rprim;
-    scene = pScene;
+    paintScene = pScene;
     renderScene = sScene;
 
     assert(prim->vertexRegion.size);

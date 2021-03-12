@@ -302,15 +302,14 @@ static void onRecreateSwapchain(void)
 static void updateView(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->view = paintScene->view;
-    matrices->viewInv = m_Invert4x4(&paintScene->view);
+    matrices->view = renderScene->camera.view;
+    matrices->viewInv = renderScene->camera.xform;
 }
 
 static void updateProj(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->proj = paintScene->proj;
-    matrices->projInv = m_Invert4x4(&paintScene->proj);
+    matrices->proj = renderScene->camera.proj;
 }
 
 static void updateBrush(void)
@@ -323,18 +322,18 @@ static void updateBrush(void)
 
 static void syncScene(const uint32_t frameIndex)
 {
-    if (paintScene->dirt)
+    if (paintScene->dirt || renderScene->dirt)
     {
-        if (paintScene->dirt & SCENE_VIEW_BIT)
+        if (renderScene->dirt & OBDN_S_CAMERA_VIEW_BIT)
             updateView();
-        if (paintScene->dirt & SCENE_PROJ_BIT)
+        if (paintScene->dirt & OBDN_S_CAMERA_PROJ_BIT)
             updateProj();
         if (paintScene->dirt & SCENE_BRUSH_BIT)
             updateBrush();
-        if (paintScene->dirt & SCENE_WINDOW_BIT)
+        if (renderScene->dirt & OBDN_S_WINDOW_BIT)
         {
-            OBDN_WINDOW_WIDTH = paintScene->window_width;
-            OBDN_WINDOW_HEIGHT = paintScene->window_height;
+            OBDN_WINDOW_WIDTH = renderScene->window[0];
+            OBDN_WINDOW_HEIGHT = renderScene->window[1];
             obdn_v_RecreateSwapchain();
         }
     }

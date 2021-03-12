@@ -101,10 +101,9 @@ static void lerpTargetToPivot(void)
     player.target = m_Lerp_Vec3(&player.target, &player.pivot, t);
 }
 
-static Mat4 generatePlayerView(void)
+static Mat4 generateCameraXform(void)
 {
-    Mat4 m = m_LookAt(&player.pos, &player.target, &UP_VEC);
-    return m_Invert4x4(&m);
+    return m_LookAt(&player.pos, &player.target, &UP_VEC);
 }
 
 static void setBrushActive(bool active)
@@ -455,8 +454,8 @@ void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
 
     Mat4 initView = m_Ident_Mat4();
     Mat4 initProj = m_BuildPerspective(0.01, 50);
-    g_SetView(&initView);
-    g_SetProj(&initProj);
+    g_SetCameraView(&initView);
+    g_SetCameraProj(&initProj);
 
     player.pos = (Vec3){0, 0., 3};
     player.target = (Vec3){0, 0, 0};
@@ -571,8 +570,8 @@ void g_Update(void)
     {
         handleMouseMovement();
         pivotChanged = false; //TODO must set to false after handleMouseMovement since it checks this... should find a better way
-        Mat4 view = generatePlayerView();
-        g_SetView(&view);
+        Mat4 cameraXform = generateCameraXform();
+        g_SetCameraXform(&cameraXform);
     }
     if (MODE_PAINT == mode)
         setBrushActive(true);
@@ -612,28 +611,32 @@ void g_CleanUp(void)
     memset(&mousePos, 0, sizeof(mousePos));
 }
 
-void g_SetView(const Mat4* m)
+void g_SetCameraXform(const Mat4* xform)
 {
-    paintScene->view = *m;
-    paintScene->dirt |= SCENE_VIEW_BIT;
-    Cam* cam = (Cam*)camRegion.hostData;
-    cam->viewInv = m_Invert4x4(m);
+    renderScene->camera.xform = *xform;
+    renderScene->camera.view = m_Invert4x4(xform);
+    renderScene->dirt |= OBDN_S_CAMERA_VIEW_BIT;
 }
 
-void g_SetProj(const Mat4* m)
+void g_SetCameraView(const Mat4* view)
 {
-    paintScene->proj = *m;
-    paintScene->dirt |= SCENE_PROJ_BIT;
-    Cam* cam = (Cam*)camRegion.hostData;
-    cam->projInv = m_Invert4x4(m);
+    renderScene->camera.view = *view;
+    renderScene->camera.xform = m_Invert4x4(view);
+    renderScene->dirt |= OBDN_S_CAMERA_VIEW_BIT;
 }
 
-void g_SetWindow(uint32_t width, uint32_t height)
+void g_SetCameraProj(const Mat4* m)
+{
+    renderScene->camera.proj = *m;
+    renderScene->dirt |= OBDN_S_CAMERA_PROJ_BIT;
+}
+
+void g_SetWindow(uint16_t width, uint16_t height)
 {
     // TODO: make this safe some how... 
-    paintScene->window_width  = width;
-    paintScene->window_height = height;
-    paintScene->dirt |= SCENE_WINDOW_BIT;
+    renderScene->window[0] = width;
+    renderScene->window[1] = height;
+    renderScene->dirt |= OBDN_S_WINDOW_BIT;
 }
 
 void g_SetBrushPos(float x, float y)
