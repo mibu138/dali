@@ -84,7 +84,7 @@ static void initOffscreenAttachments(void)
 {
     Obdn_V_MemoryType memType = parms.copySwapToHost ? OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE : OBDN_V_MEMORY_DEVICE_TYPE;
     depthAttachment = obdn_v_CreateImage(
-            OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT,
+            renderScene->window[0], renderScene->window[1],
             depthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -221,7 +221,7 @@ static void initRasterPipelines(void)
         .vertexDescription = obdn_r_GetVertexDescription(3, attrSizes),
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT},
+        .viewportDim = {renderScene->window[0], renderScene->window[1]},
         .vertShader = SPVDIR"/raster-vert.spv", 
         .fragShader = SPVDIR"/raster-frag.spv"
     },{
@@ -231,7 +231,7 @@ static void initRasterPipelines(void)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .frontFace   = VK_FRONT_FACE_CLOCKWISE,
         .blendMode   = OBDN_R_BLEND_MODE_OVER,
-        .viewportDim = {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT},
+        .viewportDim = {renderScene->window[0], renderScene->window[1]},
         .vertShader = obdn_r_FullscreenTriVertShader(),
         .fragShader = SPVDIR"/post-frag.spv"
     }};
@@ -250,8 +250,8 @@ static void initSwapchainDependentFramebuffers(void)
         VkFramebufferCreateInfo framebufferInfo = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = OBDN_WINDOW_HEIGHT,
-            .width  = OBDN_WINDOW_WIDTH,
+            .height = renderScene->window[0],
+            .width  = renderScene->window[1],
             .renderPass = swapchainRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments 
@@ -332,9 +332,7 @@ static void syncScene(const uint32_t frameIndex)
             updateBrush();
         if (renderScene->dirt & OBDN_S_WINDOW_BIT)
         {
-            OBDN_WINDOW_WIDTH = renderScene->window[0];
-            OBDN_WINDOW_HEIGHT = renderScene->window[1];
-            obdn_v_RecreateSwapchain();
+            onRecreateSwapchain();
         }
     }
 }
@@ -360,7 +358,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .clearValueCount = 2,
             .pClearValues = clears,
-            .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
+            .renderArea = {{0, 0}, {renderScene->window[0], renderScene->window[1]}},
             .renderPass =  swapchainRenderPass,
             .framebuffer = swapchainFrameBuffers[obdn_v_GetCurrentFrameIndex()]
         };
@@ -376,7 +374,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .clearValueCount = 1,
             .pClearValues = &clearValueColor,
-            .renderArea = {{0, 0}, {OBDN_WINDOW_WIDTH, OBDN_WINDOW_HEIGHT}},
+            .renderArea = {{0, 0}, {renderScene->window[0], renderScene->window[1]}},
             .renderPass =  postRenderPass,
             .framebuffer = postFrameBuffers[obdn_v_GetCurrentFrameIndex()]
         };
@@ -431,8 +429,6 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene)
 
     initSwapchainDependentFramebuffers();
 
-    obdn_v_RegisterSwapchainRecreationFn(onRecreateSwapchain);
-
     if (copySwapToHost)
     {
         VkDeviceSize swapImageSize = obdn_v_GetFrame(0)->size;
@@ -449,6 +445,7 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene)
 
 void r_Render(uint32_t fi, VkSemaphore waitSemaphore)
 {
+    assert(renderScene->primCount == 1);
     syncScene(fi);
     obdn_v_WaitForFence(&renderCommand.fence);
     obdn_v_ResetCommand(&renderCommand);
@@ -522,8 +519,8 @@ void r_CleanUp(void)
 void r_GetSwapBufferData(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
         void** colorData, void** depthData)
 {
-    *width = OBDN_WINDOW_WIDTH;
-    *height = OBDN_WINDOW_HEIGHT;
+    *width = renderScene->window[0];
+    *height = renderScene->window[1];
     *elementSize = 4;
     *colorData = swapHostBufferColor.hostData;
     *depthData = swapHostBufferDepth.hostData;
@@ -532,8 +529,8 @@ void r_GetSwapBufferData(uint32_t* width, uint32_t* height, uint32_t* elementSiz
 void r_GetColorDepthExternal(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
         uint64_t* colorOffset, uint64_t* depthOffset)
 {
-    *width = OBDN_WINDOW_WIDTH;
-    *height = OBDN_WINDOW_HEIGHT;
+    *width = renderScene->window[0];
+    *height = renderScene->window[1];
     *elementSize = 4;
 
     uint32_t frameId = obdn_v_GetCurrentFrameIndex();

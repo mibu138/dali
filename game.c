@@ -445,8 +445,8 @@ void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
     Obdn_S_MaterialId matId = obdn_s_CreateMaterial(renderScene, (Vec3){1, 1, 1}, 1.0, texId, 0, 0);
     obdn_s_BindPrimToMaterial(renderScene, primId, matId);
 
-    printf("Prim id!! : %d\n", primId);
-    printf(" >>>>>>>>>>>>> Tex id!! : %d\n", texId);
+    renderScene->window[0] = OBDN_WINDOW_WIDTH;
+    renderScene->window[1] = OBDN_WINDOW_HEIGHT;
 
     initGPUSelection(&renderScene->prims[primId].rprim);
 

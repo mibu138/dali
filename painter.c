@@ -111,6 +111,7 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
 void painter_LocalInit(uint32_t texSize)
 {
     printf(">>>> Painter local init\n");
+
     g_Init(&renderScene, &paintScene);
     p_Init(&renderScene, &paintScene, texSize);
     r_InitRenderer(&renderScene, &paintScene);
@@ -133,7 +134,7 @@ void painter_StartLoop(void)
         g_Update();
         VkSemaphore s = VK_NULL_HANDLE;
         s = p_Paint(s);
-        uint32_t i = obdn_v_RequestFrame(&renderScene.dirt);
+        uint32_t i = obdn_v_RequestFrame(&renderScene.dirt, renderScene.window);
         r_Render(i, s);
 
         obdn_FrameEnd(&loopData);

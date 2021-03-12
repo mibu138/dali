@@ -1486,6 +1486,7 @@ void p_SavePaintImage(void)
 
 VkSemaphore p_Paint(VkSemaphore waitSemaphore)
 {
+    assert(renderScene->primCount == 1);
     obdn_v_WaitForFence(&paintCommand.fence);
     obdn_v_ResetCommand(&paintCommand);
     waitSemaphore = syncScene();
