@@ -1,4 +1,5 @@
 #include "painter.h"
+#include "paint.h"
 #include "game.h"
 #include "common.h"
 #include "obsidian/t_def.h"
@@ -64,6 +65,9 @@ static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
     .deviceExternalGraphicsImageMemorySize = OBDN_100_MiB };
 }
 
+static Obdn_S_Scene renderScene;
+static PaintScene   paintScene;
+
 void painter_Init(uint32_t texSize, bool houdiniMode)
 {
     assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K);
@@ -107,23 +111,9 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
 void painter_LocalInit(uint32_t texSize)
 {
     printf(">>>> Painter local init\n");
-    r_InitRenderer(texSize);
-    g_Init();
-}
-
-void painter_LoadFprim(Obdn_F_Primitive* fprim)
-{
-    Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(fprim);
-    obdn_f_FreePrimitive(fprim);
-    r_LoadPrim(prim);
-}
-
-void painter_ReloadPrim(Obdn_F_Primitive* fprim)
-{
-    vkDeviceWaitIdle(device);
-    r_ClearPrim();
-
-    painter_LoadFprim(fprim);
+    g_Init(&renderScene, &paintScene);
+    p_Init(&renderScene, &paintScene, texSize);
+    r_InitRenderer(&renderScene, &paintScene);
 }
 
 void painter_StartLoop(void)
@@ -141,35 +131,14 @@ void painter_StartLoop(void)
         obdn_i_ProcessEvents();
 
         g_Update();
-        r_Render();
+        VkSemaphore s = VK_NULL_HANDLE;
+        s = p_Paint(s);
+        r_Render(s);
 
         obdn_FrameEnd(&loopData);
-    }
 
-    if (parms.reload)
-    {
-        parms.reload = false;
-        vkDeviceWaitIdle(device);
-
-        r_ClearPrim();
-        Obdn_R_Primitive cube = obdn_r_CreateCubePrim(true);
-        r_LoadPrim(cube);
-        printf("RELOAD!\n");
-
-        painter_StartLoop();
-    }
-    else if (parms.restart)
-    {
-        parms.restart = false;
-        vkDeviceWaitIdle(device);
-
-        painter_ShutDown();
-        painter_Init(IMG_4K, parms.copySwapToHost); // note: will not match 8k or 16k
-        Obdn_R_Primitive cube = obdn_r_CreateCubePrim(true);
-        r_LoadPrim(cube);
-        printf("RESTART!\n");
-
-        painter_StartLoop();
+        paintScene.dirt = 0;
+        renderScene.dirt = 0;
     }
 }
 

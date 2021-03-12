@@ -8,7 +8,7 @@
 
 struct Obdn_I_Event;
 
-void g_Init(void);
+void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_);
 void g_CleanUp(void);
 bool g_Responder(const struct Obdn_I_Event *event);
 void g_Update(void);

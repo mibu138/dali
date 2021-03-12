@@ -9,7 +9,7 @@ layout(location = 2) in  vec3 inUvw;
 
 layout(location = 0) out vec4 outColor;
 
-layout(set = 0, binding = 3) uniform sampler2D image;
+layout(set = 0, binding = 2) uniform sampler2D image;
 
 void main()
 {

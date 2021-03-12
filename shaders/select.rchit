@@ -8,15 +8,13 @@
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 
-layout(binding = 1, set = 0, scalar) buffer Attributes {
+layout(set = 0, binding = 3, scalar) buffer Attributes {
     vec3 a[];
 } attribs;
 
-layout(binding = 2, set = 0) buffer Indices {
+layout(set = 0, binding = 4) buffer Indices {
     uint i[];
 } indices;
-
-layout(binding = 0, set = 1) uniform accelerationStructureEXT topLevelAS;
 
 hitAttributeEXT vec3 hitAttrs;
 

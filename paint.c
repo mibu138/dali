@@ -3,7 +3,10 @@
 #include <obsidian/r_raytrace.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/private.h>
+#include <string.h>
 #include "layer.h"
+#include "obsidian/r_geo.h"
+#include "obsidian/v_command.h"
 #include "paint.h"
 #include "undo.h"
 #include "obsidian/t_def.h"
@@ -71,6 +74,7 @@ static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
 
 static const PaintScene* scene;
 static const Obdn_R_Primitive* prim;
+static Obdn_S_Scene* renderScene;
 
 static VkPipelineLayout pipelineLayout;
 
@@ -459,14 +463,9 @@ static void initUniformBuffers(void)
 static void initDescSetsAndPipeLayouts(void)
 {
     const Obdn_R_DescriptorSetInfo descSets[] = {{
-        //   raster
-            .bindingCount = 4, 
+            .bindingCount = 3, 
             .bindings = {{
-                // pos buffer
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-                .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            },{ // uv buffer
+                // uv buffer
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
@@ -480,9 +479,13 @@ static void initDescSetsAndPipeLayouts(void)
                 .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
             }},
         },{
-            .bindingCount = 2, 
+            .bindingCount = 3, 
             .bindings = {{
                 // matrices
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+                .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
+            },{ // brush 
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
                 .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
@@ -541,17 +544,9 @@ static void updateDescSetPrim(void)
         .pAccelerationStructures    = &topLevelAS.handle
     };
 
-    VkDescriptorBufferInfo vertBufInfo = {
-        .offset = prim->vertexRegion.offset,
-        .range  = prim->vertexRegion.size,
-        .buffer = prim->vertexRegion.buffer,
-    };
-
-    // TODO: create a method to extract the offset and range of an attribute
-    // given its name
     VkDescriptorBufferInfo uvBufInfo = {
-        .offset = prim->vertexRegion.offset + prim->attrOffsets[2],
-        .range  = prim->vertexRegion.size - prim->attrOffsets[2], //works only because uv is the last attribute
+        .offset = obdn_r_GetAttrOffset(prim, "uv"),
+        .range  = obdn_r_GetAttrRange(prim, "uv"),
         .buffer = prim->vertexRegion.buffer,
     };
 
@@ -568,7 +563,7 @@ static void updateDescSetPrim(void)
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo = &vertBufInfo
+            .pBufferInfo = &uvBufInfo
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -576,20 +571,12 @@ static void updateDescSetPrim(void)
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-            .pBufferInfo = &uvBufInfo
-        },{
-            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_PRIM],
-            .dstBinding = 2,
-            .descriptorCount = 1,
-            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .pBufferInfo = &indexBufInfo
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
             .dstSet = description.descriptorSets[DESC_SET_PRIM],
-            .dstBinding = 3,
+            .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
             .pNext = &asInfo
@@ -612,6 +599,12 @@ static void updateDescSetPaint(void)
         .buffer = brushRegion.buffer,
     };
 
+    VkDescriptorImageInfo imageInfo = {
+        .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .imageView = imageA.view,
+        .sampler   = imageA.sampler
+    };
+
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
@@ -628,6 +621,14 @@ static void updateDescSetPaint(void)
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
             .pBufferInfo = &uniformInfoBrush
+    },{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstArrayElement = 0,
+            .dstSet = description.descriptorSets[DESC_SET_PAINT], 
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+            .pImageInfo = &imageInfo
     }};
 
     vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
@@ -711,7 +712,7 @@ static void initPaintPipelineAndShaderBindingTable(void)
         },
         .chitCount = 1,
         .chitShaders = (char*[]){
-            SPVDIR"/paint-vec2-rchit.spv"
+            SPVDIR"/paint-rchit.spv"
         }
     }};
 
@@ -1260,7 +1261,7 @@ static void splat(const VkCommandBuffer cmdBuf, const float x, const float y)
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, paintPipeline);
 
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
-            pipelineLayout, 0, 1, &description.descriptorSets[DESC_SET_PAINT], 0, NULL);
+            pipelineLayout, 0, 2, description.descriptorSets, 0, NULL);
 
     float pc[4] = {coal_Rand(), coal_Rand(), x, y};
 
@@ -1293,7 +1294,7 @@ static void applyPaint(const VkCommandBuffer cmdBuf)
             cmdBuf, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
             pipelineLayout,
-            0, 1, &description.descriptorSets[DESC_SET_COMP], 
+            DESC_SET_COMP, 1, &description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_1]);
@@ -1482,8 +1483,10 @@ void p_SavePaintImage(void)
     obdn_v_SaveImage(&imageA, fileType, strbuf);
 }
 
-VkSemaphore paint(VkSemaphore waitSemaphore)
+VkSemaphore p_Paint(VkSemaphore waitSemaphore)
 {
+    obdn_v_WaitForFence(&paintCommand.fence);
+    obdn_v_ResetCommand(&paintCommand);
     waitSemaphore = syncScene();
     updateCommands();
     obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
@@ -1492,11 +1495,14 @@ VkSemaphore paint(VkSemaphore waitSemaphore)
     return paintCommand.semaphore;
 }
 
-void p_Init(const Obdn_R_Primitive* prim_, const uint32_t texSize)
+void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSize)
 {
-    prim = prim_;
+    assert(sScene->primCount > 0);
+    prim  = &sScene->prims[0].rprim;
+    scene = pScene;
+    renderScene = sScene;
 
-    assert(prim->vertexRegion.size == 0);
+    assert(prim->vertexRegion.size);
     obdn_r_BuildBlas(prim, &bottomLevelAS);
     obdn_r_BuildTlas(&bottomLevelAS, &topLevelAS);
 
@@ -1543,4 +1549,5 @@ void p_Init(const Obdn_R_Primitive* prim_, const uint32_t texSize)
     updateDescSetPaint();
     updateDescSetComp();
 
+    renderScene->textures[1].devImage = imageA;
 }

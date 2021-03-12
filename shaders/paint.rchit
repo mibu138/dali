@@ -8,25 +8,13 @@
 
 layout(location = 0) rayPayloadInEXT hitPayload prd;
 
-layout(binding = 1, set = 0, scalar) buffer Attributes {
-    vec3 a[];
-} attribs;
+layout(set = 0, binding = 0, scalar) buffer Uv {
+    vec2 uv[];
+} uvs;
 
-layout(binding = 2, set = 0) buffer Indices {
+layout(set = 0, binding = 1) buffer Indices {
     uint i[];
 } indices;
-
-layout(binding = 0, set = 1) uniform accelerationStructureEXT topLevelAS;
-
-layout(push_constant) uniform Constants {
-    vec4 clearColor;
-    vec3 lightDir;
-    float lightIntensity;
-    int   lightType;
-    uint  posOffset;
-    uint  normalOffset;
-    uint  uvwOffset;
-} pushC;
 
 hitAttributeEXT vec3 hitAttrs;
 
@@ -34,26 +22,18 @@ layout(location = 1) rayPayloadEXT bool isShadowed;
 
 void main()
 {
-    ivec3 ind = ivec3(
+    const ivec3 ind = ivec3(
         indices.i[3 * gl_PrimitiveID + 0],
         indices.i[3 * gl_PrimitiveID + 1],
         indices.i[3 * gl_PrimitiveID + 2]);
 
     const vec3 barycen = vec3(1.0 - hitAttrs.x - hitAttrs.y, hitAttrs.x, hitAttrs.y);
 
-    const uint nOffset = pushC.normalOffset;
-    const uint uvwOffset = pushC.uvwOffset;;
+    const vec2 uv0 = uvs.uv[ind[0]];
+    const vec2 uv1 = uvs.uv[ind[1]];
+    const vec2 uv2 = uvs.uv[ind[2]];
 
-    const vec3 n0 = attribs.a[ind[0] + nOffset];
-    const vec3 n1 = attribs.a[ind[1] + nOffset];
-    const vec3 n2 = attribs.a[ind[2] + nOffset];
+    const vec2 uv = uv0 * barycen.x + uv1 * barycen.y + uv2 * barycen.z;
 
-    const vec3 uvw0 = attribs.a[ind[0] + uvwOffset];
-    const vec3 uvw1 = attribs.a[ind[1] + uvwOffset];
-    const vec3 uvw2 = attribs.a[ind[2] + uvwOffset];
-
-    vec3 normal = n0 * barycen.x + n1 * barycen.y + n2 * barycen.z;
-    vec3 uvw    = uvw0 * barycen.x + uvw1 * barycen.y + uvw2 * barycen.z;
-
-    prd.hitUv = uvw.xy;
+    prd.hitUv = uv;
 }

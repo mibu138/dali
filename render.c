@@ -45,8 +45,6 @@ typedef Obdn_V_BufferRegion BufferRegion;
 static BufferRegion  matrixRegion;
 static BufferRegion  brushRegion;
 
-static Obdn_R_Primitive     renderPrim;
-
 static VkPipelineLayout           pipelineLayout;
 static VkPipeline                 graphicsPipelines[G_PIPELINE_COUNT];
 
@@ -196,15 +194,15 @@ static void updatePaintTexture(void)
 
     VkDescriptorImageInfo texInfo = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = renderScene->textures[0].devImage.view,
-        .sampler     = renderScene->textures[0].devImage.sampler
+        .imageView   = renderScene->textures[1].devImage.view,
+        .sampler     = renderScene->textures[1].devImage.sampler
     };
 
     VkWriteDescriptorSet write = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstArrayElement = 0,
         .dstSet = description.descriptorSets[0],
-        .dstBinding = 1,
+        .dstBinding = 2,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
         .pImageInfo = &texInfo
@@ -323,9 +321,8 @@ static void updateBrush(void)
     brush->y = paintScene->brush_y;
 }
 
-static VkSemaphore syncScene(const uint32_t frameIndex)
+static void syncScene(const uint32_t frameIndex)
 {
-    VkSemaphore semaphore = VK_NULL_HANDLE;
     if (paintScene->dirt)
     {
         if (paintScene->dirt & SCENE_VIEW_BIT)
@@ -341,7 +338,6 @@ static VkSemaphore syncScene(const uint32_t frameIndex)
             obdn_v_RecreateSwapchain();
         }
     }
-    return semaphore;
 }
 
 static void rasterize(const VkCommandBuffer cmdBuf)
@@ -372,7 +368,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
 
         vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
 
-            obdn_r_DrawPrim(cmdBuf, &renderPrim);
+        obdn_r_DrawPrim(cmdBuf, &renderScene->prims[0].rprim);
             
         vkCmdEndRenderPass(cmdBuf);
     }
@@ -414,8 +410,10 @@ static void updateRenderCommands(const int8_t frameIndex)
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
-void r_InitRenderer()
+void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene)
 {
+    renderScene = scene;
+    paintScene  = pScene;
     graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);
 
     copySwapToHost = parms.copySwapToHost; //note this
@@ -450,12 +448,12 @@ void r_InitRenderer()
     }
 }
 
-void r_Render(void)
+void r_Render(VkSemaphore waitSemaphore)
 {
     Obdn_Mask dummyMask;
     uint32_t i = obdn_v_RequestFrame(&dummyMask);
 
-    VkSemaphore waitSemaphore = syncScene(i);
+    syncScene(i);
     obdn_v_WaitForFence(&renderCommand.fence);
     obdn_v_ResetCommand(&renderCommand);
     updateRenderCommands(i);
@@ -500,30 +498,6 @@ void r_Render(void)
     }
     else   
         obdn_v_PresentFrame(waitSemaphore);
-    obdn_v_WaitForFenceNoReset(&renderCommand.fence);
-}
-
-void r_BindScene(const PaintScene* scene_)
-{
-    paintScene = scene_;
-    printf("Scene bound!\n");
-}
-
-void r_LoadPrim(Obdn_R_Primitive prim)
-{
-    assert(renderPrim.vertexRegion.size == 0);
-    renderPrim = prim;
-}
-
-void r_ClearPrim(void)
-{
-    obdn_r_FreePrim(&renderPrim);
-}
-
-void r_ClearPaintImage(void)
-{
-    printf("called %s. need to reimplement.\n", __PRETTY_FUNCTION__);
-    //obdn_v_ClearColorImage(&paintImage);
 }
 
 void r_CleanUp(void)
@@ -547,9 +521,6 @@ void r_CleanUp(void)
     }
     obdn_v_FreeBufferRegion(&matrixRegion);
     obdn_v_FreeBufferRegion(&brushRegion);
-    r_ClearPrim();
-    l_CleanUp();
-    u_CleanUp();
 }
 
 void r_GetSwapBufferData(uint32_t* width, uint32_t* height, uint32_t* elementSize, 

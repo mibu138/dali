@@ -20,6 +20,7 @@ DEPS =  \
 		game.h \
 		render.h \
 		painter.h \
+		paint.h \
 		layer.h \
 		undo.h \
 		common.h \
@@ -30,6 +31,7 @@ DEPS =  \
 
 OBJS =  \
 		$(O)/game.o \
+		$(O)/paint.o \
 		$(O)/render.o \
 		$(O)/painter.o \
 		$(O)/layer.o \

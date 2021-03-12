@@ -1,6 +1,9 @@
 #include "game.h"
 #include "coal/m_math.h"
+#include "obsidian/r_raytrace.h"
 #include "obsidian/r_render.h"
+#include "obsidian/s_scene.h"
+#include "obsidian/v_memory.h"
 #include "render.h"
 #include "layer.h"
 #include "undo.h"
@@ -9,12 +12,41 @@
 #include <assert.h>
 #include <string.h>
 #include <obsidian/t_def.h>
+#include <obsidian/r_geo.h>
 #include <obsidian/i_input.h>
 #include <obsidian/v_video.h>
 #include <obsidian/u_ui.h>
+#include <obsidian/r_pipeline.h>
+#include <obsidian/f_file.h>
+#include <obsidian/private.h>
 #include <pthread.h>
+#include <vulkan/vulkan_core.h>
 
 static bool pivotChanged;
+
+#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
+
+static Obdn_V_BufferRegion          selectionRegion;
+static Obdn_V_BufferRegion          camRegion;
+static Obdn_R_Description           description;
+static VkDescriptorSetLayout        descriptorSetLayout;
+static VkPipelineLayout             pipelineLayout;
+static VkPipeline                   selectionPipeline;
+static Obdn_R_ShaderBindingTable    sbt;
+static Obdn_R_AccelerationStructure blas;
+static Obdn_R_AccelerationStructure tlas;
+
+typedef struct {
+    float x;
+    float y;
+    float z;
+    int   hit;
+} Selection;
+
+typedef struct {
+    Mat4 viewInv;
+    Mat4 projInv;
+} Cam;
 
 typedef enum {
     TUMBLE,
@@ -46,8 +78,8 @@ static struct Player {
     Vec3 pivot;
 } player;
 
-static PaintScene     scene;
-static Scene_DirtMask dirt;
+static PaintScene*     paintScene;
+static Obdn_S_Scene*   renderScene;
 
 static const Vec3 UP_VEC = {0, 1, 0};
 
@@ -55,16 +87,6 @@ static Obdn_U_Widget* radiusSlider;
 static Obdn_U_Widget* opacitySlider;
 static Obdn_U_Widget* falloffSlider;
 static Obdn_U_Widget* text;
-
-static void setViewerPivotByIntersection(void)
-{
-    Vec3 hitPos;
-    int r = r_GetSelectionPos(&hitPos);
-    if (r)
-    {
-        player.pivot = hitPos;
-    }
-}
 
 static void lerpTargetToPivot(void)
 {
@@ -87,8 +109,8 @@ static Mat4 generatePlayerView(void)
 
 static void setBrushActive(bool active)
 {
-    scene.brush_active = active;
-    dirt |= SCENE_BRUSH_BIT;
+    paintScene->brush_active = active;
+    paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
 static void handleMouseMovement(void)
@@ -167,10 +189,10 @@ static void incrementLayer(void)
     L_LayerId id;
     if (l_IncrementLayer(&id))
     {
-        scene.layer = id;
-        dirt |= SCENE_LAYER_CHANGED_BIT;
+        paintScene->layer = id;
+        paintScene->dirt |= SCENE_LAYER_CHANGED_BIT;
         if (!u_LayerInCache(id))
-            dirt |= SCENE_LAYER_BACKUP_BIT;
+            paintScene->dirt |= SCENE_LAYER_BACKUP_BIT;
         char str[12];
         snprintf(str, 12, "Layer %d", id + 1);
         obdn_u_UpdateText(str, text);
@@ -182,14 +204,171 @@ static void decrementLayer(void)
     L_LayerId id;
     if (l_DecrementLayer(&id))
     {
-        scene.layer = id;
-        dirt |= SCENE_LAYER_CHANGED_BIT;
+        paintScene->layer = id;
+        paintScene->dirt |= SCENE_LAYER_CHANGED_BIT;
         if (!u_LayerInCache(id))
-            dirt |= SCENE_LAYER_BACKUP_BIT;
+            paintScene->dirt |= SCENE_LAYER_BACKUP_BIT;
         char str[12];
         snprintf(str, 12, "Layer %d", id + 1);
         obdn_u_UpdateText(str, text);
     }
+}
+
+static void initGPUSelection(const Obdn_R_Primitive* prim)
+{
+    obdn_r_BuildBlas(prim, &blas);
+    Mat4 xform = m_Ident_Mat4();
+    obdn_r_BuildTlasNew(1, &blas, &xform, &tlas);
+
+    selectionRegion = obdn_v_RequestBufferRegion(
+        sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+
+    camRegion = obdn_v_RequestBufferRegion(sizeof(Cam),
+                                           VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                           OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+
+    Obdn_R_DescriptorBinding bindings[] = {{
+        // as
+        .descriptorCount = 1,
+        .type            = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+        .stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR
+    },{
+        // selection buffer
+        .descriptorCount = 1,
+        .type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+    },{
+        // cam buffer
+        .descriptorCount = 1,
+        .type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+    },{
+        // pos buffer
+        .descriptorCount = 1,
+        .type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+    },{
+        // index buffer
+        .descriptorCount = 1,
+        .type            = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .stageFlags      = VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR,
+    }};
+
+    Obdn_R_DescriptorSetInfo dsInfo = {
+        .bindingCount = LEN(bindings),
+    };
+
+    memcpy(dsInfo.bindings, bindings, sizeof(bindings));
+
+    obdn_r_CreateDescriptionsAndLayouts(1, &dsInfo, &descriptorSetLayout, 1, &description);
+
+    VkPushConstantRange pcrange = {
+        .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
+        .offset     = 0,
+        .size       = sizeof(Mat4) * 3
+    };
+
+    Obdn_R_PipelineLayoutInfo plInfo = {
+        .descriptorSetCount   = 1,
+        .descriptorSetLayouts = &descriptorSetLayout,
+        .pushConstantCount    = 1,
+        .pushConstantsRanges  = &pcrange
+    };
+
+    obdn_r_CreatePipelineLayouts(1, &plInfo, &pipelineLayout);
+
+    Obdn_R_RayTracePipelineInfo rtPipeInfo = {
+        .layout = pipelineLayout,
+        .raygenCount = 1,
+        .raygenShaders = (char*[]){
+            SPVDIR"/select-rgen.spv",
+        },
+        .missCount = 1,
+        .missShaders = (char*[]){
+            SPVDIR"/select-rmiss.spv",
+        },
+        .chitCount = 1,
+        .chitShaders = (char*[]){
+            SPVDIR"/select-rchit.spv"
+        }
+    };
+
+    obdn_r_CreateRayTracePipelines(1, &rtPipeInfo, &selectionPipeline, &sbt);
+    
+    VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+        .accelerationStructureCount = 1,
+        .pAccelerationStructures    = &tlas.handle
+    };
+
+    VkDescriptorBufferInfo storageBufInfoSelection= {
+        .range  = selectionRegion.size,
+        .offset = selectionRegion.offset,
+        .buffer = selectionRegion.buffer,
+    };
+
+    VkDescriptorBufferInfo camInfo = {
+        .range  = camRegion.size,
+        .offset = camRegion.offset,
+        .buffer = camRegion.buffer,
+    };
+
+    VkDescriptorBufferInfo storageBufInfoPos = {
+        .range  = obdn_r_GetAttrRange(prim, "pos"),
+        .offset = obdn_r_GetAttrOffset(prim, "pos"),
+        .buffer = prim->vertexRegion.buffer,
+    };
+
+    VkDescriptorBufferInfo storageBufInfoIndices = {
+        .range  = prim->indexRegion.size,
+        .offset = prim->indexRegion.offset,
+        .buffer = prim->indexRegion.buffer
+    };
+
+    VkWriteDescriptorSet writes[] = {{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+        .pNext = &asInfo
+    },{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 1,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo = &storageBufInfoSelection
+    },{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 2,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+        .pBufferInfo = &camInfo
+    },{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 3,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo = &storageBufInfoPos
+    },{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 4,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo = &storageBufInfoIndices
+    }};
+
+    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
 }
 
 static int getSelectionPos(Vec3* v)
@@ -198,7 +377,21 @@ static int getSelectionPos(Vec3* v)
 
     obdn_v_BeginCommandBuffer(cmd.buffer);
 
-    rayTraceSelect(cmd.buffer);
+    VkCommandBuffer cmdBuf = cmd.buffer;
+
+    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, selectionPipeline); 
+
+    vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
+            pipelineLayout, 0, 1, description.descriptorSets, 0, NULL);
+
+    vkCmdPushConstants(cmdBuf, pipelineLayout, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(float) * 2, &mousePos);
+
+    vkCmdTraceRaysKHR(cmdBuf, 
+            &sbt.raygenTable,
+            &sbt.missTable,
+            &sbt.hitTable,
+            &sbt.callableTable,
+            1, 1, 1);
 
     obdn_v_EndCommandBuffer(cmd.buffer);
 
@@ -218,8 +411,46 @@ static int getSelectionPos(Vec3* v)
         return 0;
 }
 
-void g_Init(void)
+static void setViewerPivotByIntersection(void)
 {
+    Vec3 hitPos;
+    int r = getSelectionPos(&hitPos);
+    if (r)
+    {
+        player.pivot = hitPos;
+    }
+}
+
+
+void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
+{
+    assert(scene_);
+    assert(paintScene_);
+    paintScene = paintScene_;
+    renderScene = scene_;
+
+    obdn_s_CreateEmptyScene(renderScene);
+
+    Obdn_S_PrimId primId = 0;
+    if (!parms.copySwapToHost)
+    {
+        Obdn_F_Primitive fprim;
+        obdn_f_ReadPrimitive("data/flip-uv.tnt", &fprim);
+        Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
+        obdn_f_FreePrimitive(&fprim);
+        primId = obdn_s_AddRPrim(renderScene, prim, NULL);
+    }
+    else
+        assert(0 && "we need to load a prim");
+    Obdn_S_TextureId texId = ++renderScene->textureCount;
+    Obdn_S_MaterialId matId = obdn_s_CreateMaterial(renderScene, (Vec3){1, 1, 1}, 1.0, texId, 0, 0);
+    obdn_s_BindPrimToMaterial(renderScene, primId, matId);
+
+    printf("Prim id!! : %d\n", primId);
+    printf(" >>>>>>>>>>>>> Tex id!! : %d\n", texId);
+
+    initGPUSelection(&renderScene->prims[primId].rprim);
+
     obdn_i_Subscribe(g_Responder);
 
     Mat4 initView = m_Ident_Mat4();
@@ -246,8 +477,7 @@ void g_Init(void)
         obdn_u_CreateText(10, 140, "F: ", falloffSlider);
     //}
 
-    r_BindScene(&scene);
-    u_BindScene(&scene);
+    u_BindScene(paintScene_);
 }
 
 bool g_Responder(const Obdn_I_Event *event)
@@ -258,17 +488,15 @@ bool g_Responder(const Obdn_I_Event *event)
         {
             case OBDN_KEY_E: g_SetPaintMode(PAINT_MODE_ERASE); break;
             case OBDN_KEY_W: g_SetPaintMode(PAINT_MODE_OVER); break;
-            case OBDN_KEY_Z: dirt |= SCENE_UNDO_BIT; break;
+            case OBDN_KEY_Z: paintScene->dirt |= SCENE_UNDO_BIT; break;
             case OBDN_KEY_R: g_SetBrushColor(1, 0, 0); break;
             case OBDN_KEY_G: g_SetBrushColor(0, 1, 0); break;
             case OBDN_KEY_B: g_SetBrushColor(0, 0, 1); break;
-            case OBDN_KEY_P: r_SavePaintImage(); break;
             case OBDN_KEY_ESC: parms.shouldRun = false; break;
             case OBDN_KEY_J: decrementLayer(); break;
             case OBDN_KEY_K: incrementLayer(); break;
             case OBDN_KEY_L: l_CreateLayer(); break;
             case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
-            case OBDN_KEY_C: r_ClearPaintImage(); break;
             case OBDN_KEY_I: break;
             default: return true;
         } break;
@@ -313,7 +541,7 @@ bool g_Responder(const Obdn_I_Event *event)
         {
             switch (mode) 
             {
-                case MODE_PAINT: mode = MODE_DO_NOTHING; dirt |= SCENE_LAYER_BACKUP_BIT; break;
+                case MODE_PAINT: mode = MODE_DO_NOTHING; paintScene->dirt |= SCENE_LAYER_BACKUP_BIT; break;
                 case MODE_VIEW:  drag.active = false; break;
                 default: break;
             }
@@ -351,26 +579,24 @@ void g_Update(void)
     else 
         setBrushActive(false);
 
-    // the extra, local mask allows us to clear the dirt mask for the next frame while maintaining the current frame dirty bits
-    scene.dirt = dirt;
-    dirt = 0;
+    // the extra, local mask allows us to clear the paintScene->dirt mask for the next frame while maintaining the current frame dirty bits
 
     u_Update();
 }
 
 void g_SetBrushColor(const float r, const float g, const float b)
 {
-    scene.brush_r = r;
-    scene.brush_g = g;
-    scene.brush_b = b;
-    dirt |= SCENE_BRUSH_BIT;
+    paintScene->brush_r = r;
+    paintScene->brush_g = g;
+    paintScene->brush_b = b;
+    paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
 void g_SetBrushRadius(float r)
 {
     if (r < 0.001) r = 0.001; // should not go to 0... may cause div by 0 in shader
-    scene.brush_radius = r;
-    dirt |= SCENE_BRUSH_BIT;
+    paintScene->brush_radius = r;
+    paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
 void g_CleanUp(void)
@@ -383,56 +609,59 @@ void g_CleanUp(void)
     //}
     obdn_u_DestroyWidget(text);
     obdn_i_Unsubscribe(g_Responder);
-    memset(&scene, 0, sizeof(scene));
     memset(&mousePos, 0, sizeof(mousePos));
 }
 
 void g_SetView(const Mat4* m)
 {
-    scene.view = *m;
-    dirt |= SCENE_VIEW_BIT;
+    paintScene->view = *m;
+    paintScene->dirt |= SCENE_VIEW_BIT;
+    Cam* cam = (Cam*)camRegion.hostData;
+    cam->viewInv = m_Invert4x4(m);
 }
 
 void g_SetProj(const Mat4* m)
 {
-    scene.proj = *m;
-    dirt |= SCENE_PROJ_BIT;
+    paintScene->proj = *m;
+    paintScene->dirt |= SCENE_PROJ_BIT;
+    Cam* cam = (Cam*)camRegion.hostData;
+    cam->projInv = m_Invert4x4(m);
 }
 
 void g_SetWindow(uint32_t width, uint32_t height)
 {
     // TODO: make this safe some how... 
-    scene.window_width  = width;
-    scene.window_height = height;
-    dirt |= SCENE_WINDOW_BIT;
+    paintScene->window_width  = width;
+    paintScene->window_height = height;
+    paintScene->dirt |= SCENE_WINDOW_BIT;
 }
 
 void g_SetBrushPos(float x, float y)
 {
-    scene.brush_x = x;
-    scene.brush_y = y;
-    dirt |= SCENE_BRUSH_BIT;
+    paintScene->brush_x = x;
+    paintScene->brush_y = y;
+    paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
 void g_SetPaintMode(PaintMode mode)
 {
-    scene.paint_mode = mode;
-    dirt |= SCENE_PAINT_MODE_BIT;
-    dirt |= SCENE_BRUSH_BIT;
+    paintScene->paint_mode = mode;
+    paintScene->dirt |= SCENE_PAINT_MODE_BIT;
+    paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
 void g_SetBrushOpacity(float opacity)
 {
     if (opacity < 0.0) opacity = 0.0;
     if (opacity > 1.0) opacity = 1.0;
-    scene.brush_opacity = opacity;
-    dirt |= SCENE_BRUSH_BIT;
+    paintScene->brush_opacity = opacity;
+    paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
 void g_SetBrushFallOff(float falloff)
 {
     if (falloff < 0.0) falloff = 0.0;
     if (falloff > 1.0) falloff = 1.0;
-    scene.brush_falloff = falloff;
-    dirt |= SCENE_BRUSH_BIT;
+    paintScene->brush_falloff = falloff;
+    paintScene->dirt |= SCENE_BRUSH_BIT;
 }
