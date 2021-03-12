@@ -162,9 +162,9 @@ static void updateUbos(void)
     };
 
     VkDescriptorBufferInfo uniformInfoBrush = {
-        .range  = matrixRegion.size,
-        .offset = matrixRegion.offset,
-        .buffer = matrixRegion.buffer,
+        .range  = brushRegion.size,
+        .offset = brushRegion.offset,
+        .buffer = brushRegion.buffer,
     };
 
     VkWriteDescriptorSet writes[] = {{
