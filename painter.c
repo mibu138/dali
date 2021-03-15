@@ -119,7 +119,7 @@ void painter_LocalInit(uint32_t texSize)
 
 void painter_StartLoop(void)
 {
-    Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 0, 1);
+    Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 0, 0);
 
     parms.shouldRun = true;
 

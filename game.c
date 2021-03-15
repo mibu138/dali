@@ -213,12 +213,67 @@ static void decrementLayer(void)
     }
 }
 
-static void initGPUSelection(const Obdn_R_Primitive* prim)
+static void updatePrim(void)
 {
+    Obdn_R_Primitive* prim = &renderScene->prims[0].rprim;
+    if (blas.bufferRegion.size)
+        obdn_r_DestroyAccelerationStruct(&blas);
+    if (tlas.bufferRegion.size)
+        obdn_r_DestroyAccelerationStruct(&tlas);
     obdn_r_BuildBlas(prim, &blas);
     Mat4 xform = m_Ident_Mat4();
     obdn_r_BuildTlasNew(1, &blas, &xform, &tlas);
 
+    
+    VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
+        .accelerationStructureCount = 1,
+        .pAccelerationStructures    = &tlas.handle
+    };
+
+    VkDescriptorBufferInfo storageBufInfoPos = {
+        .range  = obdn_r_GetAttrRange(prim, "pos"),
+        .offset = obdn_r_GetAttrOffset(prim, "pos"),
+        .buffer = prim->vertexRegion.buffer,
+    };
+
+    VkDescriptorBufferInfo storageBufInfoIndices = {
+        .range  = prim->indexRegion.size,
+        .offset = prim->indexRegion.offset,
+        .buffer = prim->indexRegion.buffer
+    };
+
+    VkWriteDescriptorSet writes[] = {{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 0,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
+        .pNext = &asInfo
+    },{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 3,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo = &storageBufInfoPos
+    },{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstArrayElement = 0,
+        .dstSet = description.descriptorSets[0],
+        .dstBinding = 4,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo = &storageBufInfoIndices
+    }};
+
+    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+}
+
+static void initGPUSelection(const Obdn_R_Primitive* prim)
+{
     selectionRegion = obdn_v_RequestBufferRegion(
         sizeof(Selection), VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
         OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
@@ -294,12 +349,6 @@ static void initGPUSelection(const Obdn_R_Primitive* prim)
     };
 
     obdn_r_CreateRayTracePipelines(1, &rtPipeInfo, &selectionPipeline, &sbt);
-    
-    VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
-        .accelerationStructureCount = 1,
-        .pAccelerationStructures    = &tlas.handle
-    };
 
     VkDescriptorBufferInfo storageBufInfoSelection= {
         .range  = selectionRegion.size,
@@ -313,27 +362,7 @@ static void initGPUSelection(const Obdn_R_Primitive* prim)
         .buffer = camRegion.buffer,
     };
 
-    VkDescriptorBufferInfo storageBufInfoPos = {
-        .range  = obdn_r_GetAttrRange(prim, "pos"),
-        .offset = obdn_r_GetAttrOffset(prim, "pos"),
-        .buffer = prim->vertexRegion.buffer,
-    };
-
-    VkDescriptorBufferInfo storageBufInfoIndices = {
-        .range  = prim->indexRegion.size,
-        .offset = prim->indexRegion.offset,
-        .buffer = prim->indexRegion.buffer
-    };
-
     VkWriteDescriptorSet writes[] = {{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstArrayElement = 0,
-        .dstSet = description.descriptorSets[0],
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
-        .pNext = &asInfo
-    },{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstArrayElement = 0,
         .dstSet = description.descriptorSets[0],
@@ -349,22 +378,6 @@ static void initGPUSelection(const Obdn_R_Primitive* prim)
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
         .pBufferInfo = &camInfo
-    },{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstArrayElement = 0,
-        .dstSet = description.descriptorSets[0],
-        .dstBinding = 3,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        .pBufferInfo = &storageBufInfoPos
-    },{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstArrayElement = 0,
-        .dstSet = description.descriptorSets[0],
-        .dstBinding = 4,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
-        .pBufferInfo = &storageBufInfoIndices
     }};
 
     vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
@@ -420,6 +433,25 @@ static void setViewerPivotByIntersection(void)
     }
 }
 
+static void swapPrims(void)
+{
+    static bool pig = false;
+    Obdn_F_Primitive fprim;
+    if (pig)
+    {
+        obdn_f_ReadPrimitive("data/pig.tnt", &fprim);
+        pig = false;
+    }
+    else
+    {
+        obdn_f_ReadPrimitive("data/flip-uv.tnt", &fprim);
+        pig = true;
+    }
+    Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
+    obdn_f_FreePrimitive(&fprim);
+    prim = obdn_s_SwapRPrim(renderScene, &prim, 0);
+    obdn_r_FreePrim(&prim);
+}
 
 void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
 {
@@ -434,7 +466,7 @@ void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
     if (!parms.copySwapToHost)
     {
         Obdn_F_Primitive fprim;
-        obdn_f_ReadPrimitive("data/flip-uv.tnt", &fprim);
+        obdn_f_ReadPrimitive("data/pig.tnt", &fprim);
         Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
         obdn_f_FreePrimitive(&fprim);
         primId = obdn_s_AddRPrim(renderScene, prim, NULL);
@@ -495,6 +527,7 @@ bool g_Responder(const Obdn_I_Event *event)
             case OBDN_KEY_J: decrementLayer(); break;
             case OBDN_KEY_K: incrementLayer(); break;
             case OBDN_KEY_L: l_CreateLayer(); break;
+            case OBDN_KEY_S: swapPrims(); break;
             case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
             case OBDN_KEY_I: break;
             default: return true;
@@ -580,6 +613,10 @@ void g_Update(void)
 
     // the extra, local mask allows us to clear the paintScene->dirt mask for the next frame while maintaining the current frame dirty bits
 
+    if (renderScene->dirt & OBDN_S_PRIMS_BIT)
+    {
+        updatePrim();
+    }
     u_Update();
 }
 

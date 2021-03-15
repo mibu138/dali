@@ -8,7 +8,7 @@ int main(int argc, char *argv[])
 {
     painter_Init(IMG_4K, false);
     painter_StartLoop();
-    painter_LocalCleanUp();
-    painter_ShutDown();
+    //painter_LocalCleanUp();
+    //painter_ShutDown();
     return 0;
 }
