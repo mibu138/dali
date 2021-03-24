@@ -3,6 +3,7 @@
 #include <obsidian/r_raytrace.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/private.h>
+#include <obsidian/v_private.h>
 #include <string.h>
 #include "layer.h"
 #include "obsidian/r_geo.h"
@@ -1450,9 +1451,10 @@ static void updateCommands()
 
     if (brushActive)
     {
-        static const float unit = 0.0025; //in screen space
+        static const float unit = 0.001; //in screen space
         const float brushDist = m_Distance(brushPos, prevBrushPos);
-        const int splatCount = MIN(MAX(brushDist / unit, 1), 8);
+        const int splatCount = MIN(MAX(brushDist / unit, 1), 30);
+        printf("splatCount: %d\n", splatCount);
         for (int i = 0; i < splatCount; i++)
         {
             float t = (float)i / splatCount;

@@ -23,11 +23,12 @@
 #include <obsidian/t_utils.h>
 #include <obsidian/i_input.h>
 #include <obsidian/u_ui.h>
+#include <obsidian/v_private.h>
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
 
-#define DEF_WINDOW_WIDTH  1300
-#define DEF_WINDOW_HEIGHT 1300
+#define DEF_WINDOW_WIDTH  1500
+#define DEF_WINDOW_HEIGHT 1500
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));

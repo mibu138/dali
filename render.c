@@ -18,6 +18,7 @@
 #include <obsidian/v_command.h>
 #include <obsidian/v_video.h>
 #include <obsidian/r_renderpass.h>
+#include <obsidian/v_private.h>
 #include <vulkan/vulkan_core.h>
 #include "undo.h"
 #include "painter.h"
@@ -320,6 +321,9 @@ static void updateBrush(void)
     brush->radius = paintScene->brush_radius;
     brush->x = paintScene->brush_x;
     brush->y = paintScene->brush_y;
+    brush->r = paintScene->brush_r;
+    brush->g = paintScene->brush_g;
+    brush->b = paintScene->brush_b;
 }
 
 static void syncScene(const uint32_t frameIndex)

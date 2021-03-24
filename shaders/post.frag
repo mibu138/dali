@@ -16,5 +16,5 @@ void main()
     float outer = step(d, brush.radius / 2);
     float inner = step(d, brush.radius / 2 - 0.002);
     float c = outer - inner;
-    outColor = vec4(1, 1, 1, c);
+    outColor = vec4(brush.r, brush.g, brush.b, c);
 }
