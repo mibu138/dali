@@ -18,8 +18,6 @@ typedef struct UndoStack {
     Obdn_V_BufferRegion bufferRegions[MAX_UNDOS];
 } UndoStack;
 
-static const PaintScene* scene;
-
 static uint8_t maxStacks;
 static uint8_t maxUndos;
 
@@ -145,14 +143,13 @@ bool u_LayerInCache(L_LayerId layer)
     return false;
 }
 
-void u_BindScene(const PaintScene* scene_)
-{
-    scene = scene_;
-}
-
-void u_Update(void)
+void u_Update(PaintScene* scene)
 {
     assert(scene);
     if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
+    {
+        if (!u_LayerInCache(scene->layer))
+            scene->dirt |= SCENE_LAYER_BACKUP_BIT;
         onLayerChange(scene->layer);
+    }
 }

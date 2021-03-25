@@ -6,6 +6,7 @@
 #include "render.h"
 #include "obsidian/f_file.h"
 #include "obsidian/r_geo.h"
+#include "undo.h"
 
 #include <pthread.h>
 #include <stdio.h>
@@ -24,6 +25,8 @@
 #include <obsidian/i_input.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/v_private.h>
+#include <dlfcn.h>
+#include "g_api.h"
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
 
@@ -68,6 +71,7 @@ static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
 
 static Obdn_S_Scene renderScene;
 static PaintScene   paintScene;
+static G_Export     ge;
 
 void painter_Init(uint32_t texSize, bool houdiniMode)
 {
@@ -105,6 +109,22 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
     obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
+
+    void* game = dlopen("chalkboard.so", RTLD_LAZY);
+    assert(game);
+    printf("Game module imported successfully.\n");
+    void* g_entry = dlsym(game, "handshake");
+    assert(g_entry);
+    printf("Game handshake function found.\n");
+    G_Handshake handshake = g_entry;
+
+    G_Import gi = {
+        .createLayer    = l_CreateLayer,
+        .decrementLayer = l_DecrementLayer,
+        .incrementLayer = l_IncrementLayer
+    };
+    ge = handshake(gi);
+
     if (!parms.copySwapToHost)
         painter_LocalInit(texSize);
 }
@@ -113,7 +133,7 @@ void painter_LocalInit(uint32_t texSize)
 {
     printf(">>>> Painter local init\n");
 
-    g_Init(&renderScene, &paintScene);
+    ge.init(&renderScene, &paintScene);
     p_Init(&renderScene, &paintScene, texSize);
     r_InitRenderer(&renderScene, &paintScene);
 }
@@ -135,7 +155,8 @@ void painter_StartLoop(void)
             obdn_d_DrainEventQueue();
         obdn_i_ProcessEvents();
 
-        g_Update();
+        ge.update();
+        u_Update(&paintScene);
         VkSemaphore s = VK_NULL_HANDLE;
         s = p_Paint(s);
         uint32_t i = obdn_v_RequestFrame(&renderScene.dirt, renderScene.window);
@@ -168,7 +189,7 @@ void painter_LocalCleanUp(void)
 {
     printf(">>>> Painter local cleanup\n");
     vkDeviceWaitIdle(device);
-    g_CleanUp();
+    ge.cleanUp();
     r_CleanUp();
 }
 

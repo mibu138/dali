@@ -4,7 +4,7 @@ GLC = glslc
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
 LDFLAGS = -L/opt/hfs18.6/dsolib -L/home/michaelb/lib
 INFLAGS = -I$(HOME)/dev
-LIBS = -lm -lcoal -lobsidian -lvulkan -lxcb -lxcb-keysyms -lfreetype
+LIBS = -ldl -lm -lcoal -lobsidian -lvulkan -lxcb -lxcb-keysyms -lfreetype
 GLFLAGS = --target-env=vulkan1.2
 BIN = bin
 LIB = $(HOME)/lib
@@ -30,7 +30,7 @@ DEPS =  \
 		shaders/brush.glsl
 
 OBJS =  \
-		$(O)/game.o \
+		$(O)/g_chalkboard.o \
 		$(O)/paint.o \
 		$(O)/render.o \
 		$(O)/painter.o \
@@ -49,7 +49,7 @@ debug: all
 release: CFLAGS += -DNDEBUG -O2
 release: all
 
-all: obsidian bin lib tags
+all: obsidian chalkboard bin lib tags
 
 shaders: $(FRAG) $(VERT) $(RGEN) $(RCHIT) $(RMISS)
 
@@ -62,6 +62,9 @@ clean:
 
 tags:
 	ctags -R .
+
+chalkboard: $(O)/g_chalkboard.o
+	$(CC) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
 
 bin: main.c $(OBJS) $(DEPS) shaders
 	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) $(OBJS) $< -o $(BIN)/$(NAME) $(LIBS)

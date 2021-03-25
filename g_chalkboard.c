@@ -1,12 +1,8 @@
-#include "game.h"
 #include "coal/m_math.h"
 #include "obsidian/r_raytrace.h"
 #include "obsidian/r_render.h"
 #include "obsidian/s_scene.h"
 #include "obsidian/v_memory.h"
-#include "render.h"
-#include "layer.h"
-#include "undo.h"
 #include "common.h"
 #include "obsidian/t_utils.h"
 #include <assert.h>
@@ -21,7 +17,7 @@
 #include <obsidian/private.h>
 #include <obsidian/v_private.h>
 #include <pthread.h>
-#include <vulkan/vulkan_core.h>
+#include "g_api.h"
 
 static bool pivotChanged;
 
@@ -88,6 +84,10 @@ static Obdn_U_Widget* radiusSlider;
 static Obdn_U_Widget* opacitySlider;
 static Obdn_U_Widget* falloffSlider;
 static Obdn_U_Widget* text;
+
+static G_Import gi;
+
+bool g_Responder(const Obdn_I_Event *event);
 
 static void lerpTargetToPivot(void)
 {
@@ -189,12 +189,13 @@ static void handleMouseMovement(void)
 static void incrementLayer(void)
 {
     L_LayerId id;
-    if (l_IncrementLayer(&id))
+    if (gi.incrementLayer(&id))
     {
         paintScene->layer = id;
         paintScene->dirt |= SCENE_LAYER_CHANGED_BIT;
-        if (!u_LayerInCache(id))
-            paintScene->dirt |= SCENE_LAYER_BACKUP_BIT;
+        // see if we can handle this in the u_update method so game does not need to worry about this
+        //if (!u_LayerInCache(id))
+        //    paintScene->dirt |= SCENE_LAYER_BACKUP_BIT;
         char str[12];
         snprintf(str, 12, "Layer %d", id + 1);
         obdn_u_UpdateText(str, text);
@@ -204,12 +205,13 @@ static void incrementLayer(void)
 static void decrementLayer(void)
 {
     L_LayerId id;
-    if (l_DecrementLayer(&id))
+    if (gi.decrementLayer(&id))
     {
         paintScene->layer = id;
         paintScene->dirt |= SCENE_LAYER_CHANGED_BIT;
-        if (!u_LayerInCache(id))
-            paintScene->dirt |= SCENE_LAYER_BACKUP_BIT;
+        // see if we can handle this in the u_update method so game does not need to worry about this
+        //if (!u_LayerInCache(id))
+        //    paintScene->dirt |= SCENE_LAYER_BACKUP_BIT;
         char str[12];
         snprintf(str, 12, "Layer %d", id + 1);
         obdn_u_UpdateText(str, text);
@@ -456,180 +458,6 @@ static void swapPrims(void)
     obdn_r_FreePrim(&prim);
 }
 
-void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
-{
-    assert(scene_);
-    assert(paintScene_);
-    paintScene = paintScene_;
-    renderScene = scene_;
-
-    obdn_s_CreateEmptyScene(renderScene);
-
-    Obdn_S_PrimId primId = 0;
-    if (!parms.copySwapToHost)
-    {
-        Obdn_F_Primitive fprim;
-        obdn_f_ReadPrimitive("data/grid.tnt", &fprim);
-        Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
-        obdn_f_FreePrimitive(&fprim);
-        primId = obdn_s_AddRPrim(renderScene, prim, NULL);
-    }
-    else
-        assert(0 && "we need to load a prim");
-    Obdn_S_TextureId texId = ++renderScene->textureCount;
-    Obdn_S_MaterialId matId = obdn_s_CreateMaterial(renderScene, (Vec3){1, 1, 1}, 1.0, texId, 0, 0);
-    obdn_s_BindPrimToMaterial(renderScene, primId, matId);
-
-    renderScene->window[0] = OBDN_WINDOW_WIDTH;
-    renderScene->window[1] = OBDN_WINDOW_HEIGHT;
-
-    initGPUSelection(&renderScene->prims[primId].rprim);
-
-    obdn_i_Subscribe(g_Responder);
-
-    Mat4 initView = m_Ident_Mat4();
-    Mat4 initProj = m_BuildPerspective(0.01, 50);
-    g_SetCameraView(&initView);
-    g_SetCameraProj(&initProj);
-
-    player.pos = (Vec3){0, 0., 3};
-    player.target = (Vec3){0, 0, 0};
-    player.pivot = player.target;
-    g_SetBrushColor(1, 1, 1);
-    g_SetBrushRadius(0.01);
-    g_SetBrushFallOff(0.5);
-    g_SetBrushOpacity(1);
-    mode = MODE_DO_NOTHING;
-    setBrushActive(false);
-
-    text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
-    //if (!parms.copySwapToHost)
-    //{
-        //radiusSlider = obdn_u_CreateSlider(40, 80, NULL);
-        //obdn_u_CreateText(10, 60, "R: ", radiusSlider);
-        //opacitySlider = obdn_u_CreateSlider(40, 120, NULL);
-        //obdn_u_CreateText(10, 100, "O: ", opacitySlider);
-        //falloffSlider = obdn_u_CreateSlider(40, 160, NULL);
-        //obdn_u_CreateText(10, 140, "F: ", falloffSlider);
-    //}
-
-    u_BindScene(paintScene_);
-}
-
-bool g_Responder(const Obdn_I_Event *event)
-{
-    switch (event->type) 
-    {
-        case OBDN_I_KEYDOWN: switch (event->data.keyCode)
-        {
-            case OBDN_KEY_E: g_SetPaintMode(PAINT_MODE_ERASE); break;
-            case OBDN_KEY_W: g_SetPaintMode(PAINT_MODE_OVER); break;
-            case OBDN_KEY_Z: paintScene->dirt |= SCENE_UNDO_BIT; break;
-            case OBDN_KEY_R: g_SetBrushColor(1, 0, 0); break;
-            case OBDN_KEY_G: g_SetBrushColor(0, 1, 0); break;
-            case OBDN_KEY_B: g_SetBrushColor(0, 0, 1); break;
-            case OBDN_KEY_1: g_SetBrushRadius(0.004); break;
-            case OBDN_KEY_2: g_SetBrushRadius(0.01); break;
-            case OBDN_KEY_3: g_SetBrushRadius(0.1); break;
-            case OBDN_KEY_Q: g_SetBrushColor(1, 1, 1); break;
-            case OBDN_KEY_Y: g_SetBrushColor(1, 1, 0); break;
-            case OBDN_KEY_ESC: parms.shouldRun = false; break;
-            case OBDN_KEY_J: decrementLayer(); break;
-            case OBDN_KEY_K: incrementLayer(); break;
-            case OBDN_KEY_L: l_CreateLayer(); break;
-            case OBDN_KEY_S: swapPrims(); break;
-            case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
-            case OBDN_KEY_I: break;
-            default: return true;
-        } break;
-        case OBDN_I_KEYUP:   switch (event->data.keyCode)
-        {
-            case OBDN_KEY_SPACE: mode = MODE_DO_NOTHING; break;
-            default: return true;
-        } break;
-        case OBDN_I_MOTION: 
-        {
-            mousePos.x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH;
-            mousePos.y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT;
-        } break;
-        case OBDN_I_MOUSEDOWN: switch (mode) 
-        {
-            case MODE_DO_NOTHING: mode = MODE_PAINT; break;
-            case MODE_VIEW:
-            {
-                drag.active = true;
-                const Vec2 p = {
-                    .x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH,
-                    .y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT };
-                drag.startPos = p;
-                if (event->data.mouseData.buttonCode == OBDN_MOUSE_LEFT)
-                {
-                    drag.mode = TUMBLE;
-                    pivotChanged = true;
-                }
-                if (event->data.mouseData.buttonCode == OBDN_MOUSE_MID)
-                {
-                    drag.mode = PAN;
-                }
-                if (event->data.mouseData.buttonCode == OBDN_MOUSE_RIGHT)
-                {
-                    drag.mode = ZOOM;
-                    pivotChanged = true;
-                }
-            } break;
-            default: break;
-        } break;
-        case OBDN_I_MOUSEUP:
-        {
-            switch (mode) 
-            {
-                case MODE_PAINT: mode = MODE_DO_NOTHING; paintScene->dirt |= SCENE_LAYER_BACKUP_BIT; break;
-                case MODE_VIEW:  drag.active = false; break;
-                default: break;
-            }
-        } break;
-        default: break;
-    }
-    return true;
-}
-
-void g_Update(void)
-{
-    //assert(sizeof(struct Player) == sizeof(UboPlayer));
-    //handleKeyMovement();
-    if (radiusSlider)
-        g_SetBrushRadius(radiusSlider->data.slider.sliderPos * 0.1); // TODO: find a better way
-    if (opacitySlider)
-        g_SetBrushOpacity(opacitySlider->data.slider.sliderPos);
-    if (falloffSlider)
-        g_SetBrushFallOff(falloffSlider->data.slider.sliderPos);
-    //
-    g_SetBrushPos(mousePos.x, mousePos.y);
-    if (pivotChanged)
-    {
-        printf("Pivot changed!\n");
-        setViewerPivotByIntersection();
-    }
-    if (!parms.copySwapToHost)
-    {
-        handleMouseMovement();
-        pivotChanged = false; //TODO must set to false after handleMouseMovement since it checks this... should find a better way
-        Mat4 cameraXform = generateCameraXform();
-        g_SetCameraXform(&cameraXform);
-    }
-    if (MODE_PAINT == mode)
-        setBrushActive(true);
-    else 
-        setBrushActive(false);
-
-    // the extra, local mask allows us to clear the paintScene->dirt mask for the next frame while maintaining the current frame dirty bits
-
-    if (renderScene->dirt & OBDN_S_PRIMS_BIT)
-    {
-        updatePrim();
-    }
-    u_Update();
-}
 
 void g_SetBrushColor(const float r, const float g, const float b)
 {
@@ -715,4 +543,190 @@ void g_SetBrushFallOff(float falloff)
     if (falloff > 1.0) falloff = 1.0;
     paintScene->brush_falloff = falloff;
     paintScene->dirt |= SCENE_BRUSH_BIT;
+}
+
+bool g_Responder(const Obdn_I_Event *event)
+{
+    switch (event->type) 
+    {
+        case OBDN_I_KEYDOWN: switch (event->data.keyCode)
+        {
+            case OBDN_KEY_E: g_SetPaintMode(PAINT_MODE_ERASE); break;
+            case OBDN_KEY_W: g_SetPaintMode(PAINT_MODE_OVER); break;
+            case OBDN_KEY_Z: paintScene->dirt |= SCENE_UNDO_BIT; break;
+            case OBDN_KEY_R: g_SetBrushColor(1, 0, 0); break;
+            case OBDN_KEY_G: g_SetBrushColor(0, 1, 0); break;
+            case OBDN_KEY_B: g_SetBrushColor(0, 0, 1); break;
+            case OBDN_KEY_1: g_SetBrushRadius(0.004); break;
+            case OBDN_KEY_2: g_SetBrushRadius(0.01); break;
+            case OBDN_KEY_3: g_SetBrushRadius(0.1); break;
+            case OBDN_KEY_Q: g_SetBrushColor(1, 1, 1); break;
+            case OBDN_KEY_Y: g_SetBrushColor(1, 1, 0); break;
+            case OBDN_KEY_ESC: parms.shouldRun = false; break;
+            case OBDN_KEY_J: decrementLayer(); break;
+            case OBDN_KEY_K: incrementLayer(); break;
+            case OBDN_KEY_L: gi.createLayer(); break;
+            case OBDN_KEY_S: swapPrims(); break;
+            case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
+            case OBDN_KEY_I: break;
+            default: return true;
+        } break;
+        case OBDN_I_KEYUP:   switch (event->data.keyCode)
+        {
+            case OBDN_KEY_SPACE: mode = MODE_DO_NOTHING; break;
+            default: return true;
+        } break;
+        case OBDN_I_MOTION: 
+        {
+            mousePos.x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH;
+            mousePos.y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT;
+        } break;
+        case OBDN_I_MOUSEDOWN: switch (mode) 
+        {
+            case MODE_DO_NOTHING: mode = MODE_PAINT; break;
+            case MODE_VIEW:
+            {
+                drag.active = true;
+                const Vec2 p = {
+                    .x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH,
+                    .y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT };
+                drag.startPos = p;
+                if (event->data.mouseData.buttonCode == OBDN_MOUSE_LEFT)
+                {
+                    drag.mode = TUMBLE;
+                    pivotChanged = true;
+                }
+                if (event->data.mouseData.buttonCode == OBDN_MOUSE_MID)
+                {
+                    drag.mode = PAN;
+                }
+                if (event->data.mouseData.buttonCode == OBDN_MOUSE_RIGHT)
+                {
+                    drag.mode = ZOOM;
+                    pivotChanged = true;
+                }
+            } break;
+            default: break;
+        } break;
+        case OBDN_I_MOUSEUP:
+        {
+            switch (mode) 
+            {
+                case MODE_PAINT: mode = MODE_DO_NOTHING; paintScene->dirt |= SCENE_LAYER_BACKUP_BIT; break;
+                case MODE_VIEW:  drag.active = false; break;
+                default: break;
+            }
+        } break;
+        default: break;
+    }
+    return true;
+}
+
+void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
+{
+    assert(scene_);
+    assert(paintScene_);
+    paintScene = paintScene_;
+    renderScene = scene_;
+
+    obdn_s_CreateEmptyScene(renderScene);
+
+    Obdn_S_PrimId primId = 0;
+    if (!parms.copySwapToHost)
+    {
+        Obdn_F_Primitive fprim;
+        obdn_f_ReadPrimitive("data/grid.tnt", &fprim);
+        Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
+        obdn_f_FreePrimitive(&fprim);
+        primId = obdn_s_AddRPrim(renderScene, prim, NULL);
+    }
+    else
+        assert(0 && "we need to load a prim");
+    Obdn_S_TextureId texId = ++renderScene->textureCount;
+    Obdn_S_MaterialId matId = obdn_s_CreateMaterial(renderScene, (Vec3){1, 1, 1}, 1.0, texId, 0, 0);
+    obdn_s_BindPrimToMaterial(renderScene, primId, matId);
+
+    renderScene->window[0] = OBDN_WINDOW_WIDTH;
+    renderScene->window[1] = OBDN_WINDOW_HEIGHT;
+
+    initGPUSelection(&renderScene->prims[primId].rprim);
+
+    obdn_i_Subscribe(g_Responder);
+
+    Mat4 initView = m_Ident_Mat4();
+    Mat4 initProj = m_BuildPerspective(0.01, 50);
+    g_SetCameraView(&initView);
+    g_SetCameraProj(&initProj);
+
+    player.pos = (Vec3){0, 0., 3};
+    player.target = (Vec3){0, 0, 0};
+    player.pivot = player.target;
+    g_SetBrushColor(1, 1, 1);
+    g_SetBrushRadius(0.01);
+    g_SetBrushFallOff(0.5);
+    g_SetBrushOpacity(1);
+    mode = MODE_DO_NOTHING;
+    setBrushActive(false);
+
+    text = obdn_u_CreateText(10, 0, "Layer 1", NULL);
+    //if (!parms.copySwapToHost)
+    //{
+        //radiusSlider = obdn_u_CreateSlider(40, 80, NULL);
+        //obdn_u_CreateText(10, 60, "R: ", radiusSlider);
+        //opacitySlider = obdn_u_CreateSlider(40, 120, NULL);
+        //obdn_u_CreateText(10, 100, "O: ", opacitySlider);
+        //falloffSlider = obdn_u_CreateSlider(40, 160, NULL);
+        //obdn_u_CreateText(10, 140, "F: ", falloffSlider);
+    //}
+}
+
+void g_Update(void)
+{
+    //assert(sizeof(struct Player) == sizeof(UboPlayer));
+    //handleKeyMovement();
+    if (radiusSlider)
+        g_SetBrushRadius(radiusSlider->data.slider.sliderPos * 0.1); // TODO: find a better way
+    if (opacitySlider)
+        g_SetBrushOpacity(opacitySlider->data.slider.sliderPos);
+    if (falloffSlider)
+        g_SetBrushFallOff(falloffSlider->data.slider.sliderPos);
+    //
+    g_SetBrushPos(mousePos.x, mousePos.y);
+    if (pivotChanged)
+    {
+        printf("Pivot changed!\n");
+        setViewerPivotByIntersection();
+    }
+    if (!parms.copySwapToHost)
+    {
+        handleMouseMovement();
+        pivotChanged = false; //TODO must set to false after handleMouseMovement since it checks this... should find a better way
+        Mat4 cameraXform = generateCameraXform();
+        g_SetCameraXform(&cameraXform);
+    }
+    if (MODE_PAINT == mode)
+        setBrushActive(true);
+    else 
+        setBrushActive(false);
+
+    // the extra, local mask allows us to clear the paintScene->dirt mask for the next frame while maintaining the current frame dirty bits
+
+    if (renderScene->dirt & OBDN_S_PRIMS_BIT)
+    {
+        updatePrim();
+    }
+}
+
+
+G_Export handshake(G_Import gi_)
+{
+    gi = gi_;
+
+    G_Export ge = {
+        .init = g_Init,
+        .cleanUp = g_CleanUp,
+        .update = g_Update
+    };
+
+    return ge;
 }
