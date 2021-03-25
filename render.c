@@ -69,7 +69,6 @@ static VkRenderPass postRenderPass;
 static const PaintScene*   paintScene;
 static const Obdn_S_Scene* renderScene;
 
-extern Parms parms;
 // swap to host stuff
 
 static bool            copySwapToHost;
@@ -83,7 +82,7 @@ static VkSemaphore     extFrameReadSemaphore;
 
 static void initOffscreenAttachments(void)
 {
-    Obdn_V_MemoryType memType = parms.copySwapToHost ? OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE : OBDN_V_MEMORY_DEVICE_TYPE;
+    Obdn_V_MemoryType memType = copySwapToHost ? OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE : OBDN_V_MEMORY_DEVICE_TYPE;
     depthAttachment = obdn_v_CreateImage(
             renderScene->window[0], renderScene->window[1],
             depthFormat,
@@ -430,13 +429,13 @@ static void updateRenderCommands(const int8_t frameIndex)
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
-void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene)
+void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const bool copyToHost)
 {
     renderScene = scene;
     paintScene  = pScene;
     graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    copySwapToHost = parms.copySwapToHost; //note this
+    copySwapToHost = copyToHost;
 
     renderCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
 

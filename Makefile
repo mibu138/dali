@@ -30,7 +30,6 @@ DEPS =  \
 		shaders/brush.glsl
 
 OBJS =  \
-		$(O)/g_chalkboard.o \
 		$(O)/paint.o \
 		$(O)/render.o \
 		$(O)/painter.o \
@@ -49,7 +48,7 @@ debug: all
 release: CFLAGS += -DNDEBUG -O2
 release: all
 
-all: obsidian chalkboard bin lib tags
+all: obsidian standalone chalkboard bin lib tags
 
 shaders: $(FRAG) $(VERT) $(RGEN) $(RCHIT) $(RMISS)
 
@@ -63,8 +62,11 @@ clean:
 tags:
 	ctags -R .
 
-chalkboard: $(O)/g_chalkboard.o
-	$(CC) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
+standalone: g_standalone.c
+	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
+
+chalkboard: g_chalkboard.c
+	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
 
 bin: main.c $(OBJS) $(DEPS) shaders
 	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) $(OBJS) $< -o $(BIN)/$(NAME) $(LIBS)

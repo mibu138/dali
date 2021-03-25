@@ -37,8 +37,6 @@ static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes16k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 
-extern Parms parms;
-
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
 {
     *ms = (Obdn_V_MemorySizes){
@@ -72,6 +70,7 @@ static void getMemorySizes16k(Obdn_V_MemorySizes* ms)
 static Obdn_S_Scene renderScene;
 static PaintScene   paintScene;
 static G_Export     ge;
+static Parms        parms;
 
 void painter_Init(uint32_t texSize, bool houdiniMode)
 {
@@ -110,7 +109,7 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
 
-    void* game = dlopen("chalkboard.so", RTLD_LAZY);
+    void* game = dlopen("standalone.so", RTLD_LAZY);
     assert(game);
     printf("Game module imported successfully.\n");
     void* g_entry = dlsym(game, "handshake");
@@ -121,7 +120,8 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
     G_Import gi = {
         .createLayer    = l_CreateLayer,
         .decrementLayer = l_DecrementLayer,
-        .incrementLayer = l_IncrementLayer
+        .incrementLayer = l_IncrementLayer,
+        .parms          = &parms
     };
     ge = handshake(gi);
 
@@ -135,7 +135,7 @@ void painter_LocalInit(uint32_t texSize)
 
     ge.init(&renderScene, &paintScene);
     p_Init(&renderScene, &paintScene, texSize);
-    r_InitRenderer(&renderScene, &paintScene);
+    r_InitRenderer(&renderScene, &paintScene, parms.copySwapToHost);
 }
 
 void painter_StartLoop(void)
@@ -195,20 +195,16 @@ void painter_LocalCleanUp(void)
 
 void painter_SetColor(const float r, const float g, const float b)
 {
-    g_SetBrushColor(r, g, b);
 }
 
 void painter_SetRadius(const float r)
 {
-    g_SetBrushRadius(r * 0.1);
 }
 
 void painter_SetOpacity(const float o)
 {
-    g_SetBrushOpacity(o);
 }
 
 void painter_SetFallOff(const float f)
 {
-    g_SetBrushFallOff(f);
 }

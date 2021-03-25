@@ -3,11 +3,13 @@
 
 #include <obsidian/s_scene.h>
 #include "paint.h"
+#include "common.h"
 
 typedef struct {
-    int  (*createLayer)(void);
-    bool (*incrementLayer)(uint16_t* const id);
-    bool (*decrementLayer)(uint16_t* const id);
+    int    (*createLayer)(void);
+    bool   (*incrementLayer)(uint16_t* const id);
+    bool   (*decrementLayer)(uint16_t* const id);
+    Parms*   parms;
 } G_Import;
 
 typedef struct {

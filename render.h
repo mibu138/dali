@@ -6,7 +6,7 @@
 #include "paint.h"
 #include "common.h"
 
-void         r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene);
+void         r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const bool copyToHost);
 void         r_Render(uint32_t frameIndex, VkSemaphore waitSemaphore);
 void         r_CleanUp(void);
 
