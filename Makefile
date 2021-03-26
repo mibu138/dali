@@ -17,7 +17,6 @@ SPV  = shaders/spv
 NAME = painter
 
 DEPS =  \
-		game.h \
 		render.h \
 		painter.h \
 		paint.h \

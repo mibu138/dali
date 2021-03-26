@@ -1,6 +1,5 @@
 #include "painter.h"
 #include "paint.h"
-#include "game.h"
 #include "common.h"
 #include "obsidian/t_def.h"
 #include "render.h"
@@ -72,7 +71,7 @@ static PaintScene   paintScene;
 static G_Export     ge;
 static Parms        parms;
 
-void painter_Init(uint32_t texSize, bool houdiniMode)
+void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 {
     assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K);
     Obdn_V_Config config = {};
@@ -109,7 +108,12 @@ void painter_Init(uint32_t texSize, bool houdiniMode)
     obdn_i_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
 
-    void* game = dlopen("standalone.so", RTLD_LAZY);
+    char gmodbuf[32];
+    assert(strlen(gModuleName) < 29);
+    strncpy(gmodbuf, gModuleName, 28);
+    strcat(gmodbuf, ".so");
+
+    void* game = dlopen(gmodbuf, RTLD_LAZY);
     assert(game);
     printf("Game module imported successfully.\n");
     void* g_entry = dlsym(game, "handshake");

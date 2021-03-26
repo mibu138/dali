@@ -67,8 +67,6 @@ typedef enum {
 
 static Mode  mode;
 
-Parms parms;
-
 static struct Player {
     Vec3 pos;
     Vec3 target;
@@ -459,7 +457,7 @@ static void swapPrims(void)
 }
 
 
-void g_SetBrushColor(const float r, const float g, const float b)
+static void g_SetBrushColor(const float r, const float g, const float b)
 {
     paintScene->brush_r = r;
     paintScene->brush_g = g;
@@ -467,7 +465,7 @@ void g_SetBrushColor(const float r, const float g, const float b)
     paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
-void g_SetBrushRadius(float r)
+static void g_SetBrushRadius(float r)
 {
     if (r < 0.001) r = 0.001; // should not go to 0... may cause div by 0 in shader
     paintScene->brush_radius = r;
@@ -487,49 +485,41 @@ void g_CleanUp(void)
     memset(&mousePos, 0, sizeof(mousePos));
 }
 
-void g_SetCameraXform(const Mat4* xform)
+static void g_SetCameraXform(const Mat4* xform)
 {
     renderScene->camera.xform = *xform;
     renderScene->camera.view = m_Invert4x4(xform);
     renderScene->dirt |= OBDN_S_CAMERA_VIEW_BIT;
 }
 
-void g_SetCameraView(const Mat4* view)
+static void g_SetCameraView(const Mat4* view)
 {
     renderScene->camera.view = *view;
     renderScene->camera.xform = m_Invert4x4(view);
     renderScene->dirt |= OBDN_S_CAMERA_VIEW_BIT;
 }
 
-void g_SetCameraProj(const Mat4* m)
+static void g_SetCameraProj(const Mat4* m)
 {
     renderScene->camera.proj = *m;
     renderScene->dirt |= OBDN_S_CAMERA_PROJ_BIT;
 }
 
-void g_SetWindow(uint16_t width, uint16_t height)
-{
-    // TODO: make this safe some how... 
-    renderScene->window[0] = width;
-    renderScene->window[1] = height;
-    renderScene->dirt |= OBDN_S_WINDOW_BIT;
-}
-
-void g_SetBrushPos(float x, float y)
+static void g_SetBrushPos(float x, float y)
 {
     paintScene->brush_x = x;
     paintScene->brush_y = y;
     paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
-void g_SetPaintMode(PaintMode mode)
+static void g_SetPaintMode(PaintMode mode)
 {
     paintScene->paint_mode = mode;
     paintScene->dirt |= SCENE_PAINT_MODE_BIT;
     paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
-void g_SetBrushOpacity(float opacity)
+static void g_SetBrushOpacity(float opacity)
 {
     if (opacity < 0.0) opacity = 0.0;
     if (opacity > 1.0) opacity = 1.0;
@@ -537,7 +527,7 @@ void g_SetBrushOpacity(float opacity)
     paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
-void g_SetBrushFallOff(float falloff)
+static void g_SetBrushFallOff(float falloff)
 {
     if (falloff < 0.0) falloff = 0.0;
     if (falloff > 1.0) falloff = 1.0;
@@ -562,7 +552,7 @@ bool g_Responder(const Obdn_I_Event *event)
             case OBDN_KEY_3: g_SetBrushRadius(0.1); break;
             case OBDN_KEY_Q: g_SetBrushColor(1, 1, 1); break;
             case OBDN_KEY_Y: g_SetBrushColor(1, 1, 0); break;
-            case OBDN_KEY_ESC: parms.shouldRun = false; break;
+            case OBDN_KEY_ESC: gi.parms->shouldRun = false; break;
             case OBDN_KEY_J: decrementLayer(); break;
             case OBDN_KEY_K: incrementLayer(); break;
             case OBDN_KEY_L: gi.createLayer(); break;
@@ -632,7 +622,7 @@ void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
     obdn_s_CreateEmptyScene(renderScene);
 
     Obdn_S_PrimId primId = 0;
-    if (!parms.copySwapToHost)
+    if (!gi.parms->copySwapToHost)
     {
         Obdn_F_Primitive fprim;
         obdn_f_ReadPrimitive("data/grid.tnt", &fprim);
@@ -697,7 +687,7 @@ void g_Update(void)
         printf("Pivot changed!\n");
         setViewerPivotByIntersection();
     }
-    if (!parms.copySwapToHost)
+    if (!gi.parms->copySwapToHost)
     {
         handleMouseMovement();
         pivotChanged = false; //TODO must set to false after handleMouseMovement since it checks this... should find a better way
