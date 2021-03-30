@@ -4,18 +4,18 @@
 #include "obsidian/s_scene.h"
 #include "obsidian/v_memory.h"
 #include "common.h"
-#include "obsidian/t_utils.h"
 #include <assert.h>
 #include <string.h>
 #include <obsidian/t_def.h>
 #include <obsidian/r_geo.h>
-#include <obsidian/i_input.h>
 #include <obsidian/v_video.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/f_file.h>
 #include <obsidian/private.h>
 #include <obsidian/v_private.h>
+#include <hell/input.h>
+#include <hell/evcodes.h>
 #include <pthread.h>
 #include "g_api.h"
 
@@ -32,6 +32,9 @@ static VkPipeline                   selectionPipeline;
 static Obdn_R_ShaderBindingTable    sbt;
 static Obdn_R_AccelerationStructure blas;
 static Obdn_R_AccelerationStructure tlas;
+
+static uint16_t windowWidth;
+static uint16_t windowHeight;
 
 typedef struct {
     float x;
@@ -85,7 +88,7 @@ static Obdn_U_Widget* text;
 
 static G_Import gi;
 
-bool g_Responder(const Obdn_I_Event *event);
+bool g_Responder(const Hell_I_Event *event);
 
 static void lerpTargetToPivot(void)
 {
@@ -481,7 +484,7 @@ void g_CleanUp(void)
         obdn_u_DestroyWidget(falloffSlider);
     //}
     obdn_u_DestroyWidget(text);
-    obdn_i_Unsubscribe(g_Responder);
+    hell_i_Unsubscribe(g_Responder);
     memset(&mousePos, 0, sizeof(mousePos));
 }
 
@@ -490,19 +493,6 @@ static void g_SetCameraXform(const Mat4* xform)
     renderScene->camera.xform = *xform;
     renderScene->camera.view = m_Invert4x4(xform);
     renderScene->dirt |= OBDN_S_CAMERA_VIEW_BIT;
-}
-
-static void g_SetCameraView(const Mat4* view)
-{
-    renderScene->camera.view = *view;
-    renderScene->camera.xform = m_Invert4x4(view);
-    renderScene->dirt |= OBDN_S_CAMERA_VIEW_BIT;
-}
-
-static void g_SetCameraProj(const Mat4* m)
-{
-    renderScene->camera.proj = *m;
-    renderScene->dirt |= OBDN_S_CAMERA_PROJ_BIT;
 }
 
 static void g_SetBrushPos(float x, float y)
@@ -535,62 +525,62 @@ static void g_SetBrushFallOff(float falloff)
     paintScene->dirt |= SCENE_BRUSH_BIT;
 }
 
-bool g_Responder(const Obdn_I_Event *event)
+bool g_Responder(const Hell_I_Event *event)
 {
     switch (event->type) 
     {
-        case OBDN_I_KEYDOWN: switch (event->data.keyCode)
+        case HELL_I_KEYDOWN: switch (event->data.keyCode)
         {
-            case OBDN_KEY_E: g_SetPaintMode(PAINT_MODE_ERASE); break;
-            case OBDN_KEY_W: g_SetPaintMode(PAINT_MODE_OVER); break;
-            case OBDN_KEY_Z: paintScene->dirt |= SCENE_UNDO_BIT; break;
-            case OBDN_KEY_R: g_SetBrushColor(1, 0, 0); break;
-            case OBDN_KEY_G: g_SetBrushColor(0, 1, 0); break;
-            case OBDN_KEY_B: g_SetBrushColor(0, 0, 1); break;
-            case OBDN_KEY_1: g_SetBrushRadius(0.004); break;
-            case OBDN_KEY_2: g_SetBrushRadius(0.01); break;
-            case OBDN_KEY_3: g_SetBrushRadius(0.1); break;
-            case OBDN_KEY_Q: g_SetBrushColor(1, 1, 1); break;
-            case OBDN_KEY_Y: g_SetBrushColor(1, 1, 0); break;
-            case OBDN_KEY_ESC: gi.parms->shouldRun = false; break;
-            case OBDN_KEY_J: decrementLayer(); break;
-            case OBDN_KEY_K: incrementLayer(); break;
-            case OBDN_KEY_L: gi.createLayer(); break;
-            case OBDN_KEY_S: swapPrims(); break;
-            case OBDN_KEY_SPACE: mode = MODE_VIEW; break;
-            case OBDN_KEY_I: break;
+            case HELL_KEY_E: g_SetPaintMode(PAINT_MODE_ERASE); break;
+            case HELL_KEY_W: g_SetPaintMode(PAINT_MODE_OVER); break;
+            case HELL_KEY_Z: paintScene->dirt |= SCENE_UNDO_BIT; break;
+            case HELL_KEY_R: g_SetBrushColor(1, 0, 0); break;
+            case HELL_KEY_G: g_SetBrushColor(0, 1, 0); break;
+            case HELL_KEY_B: g_SetBrushColor(0, 0, 1); break;
+            case HELL_KEY_1: g_SetBrushRadius(0.004); break;
+            case HELL_KEY_2: g_SetBrushRadius(0.01); break;
+            case HELL_KEY_3: g_SetBrushRadius(0.1); break;
+            case HELL_KEY_Q: g_SetBrushColor(1, 1, 1); break;
+            case HELL_KEY_Y: g_SetBrushColor(1, 1, 0); break;
+            case HELL_KEY_ESC: gi.parms->shouldRun = false; break;
+            case HELL_KEY_J: decrementLayer(); break;
+            case HELL_KEY_K: incrementLayer(); break;
+            case HELL_KEY_L: gi.createLayer(); break;
+            case HELL_KEY_S: swapPrims(); break;
+            case HELL_KEY_SPACE: mode = MODE_VIEW; break;
+            case HELL_KEY_I: break;
             default: return true;
         } break;
-        case OBDN_I_KEYUP:   switch (event->data.keyCode)
+        case HELL_I_KEYUP:   switch (event->data.keyCode)
         {
-            case OBDN_KEY_SPACE: mode = MODE_DO_NOTHING; break;
+            case HELL_KEY_SPACE: mode = MODE_DO_NOTHING; break;
             default: return true;
         } break;
-        case OBDN_I_MOTION: 
+        case HELL_I_MOTION: 
         {
-            mousePos.x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH;
-            mousePos.y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT;
+            mousePos.x = (float)event->data.mouseData.x / windowWidth;
+            mousePos.y = (float)event->data.mouseData.y / windowHeight;
         } break;
-        case OBDN_I_MOUSEDOWN: switch (mode) 
+        case HELL_I_MOUSEDOWN: switch (mode) 
         {
             case MODE_DO_NOTHING: mode = MODE_PAINT; break;
             case MODE_VIEW:
             {
                 drag.active = true;
                 const Vec2 p = {
-                    .x = (float)event->data.mouseData.x / OBDN_WINDOW_WIDTH,
-                    .y = (float)event->data.mouseData.y / OBDN_WINDOW_HEIGHT };
+                    .x = (float)event->data.mouseData.x / windowWidth,
+                    .y = (float)event->data.mouseData.y / windowHeight};
                 drag.startPos = p;
-                if (event->data.mouseData.buttonCode == OBDN_MOUSE_LEFT)
+                if (event->data.mouseData.buttonCode == HELL_MOUSE_LEFT)
                 {
                     drag.mode = TUMBLE;
                     pivotChanged = true;
                 }
-                if (event->data.mouseData.buttonCode == OBDN_MOUSE_MID)
+                if (event->data.mouseData.buttonCode == HELL_MOUSE_MID)
                 {
                     drag.mode = PAN;
                 }
-                if (event->data.mouseData.buttonCode == OBDN_MOUSE_RIGHT)
+                if (event->data.mouseData.buttonCode == HELL_MOUSE_RIGHT)
                 {
                     drag.mode = ZOOM;
                     pivotChanged = true;
@@ -598,7 +588,7 @@ bool g_Responder(const Obdn_I_Event *event)
             } break;
             default: break;
         } break;
-        case OBDN_I_MOUSEUP:
+        case HELL_I_MOUSEUP:
         {
             switch (mode) 
             {
@@ -619,7 +609,8 @@ void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
     paintScene = paintScene_;
     renderScene = scene_;
 
-    obdn_s_CreateEmptyScene(renderScene);
+    windowWidth  = renderScene->window[0];
+    windowHeight = renderScene->window[1];
 
     Obdn_S_PrimId primId = 0;
     if (!gi.parms->copySwapToHost)
@@ -636,17 +627,12 @@ void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
     Obdn_S_MaterialId matId = obdn_s_CreateMaterial(renderScene, (Vec3){1, 1, 1}, 1.0, texId, 0, 0);
     obdn_s_BindPrimToMaterial(renderScene, primId, matId);
 
-    renderScene->window[0] = OBDN_WINDOW_WIDTH;
-    renderScene->window[1] = OBDN_WINDOW_HEIGHT;
+    //renderScene->window[0] = OBDN_WINDOW_WIDTH;
+    //renderScene->window[1] = OBDN_WINDOW_HEIGHT;
 
     initGPUSelection(&renderScene->prims[primId].rprim);
 
-    obdn_i_Subscribe(g_Responder);
-
-    Mat4 initView = m_Ident_Mat4();
-    Mat4 initProj = m_BuildPerspective(0.01, 50);
-    g_SetCameraView(&initView);
-    g_SetCameraProj(&initProj);
+    hell_i_Subscribe(g_Responder, HELL_I_WINDOW_BIT | HELL_I_KEY_BIT | HELL_I_MOUSE_BIT);
 
     player.pos = (Vec3){0, 0., 3};
     player.target = (Vec3){0, 0, 0};

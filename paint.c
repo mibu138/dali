@@ -5,6 +5,7 @@
 #include <obsidian/private.h>
 #include <obsidian/v_private.h>
 #include <string.h>
+#include <vulkan/vulkan_core.h>
 #include "layer.h"
 #include "obsidian/r_geo.h"
 #include "obsidian/v_command.h"
@@ -32,6 +33,7 @@ enum {
 };
 
 typedef Obdn_V_BufferRegion BufferRegion;
+
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;
 
@@ -1565,4 +1567,39 @@ void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSi
     updateDescSetComp();
 
     renderScene->textures[1].devImage = imageA;
+}
+
+void p_CleanUp(void)
+{
+    obdn_v_FreeBufferRegion(&matrixRegion);
+    obdn_v_FreeBufferRegion(&brushRegion);
+    vkDestroyPipeline(device, paintPipeline, NULL);
+    vkDestroyPipelineLayout(device, pipelineLayout, NULL);
+    obdn_r_DestroyShaderBindingTable(&shaderBindingTable);
+    for (int i = 0; i < PIPELINE_COMP_COUNT; i++)
+    {
+        vkDestroyPipeline(device, compPipelines[i], NULL);
+    }
+    for (int i = 0; i < DESC_SET_COUNT; i++)
+    {
+        vkDestroyDescriptorSetLayout(device, descriptorSetLayouts[i], NULL);
+    }
+    obdn_r_DestroyDescription(&description);
+    obdn_v_DestroyCommand(releaseImageCommand);
+    obdn_v_DestroyCommand(transferImageCommand);
+    obdn_v_DestroyCommand(acquireImageCommand);
+    obdn_v_DestroyCommand(paintCommand);
+    obdn_v_FreeImage(&imageA);
+    obdn_v_FreeImage(&imageB);
+    obdn_v_FreeImage(&imageC);
+    obdn_v_FreeImage(&imageD);
+    vkDestroyFramebuffer(device, applyPaintFrameBuffer, NULL);
+    vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
+    vkDestroyFramebuffer(device, backgroundFrameBuffer, NULL);
+    vkDestroyFramebuffer(device, foregroundFrameBuffer, NULL);
+    vkDestroyRenderPass(device, singleCompositeRenderPass, NULL);
+    vkDestroyRenderPass(device, applyPaintRenderPass, NULL);
+    vkDestroyRenderPass(device, compositeRenderPass, NULL);
+    obdn_r_DestroyAccelerationStruct(&bottomLevelAS);
+    obdn_r_DestroyAccelerationStruct(&topLevelAS);
 }

@@ -41,5 +41,6 @@ typedef struct {
 
 VkSemaphore p_Paint(VkSemaphore waitSemaphore);
 void        p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSize);
+void        p_CleanUp(void);
 
 #endif /* end of include guard: PAINT_H */

@@ -12,7 +12,6 @@
 #include <obsidian/v_swapchain.h>
 #include <obsidian/v_video.h>
 #include <obsidian/t_def.h>
-#include <obsidian/t_utils.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/r_raytrace.h>
 #include <obsidian/v_command.h>
@@ -523,6 +522,7 @@ void r_CleanUp(void)
     {
         vkDestroyPipeline(device, graphicsPipelines[i], NULL);
     }
+    vkDestroyPipelineLayout(device, pipelineLayout, NULL);
     obdn_v_DestroyCommand(renderCommand);
     vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
     obdn_r_DestroyDescription(&description);

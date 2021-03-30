@@ -1,4 +1,5 @@
 #include "painter.h"
+#include "obsidian/s_scene.h"
 #include "paint.h"
 #include "common.h"
 #include "obsidian/t_def.h"
@@ -17,13 +18,13 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <obsidian/v_video.h>
-#include <obsidian/d_display.h>
 #include <obsidian/v_swapchain.h>
 #include <obsidian/r_raytrace.h>
-#include <obsidian/t_utils.h>
-#include <obsidian/i_input.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/v_private.h>
+#include <hell/input.h>
+#include <hell/display.h>
+#include <hell/cmd.h>
 #include <dlfcn.h>
 #include "g_api.h"
 
@@ -83,15 +84,9 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 #endif
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    Obdn_D_XcbWindow xcbWindow;
+    const Hell_Window* window = NULL;
     if (!parms.copySwapToHost)
-        xcbWindow = obdn_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
-    else
-    {
-        // won't matter really. these will get set by the renderer on first update.
-        OBDN_WINDOW_WIDTH  = 1000;
-        OBDN_WINDOW_HEIGHT = 1000;
-    }
+        window = hell_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     const char* exnames[] = {
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
@@ -102,14 +97,15 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
         case IMG_16K: getMemorySizes16k(&config.memorySizes); break;
     }
     obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
-    if (!parms.copySwapToHost)
-        obdn_v_InitSurfaceXcb(xcbWindow.connection, xcbWindow.window);
-    obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, parms.copySwapToHost);
-    obdn_i_Init();
+    obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, window);
+    hell_i_Init(!parms.copySwapToHost);
+    hell_c_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
+    //obdn_s_CreateEmptyScene(&renderScene);
+    obdn_s_Init(&renderScene, DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, 0.01, 1000);
 
     char gmodbuf[32];
-    assert(strlen(gModuleName) < 29);
+    assert(strnlen(gModuleName, 32) < 29);
     strncpy(gmodbuf, gModuleName, 28);
     strcat(gmodbuf, ".so");
 
@@ -144,8 +140,6 @@ void painter_LocalInit(uint32_t texSize)
 
 void painter_StartLoop(void)
 {
-    Obdn_LoopData loopData = obdn_CreateLoopData(NS_TARGET, 0, 0);
-
     parms.shouldRun = true;
 
     renderScene.dirt = ~0;
@@ -153,11 +147,9 @@ void painter_StartLoop(void)
 
     while( parms.shouldRun ) 
     {
-        obdn_FrameStart(&loopData);
-
-        if (!parms.copySwapToHost)
-            obdn_d_DrainEventQueue();
-        obdn_i_ProcessEvents();
+        hell_i_PumpEvents();
+        hell_i_DrainEvents();
+        hell_c_Execute();
 
         ge.update();
         u_Update(&paintScene);
@@ -166,11 +158,12 @@ void painter_StartLoop(void)
         uint32_t i = obdn_v_RequestFrame(&renderScene.dirt, renderScene.window);
         r_Render(i, s);
 
-        obdn_FrameEnd(&loopData);
-
         paintScene.dirt = 0;
         renderScene.dirt = 0;
     }
+
+    painter_LocalCleanUp();
+    painter_ShutDown();
 }
 
 void painter_StopLoop(void)
@@ -181,12 +174,13 @@ void painter_StopLoop(void)
 void painter_ShutDown(void)
 {
     printf("Painter shutdown\n");
-    obdn_i_CleanUp();
+    p_CleanUp();
     obdn_v_CleanUpSwapchain();
     if (!parms.copySwapToHost)
-        obdn_d_CleanUp();
+        hell_d_CleanUp();
     obdn_u_CleanUp();
     obdn_v_CleanUp();
+    hell_i_CleanUp();
 }
 
 void painter_LocalCleanUp(void)
