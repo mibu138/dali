@@ -33,6 +33,7 @@ void l_Init(const VkDeviceSize size)
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     l_CreateLayer(); // create one layer to start
+    l_CreateLayer(); // create one layer to start
 }
 
 void l_CleanUp()
@@ -98,4 +99,12 @@ bool l_DecrementLayer(LayerId* const id)
         layerStack.activeLayer = *id;
         return true;
     }
+}
+
+void l_CopyTextureToLayer(const LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format)
+{
+    assert(id < layerStack.layerCount);
+    assert(w == h && w == 4096);
+    const uint64_t size = w * h * 4;
+    memcpy(layerStack.layers[id].bufferRegion.hostData, data, size);
 }

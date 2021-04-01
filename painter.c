@@ -104,9 +104,11 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     //obdn_s_CreateEmptyScene(&renderScene);
     obdn_s_Init(&renderScene, DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, 0.01, 1000);
 
-    char gmodbuf[32];
-    assert(strnlen(gModuleName, 32) < 29);
-    strncpy(gmodbuf, gModuleName, 28);
+#define DL_PATH_LEN 256
+
+    char gmodbuf[DL_PATH_LEN];
+    assert(strnlen(gModuleName, DL_PATH_LEN) < DL_PATH_LEN - 3);
+    strncpy(gmodbuf, gModuleName, DL_PATH_LEN - 4);
     strcat(gmodbuf, ".so");
 
     void* game = dlopen(gmodbuf, RTLD_LAZY);
@@ -118,15 +120,19 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     G_Handshake handshake = g_entry;
 
     G_Import gi = {
-        .createLayer    = l_CreateLayer,
-        .decrementLayer = l_DecrementLayer,
-        .incrementLayer = l_IncrementLayer,
-        .parms          = &parms
+        .createLayer        = l_CreateLayer,
+        .decrementLayer     = l_DecrementLayer,
+        .incrementLayer     = l_IncrementLayer,
+        .copyTextureToLayer = l_CopyTextureToLayer,
+        .parms              = &parms
     };
     ge = handshake(gi);
 
     if (!parms.copySwapToHost)
         painter_LocalInit(texSize);
+
+    renderScene.dirt = ~0;
+    paintScene.dirt  = ~0;
 }
 
 void painter_LocalInit(uint32_t texSize)
@@ -138,28 +144,30 @@ void painter_LocalInit(uint32_t texSize)
     r_InitRenderer(&renderScene, &paintScene, parms.copySwapToHost);
 }
 
+void painter_Frame(void)
+{
+    hell_i_PumpEvents();
+    hell_i_DrainEvents();
+    hell_c_Execute();
+
+    ge.update();
+    u_Update(&paintScene);
+    VkSemaphore s = VK_NULL_HANDLE;
+    s = p_Paint(s);
+    uint32_t i = obdn_v_RequestFrame(&renderScene.dirt, renderScene.window);
+    r_Render(i, s);
+
+    paintScene.dirt  = 0;
+    renderScene.dirt = 0;
+}
+
 void painter_StartLoop(void)
 {
     parms.shouldRun = true;
 
-    renderScene.dirt = ~0;
-    paintScene.dirt  = ~0;
-
     while( parms.shouldRun ) 
     {
-        hell_i_PumpEvents();
-        hell_i_DrainEvents();
-        hell_c_Execute();
-
-        ge.update();
-        u_Update(&paintScene);
-        VkSemaphore s = VK_NULL_HANDLE;
-        s = p_Paint(s);
-        uint32_t i = obdn_v_RequestFrame(&renderScene.dirt, renderScene.window);
-        r_Render(i, s);
-
-        paintScene.dirt = 0;
-        renderScene.dirt = 0;
+        painter_Frame();
     }
 
     painter_LocalCleanUp();
@@ -193,16 +201,49 @@ void painter_LocalCleanUp(void)
 
 void painter_SetColor(const float r, const float g, const float b)
 {
+    if (ge.setColor)
+        ge.setColor(r, g, b);
 }
 
 void painter_SetRadius(const float r)
 {
+    if (ge.setRadius)
+        ge.setRadius(r);
 }
 
 void painter_SetOpacity(const float o)
 {
+    if (ge.setOpacity)
+        ge.setOpacity(o);
 }
 
 void painter_SetFallOff(const float f)
 {
+    if (ge.setFallOff)
+        ge.setFallOff(f);
+}
+
+void painter_SetView(const struct Mat4* m)
+{
+    if (ge.setView)
+        ge.setView(m);
+}
+
+void painter_SetProj(const struct Mat4* m)
+{
+    if (ge.setProj)
+        ge.setProj(m);
+}
+
+void painter_LoadFprim(Obdn_F_Primitive* fprim)
+{
+    Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(fprim);
+    obdn_f_FreePrimitive(fprim);
+    Obdn_S_PrimId primId = obdn_s_AddRPrim(&renderScene, prim, NULL);
+    printf("PAINTER: Loaded prim. Id %d\n", primId);
+}
+
+void painter_LoadTexture(const void* data, uint32_t w, uint32_t h, VkFormat format)
+{
+    ge.loadTexture(data, w, h, format);
 }

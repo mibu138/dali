@@ -47,7 +47,7 @@ debug: all
 release: CFLAGS += -DNDEBUG -O2
 release: all
 
-all: obsidian standalone chalkboard bin lib tags
+all: obsidian standalone houdini chalkboard bin lib tags
 
 shaders: $(FRAG) $(VERT) $(RGEN) $(RCHIT) $(RMISS)
 
@@ -62,6 +62,9 @@ tags:
 	ctags -R .
 
 standalone: g_standalone.c
+	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
+
+houdini: g_houdini.c
 	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
 
 chalkboard: g_chalkboard.c

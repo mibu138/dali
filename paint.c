@@ -1520,6 +1520,7 @@ VkSemaphore p_Paint(VkSemaphore waitSemaphore)
 
 void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSize)
 {
+    printf("PAINT: starting initialization.\n");
     assert(sScene->primCount > 0);
     paintScene = pScene;
     renderScene = sScene;
@@ -1567,6 +1568,7 @@ void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSi
     updateDescSetComp();
 
     renderScene->textures[1].devImage = imageA;
+    printf("PAINT: initialized.\n");
 }
 
 void p_CleanUp(void)
