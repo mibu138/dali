@@ -15,13 +15,6 @@ typedef struct {
 
 typedef struct {
     void (*init)(Obdn_S_Scene* renderScene, PaintScene* paintScene);
-    void (*setColor)(float r, float g, float b);
-    void (*setFallOff)(float f);
-    void (*setOpacity)(float o);
-    void (*setRadius)(float r);
-    void (*setView)(const Mat4* m);
-    void (*setProj)(const Mat4* m);
-    void (*loadTexture)(const void* data, uint32_t w, uint32_t h, VkFormat format);
     void (*update)(void);
     void (*cleanUp)(void);
 } G_Export;

@@ -72,6 +72,8 @@ static PaintScene   paintScene;
 static G_Export     ge;
 static Parms        parms;
 
+static void* gameModule;
+
 void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 {
     assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K);
@@ -111,10 +113,10 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     strncpy(gmodbuf, gModuleName, DL_PATH_LEN - 4);
     strcat(gmodbuf, ".so");
 
-    void* game = dlopen(gmodbuf, RTLD_LAZY);
-    assert(game);
+    gameModule = dlopen(gmodbuf, RTLD_LAZY);
+    assert(gameModule);
     printf("Game module imported successfully.\n");
-    void* g_entry = dlsym(game, "handshake");
+    void* g_entry = dlsym(gameModule, "handshake");
     assert(g_entry);
     printf("Game handshake function found.\n");
     G_Handshake handshake = g_entry;
@@ -199,42 +201,6 @@ void painter_LocalCleanUp(void)
     r_CleanUp();
 }
 
-void painter_SetColor(const float r, const float g, const float b)
-{
-    if (ge.setColor)
-        ge.setColor(r, g, b);
-}
-
-void painter_SetRadius(const float r)
-{
-    if (ge.setRadius)
-        ge.setRadius(r);
-}
-
-void painter_SetOpacity(const float o)
-{
-    if (ge.setOpacity)
-        ge.setOpacity(o);
-}
-
-void painter_SetFallOff(const float f)
-{
-    if (ge.setFallOff)
-        ge.setFallOff(f);
-}
-
-void painter_SetView(const struct Mat4* m)
-{
-    if (ge.setView)
-        ge.setView(m);
-}
-
-void painter_SetProj(const struct Mat4* m)
-{
-    if (ge.setProj)
-        ge.setProj(m);
-}
-
 void painter_LoadFprim(Obdn_F_Primitive* fprim)
 {
     Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(fprim);
@@ -243,7 +209,8 @@ void painter_LoadFprim(Obdn_F_Primitive* fprim)
     printf("PAINTER: Loaded prim. Id %d\n", primId);
 }
 
-void painter_LoadTexture(const void* data, uint32_t w, uint32_t h, VkFormat format)
+void* painter_GetGame(void)
 {
-    ge.loadTexture(data, w, h, format);
+    assert(gameModule);
+    return gameModule;
 }

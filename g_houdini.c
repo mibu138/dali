@@ -21,6 +21,7 @@
 #include <pthread.h>
 #include <vulkan/vulkan_core.h>
 #include "g_api.h"
+#include "g_houdini_api.h"
 
 static bool pivotChanged;
 
@@ -724,16 +725,24 @@ G_Export handshake(G_Import gi_)
 
     G_Export ge = {
         .init        = g_Init,
-        .setColor    = g_SetBrushColor,
-        .setFallOff  = g_SetBrushFallOff,
-        .setOpacity  = g_SetBrushOpacity,
-        .setRadius   = g_SetBrushRadius,
-        .setProj     = setProj,
-        .setView     = setView,
-        .loadTexture = loadTexture,
         .cleanUp     = g_CleanUp,
         .update      = g_Update
     };
 
     return ge;
+}
+
+G_Houdini_Export getFunctions(void)
+{
+    G_Houdini_Export ex = {
+        .loadTexture = loadTexture,
+        .setColor    = g_SetBrushColor,
+        .setFallOff  = g_SetBrushFallOff,
+        .setOpacity  = g_SetBrushOpacity,
+        .setRadius   = g_SetBrushRadius,
+        .setProj     = setProj,
+        .setView     = setView
+    };
+
+    return ex;
 }
