@@ -101,10 +101,11 @@ bool l_DecrementLayer(LayerId* const id)
     }
 }
 
-void l_CopyTextureToLayer(const LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format)
+uint8_t* l_CopyTextureToLayer(const LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format)
 {
     assert(id < layerStack.layerCount);
     assert(w == h && w == 4096);
     const uint64_t size = w * h * 4;
     memcpy(layerStack.layers[id].bufferRegion.hostData, data, size);
+    return layerStack.layers[id].bufferRegion.hostData;
 }

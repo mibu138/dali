@@ -21,6 +21,7 @@ int         l_GetLayerCount(void);
 L_Layer*    l_GetLayer(L_LayerId id);
 bool        l_IncrementLayer(L_LayerId* const id);
 bool        l_DecrementLayer(L_LayerId* const id);
-void        l_CopyTextureToLayer(const L_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
+// returns address to the layer data
+uint8_t*    l_CopyTextureToLayer(const L_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
 
 #endif /* end of include guard: LAYER_H */

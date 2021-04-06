@@ -228,7 +228,7 @@ static void updatePrim(void)
         obdn_r_DestroyAccelerationStruct(&tlas);
     obdn_r_BuildBlas(prim, &blas);
     Mat4 xform = m_Ident_Mat4();
-    obdn_r_BuildTlasNew(1, &blas, &xform, &tlas);
+    obdn_r_BuildTlasNew(1, &blas, &xform.x, &tlas);
 
     
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {

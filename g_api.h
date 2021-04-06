@@ -6,10 +6,10 @@
 #include "common.h"
 
 typedef struct {
-    int    (*createLayer)(void);
-    bool   (*incrementLayer)(uint16_t* const id);
-    bool   (*decrementLayer)(uint16_t* const id);
-    void   (*copyTextureToLayer)(L_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
+    int      (*createLayer)(void);
+    bool     (*incrementLayer)(uint16_t* const id);
+    bool     (*decrementLayer)(uint16_t* const id);
+    uint8_t* (*copyTextureToLayer)(L_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
     Parms*   parms;
 } G_Import;
 
