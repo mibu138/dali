@@ -1,5 +1,5 @@
 #include "painter.h"
-#include "obsidian/s_scene.h"
+#include <obsidian/s_scene.h>
 #include "paint.h"
 #include "common.h"
 #include "obsidian/t_def.h"
@@ -25,13 +25,13 @@
 #include <hell/input.h>
 #include <hell/display.h>
 #include <hell/cmd.h>
-#include <dlfcn.h>
+#include <hell/common.h>
 #include "g_api.h"
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
 
-#define DEF_WINDOW_WIDTH  1500
-#define DEF_WINDOW_HEIGHT 1500
+#define DEF_WINDOW_WIDTH  200
+#define DEF_WINDOW_HEIGHT 200
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
@@ -90,8 +90,11 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     if (!parms.copySwapToHost)
         window = hell_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     const char* exnames[] = {
+        #if 0
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
-        VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME };
+        VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME 
+        #endif
+        };
     switch (texSize)
     {
         case IMG_4K:  getMemorySizes4k(&config.memorySizes);  break;
@@ -111,12 +114,19 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     char gmodbuf[DL_PATH_LEN];
     assert(strnlen(gModuleName, DL_PATH_LEN) < DL_PATH_LEN - 3);
     strncpy(gmodbuf, gModuleName, DL_PATH_LEN - 4);
+    #ifdef UNIX
     strcat(gmodbuf, ".so");
+    #elif defined(WINDOWS)
+    strcat(gmodbuf, ".dll");
+    #else
+    #error
+    #endif
 
-    gameModule = dlopen(gmodbuf, RTLD_LAZY);
+    hell_Print("Loading module: %s\n", gmodbuf);
+    gameModule = hell_LoadLibrary(gmodbuf);
     assert(gameModule);
     printf("Game module imported successfully.\n");
-    void* g_entry = dlsym(gameModule, "handshake");
+    void* g_entry = hell_LoadSym(gameModule, "handshake");
     assert(g_entry);
     printf("Game handshake function found.\n");
     G_Handshake handshake = g_entry;

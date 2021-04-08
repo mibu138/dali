@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "name": "GCC",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "C:\\msys64\\mingw64\\x86_64-w64-mingw32\\include",
+                "C:\\msys64\\mingw64\\include\\freetype2",
+                "C:\\Users\\Michael Buckley\\dev",
+                "C:\\VulkanSDK\\1.2.170.0\\Include"
+            ],
+            "defines": [
+                "_DEBUG",
+                "UNICODE",
+                "_UNICODE"
+            ],
+            "compilerPath": "C:\\msys64\\mingw64\\bin\\gcc",
+            "cStandard": "c17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "windows-clang-x64"
+        }
+    ],
+    "version": 4
+}

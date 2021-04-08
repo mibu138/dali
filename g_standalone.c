@@ -23,7 +23,8 @@
 
 static bool pivotChanged;
 
-#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
+//#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
+#define SPVDIR "C:/Users/Michael Buckley/dev/painter/shaders/spv"
 
 static Obdn_V_BufferRegion          selectionRegion;
 static Obdn_V_BufferRegion          camRegion;

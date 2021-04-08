@@ -1,14 +1,37 @@
+
+ifeq ($(OS), Windows_NT)
+	OS = WIN
+else 
+	OS = UNIX
+endif
+
 CC = gcc
 GLC = glslc
 
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
-LDFLAGS = -L/opt/hfs18.6/dsolib -L/home/michaelb/lib
-INFLAGS = -I$(HOME)/dev
-LIBS = -ldl -lm -lcoal -lhell -lobsidian -lvulkan -lxcb -lxcb-keysyms -lfreetype
+LIBS = -lm -lcoal -lhell -lobsidian 
+ifeq ($(OS), WIN)
+	OS_HEADERS = $(WIN_HEADERS)
+	LIBEXT = dll
+	LIBS += -lvulkan-1
+	HOMEDIR =  "$(HOMEDRIVE)/$(HOMEPATH)"
+	INEXTRA = -IC:\VulkanSDK\1.2.170.0\Include -IC:\msys64\mingw64\include\freetype2
+	LDFLAGS = -L$(HOMEDIR)/lib -LC:\VulkanSDK\1.2.170.0\Lib
+else
+	OS_HEADERS = $(UNIX_HEADERS)
+	LIBEXT = so
+	LIBS += -ldl -lvulkan
+	HOMEDIR =  $(HOME)
+	INEXTRA = -I/usr/include/freetype2 
+	LDFLAGS = -L/opt/hfs18.6/dsolib
+endif
+LIBDIR  = $(HOMEDIR)/lib
+DEV = $(HOMEDIR)/dev
+INFLAGS = -I$(DEV) $(INEXTRA)
 GLFLAGS = --target-env=vulkan1.2
-BIN = bin
-LIB = $(HOME)/lib
+BIN = .
 LIBNAME = painter
+LIBPATH = $(LIBDIR)/lib$(LIBNAME).$(LIBEXT)
 
 O = build
 GLSL = shaders
@@ -42,12 +65,14 @@ RCHIT := $(patsubst %.rchit,$(SPV)/%-rchit.spv,$(notdir $(wildcard $(GLSL)/*.rch
 RMISS := $(patsubst %.rmiss,$(SPV)/%-rmiss.spv,$(notdir $(wildcard $(GLSL)/*.rmiss)))
 
 debug: CFLAGS += -g -DVERBOSE=1
-debug: all
+debug: win
 
 release: CFLAGS += -DNDEBUG -O2
 release: all
 
 all: obsidian standalone houdini chalkboard bin lib tags
+
+win: shaders standalone bin 
 
 shaders: $(FRAG) $(VERT) $(RGEN) $(RCHIT) $(RMISS)
 
@@ -62,19 +87,19 @@ tags:
 	ctags -R .
 
 standalone: g_standalone.c
-	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
+	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.$(LIBEXT) $< $(LIBS)
 
 houdini: g_houdini.c
-	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
+	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.$(LIBEXT) $< $(LIBS)
 
 chalkboard: g_chalkboard.c
-	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.so $< $(LIBS)
+	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.$(LIBEXT) $< $(LIBS)
 
 bin: main.c $(OBJS) $(DEPS) shaders
 	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) $(OBJS) $< -o $(BIN)/$(NAME) $(LIBS)
 
 lib: $(OBJS) $(DEPS) shaders
-	$(CC) -shared -o $(LIB)/lib$(LIBNAME).so $(OBJS)
+	$(CC) $(LDFLAGS) -shared -o $(LIB)/lib$(LIBNAME).$(LIBEXT) $(OBJS) $(LIBS)
 
 staticlib: $(OBJS) $(DEPS) shaders
 	ar rcs $(LIB)/lib$(NAME).a $(OBJS)
