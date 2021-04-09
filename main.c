@@ -8,10 +8,7 @@
 
 int painterMain(const char* gmod)
 {
-    if (gmod)
-        painter_Init(IMG_4K, false, gmod);
-    else
-        painter_Init(IMG_4K, false, "standalone");
+    painter_Init(IMG_4K, false, gmod);
     painter_StartLoop();
     return 0;
 }
@@ -19,7 +16,10 @@ int painterMain(const char* gmod)
 #ifdef UNIX
 int main(int argc, char *argv[])
 {
-    painterMain("standalone");
+    if (argc > 1)
+        painterMain(argv[1]);
+    else
+        painterMain("standalone");
 }
 #endif
 
@@ -30,6 +30,6 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 {
     printf("Start");
     winVars.instance = hInstance;
-    return painterMain(NULL);
+    return painterMain("standalone");
 }
 #endif

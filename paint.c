@@ -735,7 +735,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
         .blendMode   = blendMode,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp-frag.spv"
     };
 
@@ -747,7 +747,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp2a-frag.spv"
     };
 
@@ -759,7 +759,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp3a-frag.spv"
     };
 
@@ -771,7 +771,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp4a-frag.spv"
     };
 
@@ -783,7 +783,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp-frag.spv"
     };
 

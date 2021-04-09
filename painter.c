@@ -30,8 +30,8 @@
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
 
-#define DEF_WINDOW_WIDTH  200
-#define DEF_WINDOW_HEIGHT 200
+#define DEF_WINDOW_WIDTH  666
+#define DEF_WINDOW_HEIGHT 666
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
@@ -90,7 +90,7 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     if (!parms.copySwapToHost)
         window = hell_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     const char* exnames[] = {
-        #if 0
+        #if 1
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME 
         #endif
@@ -103,7 +103,8 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     }
     obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
     obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, window);
-    hell_i_Init(!parms.copySwapToHost);
+    //hell_i_Init(!parms.copySwapToHost);
+    hell_i_Init(false);
     hell_c_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     //obdn_s_CreateEmptyScene(&renderScene);
@@ -126,7 +127,7 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     gameModule = hell_LoadLibrary(gmodbuf);
     assert(gameModule);
     printf("Game module imported successfully.\n");
-    void* g_entry = hell_LoadSym(gameModule, "handshake");
+    void* g_entry = hell_LoadSymbol(gameModule, "handshake");
     assert(g_entry);
     printf("Game handshake function found.\n");
     G_Handshake handshake = g_entry;

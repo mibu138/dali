@@ -16,20 +16,20 @@ ifeq ($(OS), WIN)
 	LIBS += -lvulkan-1
 	HOMEDIR =  "$(HOMEDRIVE)/$(HOMEPATH)"
 	INEXTRA = -IC:\VulkanSDK\1.2.170.0\Include -IC:\msys64\mingw64\include\freetype2
-	LDFLAGS = -L$(HOMEDIR)/lib -LC:\VulkanSDK\1.2.170.0\Lib
+	LDFLAGS = -LC:\VulkanSDK\1.2.170.0\Lib
 else
 	OS_HEADERS = $(UNIX_HEADERS)
 	LIBEXT = so
-	LIBS += -ldl -lvulkan
+	LIBS +=  -lvulkan
 	HOMEDIR =  $(HOME)
 	INEXTRA = -I/usr/include/freetype2 
 	LDFLAGS = -L/opt/hfs18.6/dsolib
 endif
 LIBDIR  = $(HOMEDIR)/lib
 DEV = $(HOMEDIR)/dev
+LDFLAGS += -L$(HOMEDIR)/lib
 INFLAGS = -I$(DEV) $(INEXTRA)
 GLFLAGS = --target-env=vulkan1.2
-BIN = .
 LIBNAME = painter
 LIBPATH = $(LIBDIR)/lib$(LIBNAME).$(LIBEXT)
 
@@ -38,6 +38,7 @@ GLSL = shaders
 SPV  = shaders/spv
 
 NAME = painter
+X    = $(NAME)
 
 DEPS =  \
 		render.h \
@@ -65,12 +66,12 @@ RCHIT := $(patsubst %.rchit,$(SPV)/%-rchit.spv,$(notdir $(wildcard $(GLSL)/*.rch
 RMISS := $(patsubst %.rmiss,$(SPV)/%-rmiss.spv,$(notdir $(wildcard $(GLSL)/*.rmiss)))
 
 debug: CFLAGS += -g -DVERBOSE=1
-debug: win
+debug: all
 
 release: CFLAGS += -DNDEBUG -O2
 release: all
 
-all: obsidian standalone houdini chalkboard bin lib tags
+all: obsidian standalone houdini chalkboard bin lib 
 
 win: shaders standalone bin 
 
@@ -78,10 +79,10 @@ shaders: $(FRAG) $(VERT) $(RGEN) $(RCHIT) $(RMISS)
 
 .PHONY: obsidian
 obsidian:
-	make -C obsidian/ 
+	cd obsidian/ ; make ; cd ..
 
 clean: 
-	rm -f $(O)/* $(LIB)/$(LIBNAME) $(BIN)/* $(SPV)/*
+	rm -f $(O)/* $(LIBPATH) $(X) $(SPV)/*
 
 tags:
 	ctags -R .
@@ -96,10 +97,10 @@ chalkboard: g_chalkboard.c
 	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) -shared -o $@.$(LIBEXT) $< $(LIBS)
 
 bin: main.c $(OBJS) $(DEPS) shaders
-	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) $(OBJS) $< -o $(BIN)/$(NAME) $(LIBS)
+	$(CC) $(CFLAGS) $(INFLAGS) $(LDFLAGS) $(OBJS) $< -o $(X) $(LIBS)
 
 lib: $(OBJS) $(DEPS) shaders
-	$(CC) $(LDFLAGS) -shared -o $(LIB)/lib$(LIBNAME).$(LIBEXT) $(OBJS) $(LIBS)
+	$(CC) $(LDFLAGS) -shared -o $(LIBPATH) $(OBJS) $(LIBS)
 
 staticlib: $(OBJS) $(DEPS) shaders
 	ar rcs $(LIB)/lib$(NAME).a $(OBJS)

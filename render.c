@@ -236,7 +236,7 @@ static void initRasterPipelines(void)
         .blendMode   = OBDN_R_BLEND_MODE_OVER,
         .dynamicStateCount = LEN(dynamicStates),
         .pDynamicStates = dynamicStates,
-        .vertShader = obdn_r_FullscreenTriVertShader(),
+        .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/post-frag.spv"
     }};
 
