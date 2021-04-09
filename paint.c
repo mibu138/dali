@@ -14,7 +14,7 @@
 #include "obsidian/t_def.h"
 #include "ubo-shared.h"
 
-#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
+#define SPVDIR "shaders/spv"
 
 enum {
     DESC_SET_PRIM,

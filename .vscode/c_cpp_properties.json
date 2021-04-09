@@ -6,7 +6,7 @@
                 "${workspaceFolder}/**",
                 "C:\\msys64\\mingw64\\x86_64-w64-mingw32\\include",
                 "C:\\msys64\\mingw64\\include\\freetype2",
-                "C:\\Users\\Michael Buckley\\dev",
+                "C:\\dev",
                 "C:\\VulkanSDK\\1.2.170.0\\Include"
             ],
             "defines": [

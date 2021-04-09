@@ -27,7 +27,7 @@
 
 #include <pthread.h>
 
-#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
+#define SPVDIR "shaders/spv"
 
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;

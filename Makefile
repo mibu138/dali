@@ -14,7 +14,7 @@ ifeq ($(OS), WIN)
 	OS_HEADERS = $(WIN_HEADERS)
 	LIBEXT = dll
 	LIBS += -lvulkan-1
-	HOMEDIR =  "$(HOMEDRIVE)/$(HOMEPATH)"
+	HOMEDIR = C:
 	INEXTRA = -IC:\VulkanSDK\1.2.170.0\Include -IC:\msys64\mingw64\include\freetype2
 	LDFLAGS = -LC:\VulkanSDK\1.2.170.0\Lib
 else
@@ -71,7 +71,7 @@ debug: all
 release: CFLAGS += -DNDEBUG -O2
 release: all
 
-all: obsidian standalone houdini chalkboard bin lib 
+all: standalone houdini chalkboard bin lib 
 
 win: shaders standalone bin 
 

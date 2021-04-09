@@ -86,11 +86,12 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 #endif
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    hell_i_Init(false);
     const Hell_Window* window = NULL;
     if (!parms.copySwapToHost)
         window = hell_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     const char* exnames[] = {
-        #if 1
+        #if 0
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME 
         #endif
@@ -104,7 +105,6 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
     obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, window);
     //hell_i_Init(!parms.copySwapToHost);
-    hell_i_Init(false);
     hell_c_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     //obdn_s_CreateEmptyScene(&renderScene);
