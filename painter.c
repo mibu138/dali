@@ -23,9 +23,10 @@
 #include <obsidian/u_ui.h>
 #include <obsidian/v_private.h>
 #include <hell/input.h>
-#include <hell/display.h>
+#include <hell/window.h>
 #include <hell/cmd.h>
 #include <hell/common.h>
+#include <hell/locations.h>
 #include "g_api.h"
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
@@ -86,12 +87,13 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 #endif
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    hell_c_Init();
     hell_i_Init(false);
     const Hell_Window* window = NULL;
     if (!parms.copySwapToHost)
-        window = hell_d_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
+        window = hell_w_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
     const char* exnames[] = {
-        #if 0
+        #if 1
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME 
         #endif
@@ -105,16 +107,19 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
     obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, window);
     //hell_i_Init(!parms.copySwapToHost);
-    hell_c_Init();
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
     //obdn_s_CreateEmptyScene(&renderScene);
     obdn_s_Init(&renderScene, DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, 0.01, 1000);
 
 #define DL_PATH_LEN 256
 
+    hell_DPrint("ROOT %s\n", ROOT);
+
     char gmodbuf[DL_PATH_LEN];
     assert(strnlen(gModuleName, DL_PATH_LEN) < DL_PATH_LEN - 3);
-    strncpy(gmodbuf, gModuleName, DL_PATH_LEN - 4);
+    strcpy(gmodbuf, ROOT);
+    strcat(gmodbuf, "/");
+    strcat(gmodbuf, gModuleName);
     #ifdef UNIX
     strcat(gmodbuf, ".so");
     #elif defined(WINDOWS)
@@ -123,13 +128,13 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     #error
     #endif
 
-    hell_Print("Loading module: %s\n", gmodbuf);
+    hell_Print("Painter: Loading game module: %s\n", gmodbuf);
     gameModule = hell_LoadLibrary(gmodbuf);
     assert(gameModule);
-    printf("Game module imported successfully.\n");
+    hell_DPrint("Game module imported successfully.\n");
     void* g_entry = hell_LoadSymbol(gameModule, "handshake");
     assert(g_entry);
-    printf("Game handshake function found.\n");
+    hell_DPrint("Game handshake function found.\n");
     G_Handshake handshake = g_entry;
 
     G_Import gi = {
@@ -198,7 +203,7 @@ void painter_ShutDown(void)
     p_CleanUp();
     obdn_v_CleanUpSwapchain();
     if (!parms.copySwapToHost)
-        hell_d_CleanUp();
+        hell_w_CleanUp();
     obdn_u_CleanUp();
     obdn_v_CleanUp();
     hell_i_CleanUp();

@@ -4,17 +4,17 @@
 #include <obsidian/r_pipeline.h>
 #include <obsidian/private.h>
 #include <obsidian/v_private.h>
+#include <obsidian/r_geo.h>
+#include <obsidian/v_command.h>
+#include <obsidian/t_def.h>
+#include <hell/locations.h>
 #include <string.h>
-#include <vulkan/vulkan_core.h>
 #include "layer.h"
-#include "obsidian/r_geo.h"
-#include "obsidian/v_command.h"
 #include "paint.h"
 #include "undo.h"
-#include "obsidian/t_def.h"
 #include "ubo-shared.h"
 
-#define SPVDIR "shaders/spv"
+#define SPVDIR ROOT"/shaders/spv"
 
 enum {
     DESC_SET_PRIM,
@@ -1456,7 +1456,6 @@ static void updateCommands()
         static const float unit = 0.001; //in screen space
         const float brushDist = m_Distance(brushPos, prevBrushPos);
         const int splatCount = MIN(MAX(brushDist / unit, 1), 30);
-        printf("splatCount: %d\n", splatCount);
         for (int i = 0; i < splatCount; i++)
         {
             float t = (float)i / splatCount;

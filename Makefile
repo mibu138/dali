@@ -9,7 +9,9 @@ CC = gcc
 GLC = glslc
 
 CFLAGS = -Wall -Wno-missing-braces -Wno-attributes -fPIC
+DEFS = -DROOT=\"$(PWD)\"
 LIBS = -lm -lcoal -lhell -lobsidian 
+CFLAGS += $(DEFS)
 ifeq ($(OS), WIN)
 	OS_HEADERS = $(WIN_HEADERS)
 	LIBEXT = dll

@@ -20,11 +20,12 @@
 #include <pthread.h>
 #include <vulkan/vulkan_core.h>
 #include "g_api.h"
+#include <hell/locations.h>
 
 static bool pivotChanged;
 
 //#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
-#define SPVDIR "shaders/spv"
+#define SPVDIR ROOT"/shaders/spv"
 //#define SPVDIR "C:/Users/Michael Buckley/dev/painter/shaders/spv"
 
 static Obdn_V_BufferRegion          selectionRegion;
@@ -547,7 +548,7 @@ static void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
     if (!gi.parms->copySwapToHost)
     {
         Obdn_F_Primitive fprim;
-        obdn_f_ReadPrimitive("data/pig.tnt", &fprim);
+        obdn_f_ReadPrimitive(ROOT"/data/pig.tnt", &fprim);
         Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
         obdn_f_FreePrimitive(&fprim);
         primId = obdn_s_AddRPrim(renderScene, prim, NULL);

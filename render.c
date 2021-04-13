@@ -22,12 +22,13 @@
 #include "undo.h"
 #include "painter.h"
 #include <stdlib.h>
+#include <hell/locations.h>
 
 #include "ubo-shared.h"
 
 #include <pthread.h>
 
-#define SPVDIR "shaders/spv"
+#define SPVDIR ROOT"/shaders/spv"
 
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;
