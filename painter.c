@@ -37,6 +37,7 @@
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes8k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
 static void getMemorySizes16k(Obdn_V_MemorySizes* ms) __attribute__ ((unused));
+static void painter_FullClean(void);
 
 static void getMemorySizes4k(Obdn_V_MemorySizes* ms)
 {
@@ -87,13 +88,14 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 #endif
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    hell_c_Init();
-    hell_i_Init(false);
     const Hell_Window* window = NULL;
     if (!parms.copySwapToHost)
-        window = hell_w_Init(DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, NULL);
+        hell_Init(false, painter_Frame, painter_FullClean, &window);
+    else
+        hell_Init(false, painter_Frame, painter_FullClean, NULL);
+    hell_c_SetVar("maxFps", "1000000", 0); // basically don't throttle us
     const char* exnames[] = {
-        #if 1
+        #if 0
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME 
         #endif
@@ -164,10 +166,10 @@ void painter_LocalInit(uint32_t texSize)
 
 void painter_Frame(void)
 {
-    hell_i_PumpEvents();
-    hell_i_DrainEvents();
-    hell_c_Execute();
-
+//    hell_i_PumpEvents();
+//    hell_i_DrainEvents();
+//    hell_c_Execute();
+//
     ge.update();
     u_Update(&paintScene);
     VkSemaphore s = VK_NULL_HANDLE;
@@ -229,4 +231,10 @@ void* painter_GetGame(void)
 {
     assert(gameModule);
     return gameModule;
+}
+
+static void painter_FullClean(void)
+{
+    painter_LocalCleanUp();
+    painter_ShutDown();
 }

@@ -5,11 +5,12 @@
 #include <unistd.h>
 #include <string.h>
 #include <hell/platform.h>
+#include <hell/common.h>
 
 int painterMain(const char* gmod)
 {
     painter_Init(IMG_4K, false, gmod);
-    painter_StartLoop();
+    hell_Loop();
     return 0;
 }
 
