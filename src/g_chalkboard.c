@@ -12,7 +12,6 @@
 #include <obsidian/u_ui.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/f_file.h>
-#include <obsidian/v_private.h>
 #include <hell/input.h>
 #include <hell/evcodes.h>
 #include <hell/len.h>
@@ -277,7 +276,7 @@ static void updatePrim(void)
         .pBufferInfo = &storageBufInfoIndices
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static void initGPUSelection(const Obdn_R_Primitive* prim)
@@ -388,7 +387,7 @@ static void initGPUSelection(const Obdn_R_Primitive* prim)
         .pBufferInfo = &camInfo
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static int getSelectionPos(Vec3* v)

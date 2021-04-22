@@ -2,7 +2,6 @@
 #include <obsidian/v_memory.h>
 #include <obsidian/r_raytrace.h>
 #include <obsidian/r_pipeline.h>
-#include <obsidian/v_private.h>
 #include <obsidian/r_geo.h>
 #include <obsidian/v_command.h>
 #include <hell/locations.h>
@@ -16,7 +15,6 @@
 #include "paint.h"
 #include "undo.h"
 #include "dtags.h"
-#include "ubo-shared.h"
 
 #define SPVDIR ROOT"/shaders/spv"
 
@@ -228,7 +226,7 @@ static void initRenderPasses(void)
             .pDependencies = dependencies,
         };
 
-        V_ASSERT( vkCreateRenderPass(device, &ci, NULL, &applyPaintRenderPass) );
+        V_ASSERT( vkCreateRenderPass(obdn_v_GetDevice(), &ci, NULL, &applyPaintRenderPass) );
     }
 
     // comp renderpass
