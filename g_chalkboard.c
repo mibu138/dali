@@ -6,18 +6,20 @@
 #include "common.h"
 #include <assert.h>
 #include <string.h>
-#include <obsidian/t_def.h>
+#include <stdio.h>
 #include <obsidian/r_geo.h>
 #include <obsidian/v_video.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/f_file.h>
-#include <obsidian/private.h>
 #include <obsidian/v_private.h>
 #include <hell/input.h>
 #include <hell/evcodes.h>
+#include <hell/len.h>
+#include <hell/debug.h>
 #include <pthread.h>
 #include "g_api.h"
+#include "dtags.h"
 
 static bool pivotChanged;
 
@@ -670,7 +672,7 @@ void g_Update(void)
     g_SetBrushPos(mousePos.x, mousePos.y);
     if (pivotChanged)
     {
-        printf("Pivot changed!\n");
+        hell_DebugPrint(PAINT_DEBUG_TAG_GAME, "Pivot changed!\n");
         setViewerPivotByIntersection();
     }
     if (!gi.parms->copySwapToHost)

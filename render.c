@@ -8,21 +8,20 @@
 #include <memory.h>
 #include <assert.h>
 #include <string.h>
-#include <obsidian/private.h>
 #include <obsidian/v_swapchain.h>
 #include <obsidian/v_video.h>
-#include <obsidian/t_def.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/r_raytrace.h>
 #include <obsidian/v_command.h>
 #include <obsidian/v_video.h>
 #include <obsidian/r_renderpass.h>
 #include <obsidian/v_private.h>
-#include <vulkan/vulkan_core.h>
 #include "undo.h"
 #include "painter.h"
 #include <stdlib.h>
 #include <hell/locations.h>
+#include <hell/debug.h>
+#include <hell/len.h>
 
 #include "ubo-shared.h"
 
@@ -127,15 +126,15 @@ static void initDescSetsAndPipeLayouts(void)
             }},
     }};
 
-    assert(OBDN_ARRAY_SIZE(descSets) == 1);
-    obdn_r_CreateDescriptionsAndLayouts(OBDN_ARRAY_SIZE(descSets), descSets, &descriptorSetLayout, 1, &description);
+    assert(LEN(descSets) == 1);
+    obdn_r_CreateDescriptionsAndLayouts(LEN(descSets), descSets, &descriptorSetLayout, 1, &description);
 
     const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = 1, 
         .descriptorSetLayouts = &descriptorSetLayout,
     }};
 
-    obdn_r_CreatePipelineLayouts(OBDN_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, &pipelineLayout);
+    obdn_r_CreatePipelineLayouts(LEN(pipeLayoutInfos), pipeLayoutInfos, &pipelineLayout);
 }
 
 static void initUbos(void)
@@ -185,7 +184,7 @@ static void updateUbos(void)
             .pBufferInfo = &uniformInfoBrush
     }};
 
-    vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
 }
 
 static void updatePaintTexture(void)
@@ -241,7 +240,7 @@ static void initRasterPipelines(void)
         .fragShader = SPVDIR"/post-frag.spv"
     }};
 
-    obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
+    obdn_r_CreateGraphicsPipelines(LEN(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
 }
 
 static void initSwapchainDependentFramebuffers(void)
@@ -461,7 +460,7 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const b
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
         vkCreateSemaphore(device, &semCI, NULL, &extFrameReadSemaphore);
         fastPath = false;
-        printf(">> SwapHostBuffer created\n");
+        hell_DPrint(">> SwapHostBuffer created\n");
     }
 }
 
@@ -587,13 +586,13 @@ bool r_GetSemaphoreFds(int* obdnFrameDoneFD_0, int* obdnFrameDoneFD_1, int* extT
     VkResult r;
     fdInfo.semaphore = extFrameReadSemaphore;
     r = vkGetSemaphoreFdKHR(device, &fdInfo, extTextureReadFD);
-    if (r != VK_SUCCESS) {printf("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
+    if (r != VK_SUCCESS) {hell_DPrint("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
     fdInfo.semaphore = obdn_u_GetSemaphore(0);
     r = vkGetSemaphoreFdKHR(device, &fdInfo, obdnFrameDoneFD_0);
-    if (r != VK_SUCCESS) {printf("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
+    if (r != VK_SUCCESS) {hell_DPrint("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
     fdInfo.semaphore = obdn_u_GetSemaphore(1);
     r = vkGetSemaphoreFdKHR(device, &fdInfo, obdnFrameDoneFD_1);
-    if (r != VK_SUCCESS) {printf("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
+    if (r != VK_SUCCESS) {hell_DPrint("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
 
     return true;
 }

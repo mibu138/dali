@@ -2,7 +2,6 @@
 #include <obsidian/s_scene.h>
 #include "paint.h"
 #include "common.h"
-#include "obsidian/t_def.h"
 #include "render.h"
 #include "obsidian/f_file.h"
 #include "obsidian/r_geo.h"
@@ -22,11 +21,14 @@
 #include <obsidian/r_raytrace.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/v_private.h>
+#include <obsidian/dtags.h>
 #include <hell/input.h>
 #include <hell/window.h>
 #include <hell/cmd.h>
 #include <hell/common.h>
+#include <hell/debug.h>
 #include <hell/locations.h>
+#include <hell/len.h>
 #include "g_api.h"
 
 #define NS_TARGET 16666666 // 1 / 60 seconds
@@ -76,8 +78,18 @@ static Parms        parms;
 
 static void* gameModule;
 
+static const char* debugFilterTags[] = {
+    //OBDN_DEBUG_TAG_MEM, 
+    //OBDN_DEBUG_TAG_PIPE, 
+    //OBDN_DEBUG_TAG_SHADE,
+    //OBDN_DEBUG_TAG_GRAPHIC_PIPE,
+    //OBDN_DEBUG_TAG_UI,
+};
+
 void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 {
+    hell_AddFilterTags(LEN(debugFilterTags), debugFilterTags);
+    hell_c_SetVar("debug_silent", "1", HELL_C_VAR_ARCHIVE_BIT);
     assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K);
     Obdn_V_Config config = {};
     config.rayTraceEnabled = true;
@@ -89,13 +101,18 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
     parms.copySwapToHost = houdiniMode;
     const VkImageLayout finalUILayout = parms.copySwapToHost ? VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL : VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     const Hell_Window* window = NULL;
+#if defined(UNIX)
+    const bool initConsole = true;
+#elif defined(WINDOWS)
+    const bool initConsole = false;
+#endif
     if (!parms.copySwapToHost)
-        hell_Init(false, painter_Frame, painter_FullClean, &window);
+        hell_Init(initConsole, painter_Frame, painter_FullClean, &window);
     else
-        hell_Init(false, painter_Frame, painter_FullClean, NULL);
+        hell_Init(initConsole, painter_Frame, painter_FullClean, NULL);
     hell_c_SetVar("maxFps", "1000000", 0); // basically don't throttle us
     const char* exnames[] = {
-        #if 0
+        #if 1
         VK_KHR_EXTERNAL_MEMORY_FD_EXTENSION_NAME,
         VK_KHR_EXTERNAL_SEMAPHORE_FD_EXTENSION_NAME 
         #endif
@@ -106,12 +123,12 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
         case IMG_8K:  getMemorySizes8k(&config.memorySizes);  break;
         case IMG_16K: getMemorySizes16k(&config.memorySizes); break;
     }
-    obdn_v_Init(&config, OBDN_ARRAY_SIZE(exnames), exnames);
+    obdn_v_Init(&config, LEN(exnames), exnames);
     obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, window);
-    //hell_i_Init(!parms.copySwapToHost);
     obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
-    //obdn_s_CreateEmptyScene(&renderScene);
-    obdn_s_Init(&renderScene, DEF_WINDOW_WIDTH, DEF_WINDOW_HEIGHT, 0.01, 1000);
+    const Hell_C_Var* varW = hell_c_GetVar("d_width", "666", HELL_C_VAR_ARCHIVE_BIT);
+    const Hell_C_Var* varH = hell_c_GetVar("d_height", "666", HELL_C_VAR_ARCHIVE_BIT);
+    obdn_s_Init(&renderScene, varW->value, varH->value, 0.01, 1000);
 
 #define DL_PATH_LEN 256
 
@@ -157,11 +174,14 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 
 void painter_LocalInit(uint32_t texSize)
 {
-    printf(">>>> Painter local init\n");
+    hell_Print("PAINTER: Local init\n");
 
     ge.init(&renderScene, &paintScene);
+    hell_Print("PAINTER: Game Initialized.\n");
     p_Init(&renderScene, &paintScene, texSize);
+    hell_Print("PAINTER: Paint Engine Initialized.\n");
     r_InitRenderer(&renderScene, &paintScene, parms.copySwapToHost);
+    hell_Print("PAINTER: Renderer Initialized.\n");
 }
 
 void painter_Frame(void)
@@ -201,22 +221,21 @@ void painter_StopLoop(void)
 
 void painter_ShutDown(void)
 {
-    printf("Painter shutdown\n");
     p_CleanUp();
+    hell_Print("PAINTER: painter engine shut down.\n");
     obdn_v_CleanUpSwapchain();
-    if (!parms.copySwapToHost)
-        hell_w_CleanUp();
     obdn_u_CleanUp();
     obdn_v_CleanUp();
-    hell_i_CleanUp();
+    hell_Print("PAINTER: shutdown.\n");
 }
 
 void painter_LocalCleanUp(void)
 {
-    printf(">>>> Painter local cleanup\n");
     vkDeviceWaitIdle(device);
     ge.cleanUp();
+    hell_Print("PAINTER: game shutdown.\n");
     r_CleanUp();
+    hell_Print("PAINTER: renderer shutdown.\n");
 }
 
 void painter_LoadFprim(Obdn_F_Primitive* fprim)
@@ -224,7 +243,7 @@ void painter_LoadFprim(Obdn_F_Primitive* fprim)
     Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(fprim);
     obdn_f_FreePrimitive(fprim);
     Obdn_S_PrimId primId = obdn_s_AddRPrim(&renderScene, prim, NULL);
-    printf("PAINTER: Loaded prim. Id %d\n", primId);
+    hell_Print("PAINTER: Loaded prim. Id %d\n", primId);
 }
 
 void* painter_GetGame(void)

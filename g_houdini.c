@@ -8,19 +8,19 @@
 #include "common.h"
 #include <assert.h>
 #include <string.h>
-#include <obsidian/t_def.h>
+#include <stdio.h>
 #include <obsidian/r_geo.h>
 #include <obsidian/v_video.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/f_file.h>
-#include <obsidian/private.h>
 #include <obsidian/v_private.h>
 #include <hell/input.h>
 #include <hell/evcodes.h>
+#include <hell/debug.h>
 #include <pthread.h>
-#include <vulkan/vulkan_core.h>
 #include "g_api.h"
+#include "dtags.h"
 #include "g_houdini_api.h"
 
 static uint16_t windowWidth;
@@ -287,9 +287,9 @@ static void setProj(const Mat4* m)
 
 static uint8_t* loadTexture(const void* data, uint32_t w, uint32_t h, VkFormat format)
 {
-    printf("G_HOUDINI: Loading texture....\n");
+    hell_DebugPrint(PAINT_DEBUG_TAG_GAME, "Loading texture....\n");
     assert(gi.copyTextureToLayer);
-    printf("G_HOUDINI: Copied data to layer 1\n");
+    hell_DebugPrint(PAINT_DEBUG_TAG_GAME, "Copied data to layer 1\n");
     return gi.copyTextureToLayer(1, data, w, h, format);
 }
 

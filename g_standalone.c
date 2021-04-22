@@ -1,4 +1,5 @@
 #include "coal/m_math.h"
+#include "hell/cmd.h"
 #include "obsidian/r_raytrace.h"
 #include "obsidian/r_render.h"
 #include "obsidian/s_scene.h"
@@ -7,20 +8,20 @@
 #include "common.h"
 #include <assert.h>
 #include <string.h>
-#include <obsidian/t_def.h>
+#include <stdio.h>
 #include <obsidian/r_geo.h>
 #include <obsidian/v_video.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/f_file.h>
-#include <obsidian/private.h>
 #include <obsidian/v_private.h>
 #include <hell/input.h>
 #include <hell/evcodes.h>
+#include <hell/locations.h>
+#include <hell/len.h>
 #include <pthread.h>
 #include <vulkan/vulkan_core.h>
 #include "g_api.h"
-#include <hell/locations.h>
 
 static bool pivotChanged;
 
@@ -477,12 +478,9 @@ static void g_SetBrushRadius(float r)
 
 static void g_CleanUp(void)
 {
-    //if (!parms.copySwapToHost)
-    //{
-        obdn_u_DestroyWidget(radiusSlider);
-        obdn_u_DestroyWidget(opacitySlider);
-        obdn_u_DestroyWidget(falloffSlider);
-    //}
+    obdn_u_DestroyWidget(radiusSlider);
+    obdn_u_DestroyWidget(opacitySlider);
+    obdn_u_DestroyWidget(falloffSlider);
     obdn_u_DestroyWidget(text);
     obdn_v_FreeBufferRegion(&selectionRegion);
     obdn_v_FreeBufferRegion(&camRegion);
@@ -598,7 +596,7 @@ static bool g_Responder(const Hell_I_Event *event)
             case HELL_KEY_R: g_SetBrushColor(1, 0, 0); break;
             case HELL_KEY_G: g_SetBrushColor(0, 1, 0); break;
             case HELL_KEY_B: g_SetBrushColor(0, 0, 1); break;
-            case HELL_KEY_ESC: gi.parms->shouldRun = false; break;
+            case HELL_KEY_ESC: hell_c_AddText("quit\n"); break;
             case HELL_KEY_J: decrementLayer(); break;
             case HELL_KEY_K: incrementLayer(); break;
             case HELL_KEY_L: gi.createLayer(); break;

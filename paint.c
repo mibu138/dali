@@ -2,16 +2,20 @@
 #include <obsidian/v_memory.h>
 #include <obsidian/r_raytrace.h>
 #include <obsidian/r_pipeline.h>
-#include <obsidian/private.h>
 #include <obsidian/v_private.h>
 #include <obsidian/r_geo.h>
 #include <obsidian/v_command.h>
-#include <obsidian/t_def.h>
 #include <hell/locations.h>
+#include <hell/len.h>
+#include <hell/minmax.h>
+#include <hell/common.h>
+#include <hell/debug.h>
 #include <string.h>
 #include "layer.h"
+#include <stdio.h>
 #include "paint.h"
 #include "undo.h"
+#include "dtags.h"
 #include "ubo-shared.h"
 
 #define SPVDIR ROOT"/shaders/spv"
@@ -88,6 +92,8 @@ static L_LayerId curLayerId;
 static bool brushActive;
 static Vec2 prevBrushPos;
 static Vec2 brushPos;
+
+#define DTAG PAINT_DEBUG_TAG_PAINT
 
 
 static void initPaintImages(void)
@@ -216,9 +222,9 @@ static void initRenderPasses(void)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             .subpassCount = 1,
             .pSubpasses = &subpass1,
-            .attachmentCount = OBDN_ARRAY_SIZE(attachments),
+            .attachmentCount = LEN(attachments),
             .pAttachments = attachments,
-            .dependencyCount = OBDN_ARRAY_SIZE(dependencies),
+            .dependencyCount = LEN(dependencies),
             .pDependencies = dependencies,
         };
 
@@ -363,11 +369,11 @@ static void initRenderPasses(void)
 
         VkRenderPassCreateInfo ci = {
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
-            .subpassCount = OBDN_ARRAY_SIZE(subpasses),
+            .subpassCount = LEN(subpasses),
             .pSubpasses = subpasses,
-            .attachmentCount = OBDN_ARRAY_SIZE(attachments),
+            .attachmentCount = LEN(attachments),
             .pAttachments = attachments,
-            .dependencyCount = OBDN_ARRAY_SIZE(dependencies),
+            .dependencyCount = LEN(dependencies),
             .pDependencies = dependencies,
         };
 
@@ -437,9 +443,9 @@ static void initRenderPasses(void)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,
             .subpassCount = 1,
             .pSubpasses = &subpass,
-            .attachmentCount = OBDN_ARRAY_SIZE(attachments),
+            .attachmentCount = LEN(attachments),
             .pAttachments = attachments,
-            .dependencyCount = OBDN_ARRAY_SIZE(dependencies),
+            .dependencyCount = LEN(dependencies),
             .pDependencies = dependencies,
         };
 
@@ -518,9 +524,9 @@ static void initDescSetsAndPipeLayouts(void)
         }
     };
 
-    obdn_r_CreateDescriptorSetLayouts(OBDN_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts);
+    obdn_r_CreateDescriptorSetLayouts(LEN(descSets), descSets, descriptorSetLayouts);
 
-    obdn_r_CreateDescriptorSets(OBDN_ARRAY_SIZE(descSets), descSets, descriptorSetLayouts, &description);
+    obdn_r_CreateDescriptorSets(LEN(descSets), descSets, descriptorSetLayouts, &description);
 
     VkPushConstantRange pcRange = {
         .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
@@ -529,13 +535,13 @@ static void initDescSetsAndPipeLayouts(void)
     }; 
 
     const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
-        .descriptorSetCount = OBDN_ARRAY_SIZE(descSets), 
+        .descriptorSetCount = LEN(descSets), 
         .descriptorSetLayouts = descriptorSetLayouts,
         .pushConstantCount = 1,
         .pushConstantsRanges = &pcRange
     }};
 
-    obdn_r_CreatePipelineLayouts(OBDN_ARRAY_SIZE(pipeLayoutInfos), pipeLayoutInfos, &pipelineLayout);
+    obdn_r_CreatePipelineLayouts(LEN(pipeLayoutInfos), pipeLayoutInfos, &pipelineLayout);
 }
 
 static void updateDescSetPrim(void)
@@ -586,7 +592,7 @@ static void updateDescSetPrim(void)
             .pNext = &asInfo
     }};
 
-    vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
 }
 
 static void updateDescSetPaint(void)
@@ -635,7 +641,7 @@ static void updateDescSetPaint(void)
             .pImageInfo = &imageInfo
     }};
 
-    vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
 }
 
 static void updateDescSetComp(void)
@@ -698,7 +704,7 @@ static void updateDescSetComp(void)
             .pImageInfo = &imageInfoD
     }};
 
-    vkUpdateDescriptorSets(device, OBDN_ARRAY_SIZE(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
 }
 
 static void initPaintPipelineAndShaderBindingTable(void)
@@ -720,7 +726,7 @@ static void initPaintPipelineAndShaderBindingTable(void)
         }
     }};
 
-    obdn_r_CreateRayTracePipelines(OBDN_ARRAY_SIZE(pipeInfosRT), pipeInfosRT, &paintPipeline, &shaderBindingTable);
+    obdn_r_CreateRayTracePipelines(LEN(pipeInfosRT), pipeInfosRT, &paintPipeline, &shaderBindingTable);
 }
 
 static void initCompPipelines(const Obdn_R_BlendMode blendMode)
@@ -791,9 +797,9 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         pipeInfo1, pipeInfo2, pipeInfo3, pipeInfo4, pipeInfoSingle
     };
 
-    assert(OBDN_ARRAY_SIZE(infos) == PIPELINE_COMP_COUNT);
+    assert(LEN(infos) == PIPELINE_COMP_COUNT);
 
-    obdn_r_CreateGraphicsPipelines(OBDN_ARRAY_SIZE(infos), infos, compPipelines);
+    obdn_r_CreateGraphicsPipelines(LEN(infos), infos, compPipelines);
 }
 
 static void destroyCompPipelines(void)
@@ -885,7 +891,7 @@ static void initFramebuffers(void)
 
 static void onLayerChange(L_LayerId newLayerId)
 {
-    printf("Begin %s\n", __PRETTY_FUNCTION__);
+    hell_DebugPrint(PAINT_DEBUG_TAG_PAINT, "Begin\n");
 
     Obdn_V_Command cmd = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
 
@@ -943,7 +949,7 @@ static void onLayerChange(L_LayerId newLayerId)
     }};
 
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
-            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers), barriers);
+            0, 0, NULL, 0, NULL, LEN(barriers), barriers);
 
     obdn_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, VK_IMAGE_ASPECT_COLOR_BIT, prevLayerBuffer);
 
@@ -969,7 +975,7 @@ static void onLayerChange(L_LayerId newLayerId)
     }};
 
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers0), barriers0);
+            0, 0, NULL, 0, NULL, LEN(barriers0), barriers0);
 
     curLayerId = newLayerId;
 
@@ -1094,7 +1100,7 @@ static void onLayerChange(L_LayerId newLayerId)
     }};
 
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
-            0, 0, NULL, 0, NULL, OBDN_ARRAY_SIZE(barriers), barriers2);
+            0, 0, NULL, 0, NULL, LEN(barriers), barriers2);
 
     obdn_v_EndCommandBuffer(cmd.buffer);
 
@@ -1102,7 +1108,7 @@ static void onLayerChange(L_LayerId newLayerId)
 
     obdn_v_DestroyCommand(cmd);
 
-    printf("End %s\n", __PRETTY_FUNCTION__);
+    hell_DebugPrint(PAINT_DEBUG_TAG_PAINT, "End\n");
 }
 
 static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
@@ -1193,12 +1199,12 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
 static void backupLayer(void)
 {
     runUndoCommands(true, u_GetNextBuffer());
-    printf("%s\n",__PRETTY_FUNCTION__);
+    hell_DebugPrint(DTAG, "layer backed up\n");
 }
 
 static bool undo(void)
 {
-    printf("%s\n",__PRETTY_FUNCTION__);
+    hell_DebugPrint(DTAG, "undo\n");
     BufferRegion* buf = u_GetLastBuffer();
     if (!buf) return false; // nothing to undo
     runUndoCommands(false, buf);
@@ -1333,7 +1339,7 @@ static void comp(const VkCommandBuffer cmdBuf)
 
     const VkRenderPassBeginInfo rpass = {
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
-        .clearValueCount = OBDN_ARRAY_SIZE(clears),
+        .clearValueCount = LEN(clears),
         .pClearValues = clears,
         .renderArea = {{0, 0}, {textureSize, textureSize}},
         .renderPass =  compositeRenderPass,
@@ -1481,24 +1487,24 @@ static void updateCommands()
 
 void p_SavePaintImage(void)
 {
-    printf("Please enter a file name with extension.\n");
+    hell_Print("Please enter a file name with extension.\n");
     char strbuf[32];
     fgets(strbuf, 32, stdin);
     uint8_t len = strlen(strbuf);
     if (len < 5)
     {
-        printf("Filename too small. Must include extension.\n");
+        hell_Print("Filename too small. Must include extension.\n");
         return;
     }
     if (strbuf[len - 1] == '\n')  strbuf[--len] = '\0'; 
     const char* ext = strbuf + len - 3;
-    OBDN_DEBUG_PRINT("%s", ext);
+    hell_Print("%s", ext);
     Obdn_V_ImageFileType fileType;
     if (strncmp(ext, "png", 3) == 0) fileType = OBDN_V_IMAGE_FILE_TYPE_PNG;
     else if (strncmp(ext, "jpg", 3) == 0) fileType = OBDN_V_IMAGE_FILE_TYPE_JPG;
     else 
     {
-        printf("Bad extension.\n");
+        hell_Print("Bad extension.\n");
         return;
     }
     obdn_v_SaveImage(&imageA, fileType, strbuf);
@@ -1519,7 +1525,7 @@ VkSemaphore p_Paint(VkSemaphore waitSemaphore)
 
 void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSize)
 {
-    printf("PAINT: starting initialization.\n");
+    hell_Print("PAINT: starting initialization...\n");
     assert(sScene->primCount > 0);
     paintScene = pScene;
     renderScene = sScene;
@@ -1567,7 +1573,7 @@ void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSi
     updateDescSetComp();
 
     renderScene->textures[1].devImage = imageA;
-    printf("PAINT: initialized.\n");
+    hell_Print("PAINT: initialized.\n");
 }
 
 void p_CleanUp(void)

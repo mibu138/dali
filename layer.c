@@ -3,7 +3,9 @@
 #include <obsidian/r_renderpass.h>
 #include <obsidian/v_video.h>
 #include <obsidian/v_image.h>
-#include <obsidian/t_def.h>
+#include <hell/debug.h>
+#include <hell/common.h>
+#include "dtags.h"
 #include <string.h>
 #include <vulkan/vulkan_core.h>
 
@@ -56,8 +58,8 @@ int l_CreateLayer(void)
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     
-    OBDN_DEBUG_PRINT("Layer created!");
-    printf("Adding layer. There are now %d layers. Active layer is %d\n", layerStack.layerCount, layerStack.activeLayer);
+    hell_DebugPrint(PAINT_DEBUG_TAG_LAYER, "Layer created!");
+    hell_Print("Adding layer. There are now %d layers. Active layer is %d\n", layerStack.layerCount, layerStack.activeLayer);
     return curId;
 }
 

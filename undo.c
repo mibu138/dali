@@ -2,7 +2,9 @@
 #include "painter/layer.h"
 #include "layer.h"
 #include "render.h"
-#include <stdio.h>
+#include "dtags.h"
+#include <hell/debug.h>
+#include <hell/common.h>
 #include <string.h>
 
 #define MAX_UNDOS 8
@@ -111,7 +113,7 @@ Obdn_V_BufferRegion* u_GetNextBuffer(void)
         undoStack->trl++;
         undoStack->trl = undoStack->trl % maxUndos;
     }
-    printf("%s: cur: %d\n", __PRETTY_FUNCTION__, undoStack->cur);
+    hell_DebugPrint(PAINT_DEBUG_TAG_UNDO, "cur: %d\n", undoStack->cur);
     return &undoStack->bufferRegions[stackIndex];
 }
 
@@ -121,15 +123,15 @@ Obdn_V_BufferRegion* u_GetLastBuffer(void)
     uint8_t stackIndex = undoStack->cur - 1;
     if (stackIndex % maxUndos == undoStack->trl)
     {
-        printf("Nothing to undo!\n");
+        hell_Print("Nothing to undo!\n");
         return NULL; // cannot cross trl
     }
     stackIndex--;
     stackIndex = stackIndex % maxUndos;
-    printf("undoStack->cur - 1 = %d\n", undoStack->cur - 1);
+    hell_DebugPrint(PAINT_DEBUG_TAG_UNDO, "undoStack->cur - 1 = %d\n", undoStack->cur - 1);
     undoStack->cur--;
     undoStack->cur = undoStack->cur % maxUndos;
-    printf("%s: cur: %d\n", __PRETTY_FUNCTION__, undoStack->cur);
+    hell_DebugPrint(PAINT_DEBUG_TAG_UNDO, "cur: %d\n", undoStack->cur);
     return &undoStack->bufferRegions[stackIndex];
 }
 
