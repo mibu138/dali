@@ -15,8 +15,9 @@
 #include "paint.h"
 #include "undo.h"
 #include "dtags.h"
+#include "ubo-shared.h"
 
-#define SPVDIR ROOT"/shaders/spv"
+#define SPVDIR "painter"
 
 enum {
     DESC_SET_PRIM,
@@ -375,7 +376,7 @@ static void initRenderPasses(void)
             .pDependencies = dependencies,
         };
 
-        V_ASSERT( vkCreateRenderPass(device, &ci, NULL, &compositeRenderPass) );
+        V_ASSERT( vkCreateRenderPass(obdn_v_GetDevice(), &ci, NULL, &compositeRenderPass) );
     }
 
     {
@@ -447,7 +448,7 @@ static void initRenderPasses(void)
             .pDependencies = dependencies,
         };
 
-        V_ASSERT( vkCreateRenderPass(device, &ci, NULL, &singleCompositeRenderPass) );
+        V_ASSERT( vkCreateRenderPass(obdn_v_GetDevice(), &ci, NULL, &singleCompositeRenderPass) );
     }
 }
 
@@ -590,7 +591,7 @@ static void updateDescSetPrim(void)
             .pNext = &asInfo
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static void updateDescSetPaint(void)
@@ -639,7 +640,7 @@ static void updateDescSetPaint(void)
             .pImageInfo = &imageInfo
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static void updateDescSetComp(void)
@@ -702,7 +703,7 @@ static void updateDescSetComp(void)
             .pImageInfo = &imageInfoD
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static void initPaintPipelineAndShaderBindingTable(void)
@@ -712,15 +713,15 @@ static void initPaintPipelineAndShaderBindingTable(void)
         .layout = pipelineLayout,
         .raygenCount = 1,
         .raygenShaders = (char*[]){
-            SPVDIR"/paint-rgen.spv",
+            SPVDIR"/paint.rgen.spv",
         },
         .missCount = 1,
         .missShaders = (char*[]){
-            SPVDIR"/paint-rmiss.spv",
+            SPVDIR"/paint.rmiss.spv",
         },
         .chitCount = 1,
         .chitShaders = (char*[]){
-            SPVDIR"/paint-rchit.spv"
+            SPVDIR"/paint.rchit.spv"
         }
     }};
 
@@ -740,7 +741,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .viewportDim = {textureSize, textureSize},
         .blendMode   = blendMode,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
-        .fragShader = SPVDIR"/comp-frag.spv"
+        .fragShader = SPVDIR"/comp.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfo2 = {
@@ -752,7 +753,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
-        .fragShader = SPVDIR"/comp2a-frag.spv"
+        .fragShader = SPVDIR"/comp2a.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfo3 = {
@@ -764,7 +765,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
-        .fragShader = SPVDIR"/comp3a-frag.spv"
+        .fragShader = SPVDIR"/comp3a.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfo4 = {
@@ -776,7 +777,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
-        .fragShader = SPVDIR"/comp4a-frag.spv"
+        .fragShader = SPVDIR"/comp4a.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfoSingle = {
@@ -788,7 +789,7 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
         .viewportDim = {textureSize, textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
-        .fragShader = SPVDIR"/comp-frag.spv"
+        .fragShader = SPVDIR"/comp.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo infos[] = {
@@ -804,7 +805,7 @@ static void destroyCompPipelines(void)
 {
     for (int i = PIPELINE_COMP_1; i < PIPELINE_COMP_COUNT; i++)
     {
-        vkDestroyPipeline(device, compPipelines[i], NULL);
+        vkDestroyPipeline(obdn_v_GetDevice(), compPipelines[i], NULL);
     }
 }
 
@@ -826,7 +827,7 @@ static void initFramebuffers(void)
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &applyPaintFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &applyPaintFrameBuffer) );
     }
 
     // compositeFrameBuffer
@@ -845,7 +846,7 @@ static void initFramebuffers(void)
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &compositeFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &compositeFrameBuffer) );
     }
 
     // backgroundFrameBuffer
@@ -864,7 +865,7 @@ static void initFramebuffers(void)
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &backgroundFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &backgroundFrameBuffer) );
     }
 
     // foregroundFrameBuffer
@@ -883,7 +884,7 @@ static void initFramebuffers(void)
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(device, &info, NULL, &foregroundFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &foregroundFrameBuffer) );
     }
 }
 
@@ -1255,7 +1256,7 @@ static void updateBrush(void)
 
 static void updatePaintMode(void)
 {
-    vkDeviceWaitIdle(device);
+    vkDeviceWaitIdle(obdn_v_GetDevice());
     destroyCompPipelines();
     switch (paintScene->paint_mode)
     {
@@ -1578,16 +1579,16 @@ void p_CleanUp(void)
 {
     obdn_v_FreeBufferRegion(&matrixRegion);
     obdn_v_FreeBufferRegion(&brushRegion);
-    vkDestroyPipeline(device, paintPipeline, NULL);
-    vkDestroyPipelineLayout(device, pipelineLayout, NULL);
+    vkDestroyPipeline(obdn_v_GetDevice(), paintPipeline, NULL);
+    vkDestroyPipelineLayout(obdn_v_GetDevice(), pipelineLayout, NULL);
     obdn_r_DestroyShaderBindingTable(&shaderBindingTable);
     for (int i = 0; i < PIPELINE_COMP_COUNT; i++)
     {
-        vkDestroyPipeline(device, compPipelines[i], NULL);
+        vkDestroyPipeline(obdn_v_GetDevice(), compPipelines[i], NULL);
     }
     for (int i = 0; i < DESC_SET_COUNT; i++)
     {
-        vkDestroyDescriptorSetLayout(device, descriptorSetLayouts[i], NULL);
+        vkDestroyDescriptorSetLayout(obdn_v_GetDevice(), descriptorSetLayouts[i], NULL);
     }
     obdn_r_DestroyDescription(&description);
     obdn_v_DestroyCommand(releaseImageCommand);
@@ -1598,13 +1599,13 @@ void p_CleanUp(void)
     obdn_v_FreeImage(&imageB);
     obdn_v_FreeImage(&imageC);
     obdn_v_FreeImage(&imageD);
-    vkDestroyFramebuffer(device, applyPaintFrameBuffer, NULL);
-    vkDestroyFramebuffer(device, compositeFrameBuffer, NULL);
-    vkDestroyFramebuffer(device, backgroundFrameBuffer, NULL);
-    vkDestroyFramebuffer(device, foregroundFrameBuffer, NULL);
-    vkDestroyRenderPass(device, singleCompositeRenderPass, NULL);
-    vkDestroyRenderPass(device, applyPaintRenderPass, NULL);
-    vkDestroyRenderPass(device, compositeRenderPass, NULL);
+    vkDestroyFramebuffer(obdn_v_GetDevice(), applyPaintFrameBuffer, NULL);
+    vkDestroyFramebuffer(obdn_v_GetDevice(), compositeFrameBuffer, NULL);
+    vkDestroyFramebuffer(obdn_v_GetDevice(), backgroundFrameBuffer, NULL);
+    vkDestroyFramebuffer(obdn_v_GetDevice(), foregroundFrameBuffer, NULL);
+    vkDestroyRenderPass(obdn_v_GetDevice(), singleCompositeRenderPass, NULL);
+    vkDestroyRenderPass(obdn_v_GetDevice(), applyPaintRenderPass, NULL);
+    vkDestroyRenderPass(obdn_v_GetDevice(), compositeRenderPass, NULL);
     obdn_r_DestroyAccelerationStruct(&bottomLevelAS);
     obdn_r_DestroyAccelerationStruct(&topLevelAS);
 }

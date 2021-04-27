@@ -1,7 +1,5 @@
 #include "painter.h"
 #include "render.h"
-#include "obsidian/f_file.h"
-#include "obsidian/r_geo.h"
 #include <unistd.h>
 #include <string.h>
 #include <hell/platform.h>

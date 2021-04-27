@@ -15,7 +15,6 @@
 #include <obsidian/v_command.h>
 #include <obsidian/v_video.h>
 #include <obsidian/r_renderpass.h>
-#include <obsidian/v_private.h>
 #include "undo.h"
 #include "painter.h"
 #include <stdlib.h>
@@ -27,7 +26,7 @@
 
 #include <pthread.h>
 
-#define SPVDIR ROOT"/shaders/spv"
+#define SPVDIR "painter"
 
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;
@@ -184,7 +183,7 @@ static void updateUbos(void)
             .pBufferInfo = &uniformInfoBrush
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static void updatePaintTexture(void)
@@ -207,7 +206,7 @@ static void updatePaintTexture(void)
         .pImageInfo = &texInfo
     };
 
-    vkUpdateDescriptorSets(device, 1, &write, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), 1, &write, 0, NULL);
 }
 
 static void initRasterPipelines(void)
@@ -225,8 +224,8 @@ static void initRasterPipelines(void)
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
         .dynamicStateCount = LEN(dynamicStates),
         .pDynamicStates = dynamicStates,
-        .vertShader = SPVDIR"/raster-vert.spv", 
-        .fragShader = SPVDIR"/raster-frag.spv"
+        .vertShader = SPVDIR"/raster.vert.spv", 
+        .fragShader = SPVDIR"/raster.frag.spv"
     },{
         // post
         .renderPass = postRenderPass,
@@ -237,7 +236,7 @@ static void initRasterPipelines(void)
         .dynamicStateCount = LEN(dynamicStates),
         .pDynamicStates = dynamicStates,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
-        .fragShader = SPVDIR"/post-frag.spv"
+        .fragShader = SPVDIR"/post.frag.spv"
     }};
 
     obdn_r_CreateGraphicsPipelines(LEN(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
@@ -261,12 +260,12 @@ static void initSwapchainDependentFramebuffers(void)
             .pAttachments = attachments 
         };
 
-        V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &swapchainFrameBuffers[i]) );
+        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &framebufferInfo, NULL, &swapchainFrameBuffers[i]) );
 
         framebufferInfo.renderPass = postRenderPass;
         framebufferInfo.attachmentCount = 1;
 
-        V_ASSERT( vkCreateFramebuffer(device, &framebufferInfo, NULL, &postFrameBuffers[i]) );
+        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &framebufferInfo, NULL, &postFrameBuffers[i]) );
     }
 }
 
@@ -274,8 +273,8 @@ static void cleanUpSwapchainDependent(void)
 {
     for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
     {
-        vkDestroyFramebuffer(device, swapchainFrameBuffers[i], NULL);
-        vkDestroyFramebuffer(device, postFrameBuffers[i], NULL);
+        vkDestroyFramebuffer(obdn_v_GetDevice(), swapchainFrameBuffers[i], NULL);
+        vkDestroyFramebuffer(obdn_v_GetDevice(), postFrameBuffers[i], NULL);
     }
     obdn_v_FreeImage(&depthAttachment);
     if (copySwapToHost)
@@ -458,7 +457,7 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const b
         copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
         VkSemaphoreCreateInfo semCI = {
             .sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO };
-        vkCreateSemaphore(device, &semCI, NULL, &extFrameReadSemaphore);
+        vkCreateSemaphore(obdn_v_GetDevice(), &semCI, NULL, &extFrameReadSemaphore);
         fastPath = false;
         hell_DPrint(">> SwapHostBuffer created\n");
     }
@@ -520,18 +519,18 @@ void r_CleanUp(void)
     obdn_v_UnregisterSwapchainRecreateFn(onRecreateSwapchain);
     for (int i = 0; i < G_PIPELINE_COUNT; i++)  // first 2 handles in swapcleanup
     {
-        vkDestroyPipeline(device, graphicsPipelines[i], NULL);
+        vkDestroyPipeline(obdn_v_GetDevice(), graphicsPipelines[i], NULL);
     }
-    vkDestroyPipelineLayout(device, pipelineLayout, NULL);
+    vkDestroyPipelineLayout(obdn_v_GetDevice(), pipelineLayout, NULL);
     obdn_v_DestroyCommand(renderCommand);
-    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
+    vkDestroyDescriptorSetLayout(obdn_v_GetDevice(), descriptorSetLayout, NULL);
     obdn_r_DestroyDescription(&description);
     memset(&description, 0, sizeof(description));
-    vkDestroyRenderPass(device, swapchainRenderPass, NULL);
-    vkDestroyRenderPass(device, postRenderPass, NULL);
+    vkDestroyRenderPass(obdn_v_GetDevice(), swapchainRenderPass, NULL);
+    vkDestroyRenderPass(obdn_v_GetDevice(), postRenderPass, NULL);
     if (copySwapToHost)
     {
-        vkDestroySemaphore(device, extFrameReadSemaphore, NULL);
+        vkDestroySemaphore(obdn_v_GetDevice(), extFrameReadSemaphore, NULL);
         obdn_v_DestroyCommand(copyToHostCommand);
     }
     obdn_v_FreeBufferRegion(&matrixRegion);
@@ -569,7 +568,7 @@ bool r_GetExtMemoryFd(int* fd, uint64_t* size)
         .handleType = VK_EXTERNAL_MEMORY_HANDLE_TYPE_OPAQUE_FD_BIT,
     };
 
-    V_ASSERT( vkGetMemoryFdKHR(device, &fdInfo, fd) );
+    V_ASSERT( vkGetMemoryFdKHR(obdn_v_GetDevice(), &fdInfo, fd) );
 
     *size = obdn_v_GetMemorySize(OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE);
 
@@ -585,13 +584,13 @@ bool r_GetSemaphoreFds(int* obdnFrameDoneFD_0, int* obdnFrameDoneFD_1, int* extT
 
     VkResult r;
     fdInfo.semaphore = extFrameReadSemaphore;
-    r = vkGetSemaphoreFdKHR(device, &fdInfo, extTextureReadFD);
+    r = vkGetSemaphoreFdKHR(obdn_v_GetDevice(), &fdInfo, extTextureReadFD);
     if (r != VK_SUCCESS) {hell_DPrint("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
     fdInfo.semaphore = obdn_u_GetSemaphore(0);
-    r = vkGetSemaphoreFdKHR(device, &fdInfo, obdnFrameDoneFD_0);
+    r = vkGetSemaphoreFdKHR(obdn_v_GetDevice(), &fdInfo, obdnFrameDoneFD_0);
     if (r != VK_SUCCESS) {hell_DPrint("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
     fdInfo.semaphore = obdn_u_GetSemaphore(1);
-    r = vkGetSemaphoreFdKHR(device, &fdInfo, obdnFrameDoneFD_1);
+    r = vkGetSemaphoreFdKHR(obdn_v_GetDevice(), &fdInfo, obdnFrameDoneFD_1);
     if (r != VK_SUCCESS) {hell_DPrint("!!! %s ERROR: %d\n", __PRETTY_FUNCTION__, r); assert(0); }
 
     return true;

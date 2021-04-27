@@ -27,16 +27,16 @@ foreach(SRC ${SRCS})
     get_filename_component(FILE_NAME ${SRC} NAME)
     set(SPV "${PROJECT_BINARY_DIR}/src/shaders/${FILE_NAME}.spv")
     set(CMD ${GLC} ${GLCFLAGS} ${DIR}/${SRC} -o ${SPV})
-    message("Command: ${CMD}")
     add_custom_command(
         OUTPUT ${SPV}
         COMMAND ${CMD}
         DEPENDS ${SRC})
     list(APPEND SPVS ${SPV})
 endforeach(SRC)
-message("SPVS: ${SPVS}")
 
 add_custom_target(shaders DEPENDS ${SPVS})
 install(FILES ${SPVS}
     DESTINATION shaders/painter)
 
+install(FILES ${SPVS}
+    DESTINATION ${HOUDINI_TOOL_INS_DIR}/shaders/painter)

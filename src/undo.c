@@ -1,5 +1,5 @@
 #include "undo.h"
-#include "painter/layer.h"
+#include "layer.h"
 #include "layer.h"
 #include "render.h"
 #include "dtags.h"

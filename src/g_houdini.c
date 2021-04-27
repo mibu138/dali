@@ -3,7 +3,7 @@
 #include "obsidian/r_render.h"
 #include "obsidian/s_scene.h"
 #include "obsidian/v_memory.h"
-#include "painter/layer.h"
+#include "layer.h"
 #include "render.h"
 #include "common.h"
 #include <assert.h>
@@ -14,7 +14,6 @@
 #include <obsidian/u_ui.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/f_file.h>
-#include <obsidian/v_private.h>
 #include <hell/input.h>
 #include <hell/evcodes.h>
 #include <hell/debug.h>
@@ -170,18 +169,7 @@ static void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
     windowHeight = renderScene->window[1];
 
     Obdn_S_PrimId primId = 0;
-    if (!gi.parms->copySwapToHost)
-    {
-        Obdn_F_Primitive fprim;
-        obdn_f_ReadPrimitive("data/pig.tnt", &fprim);
-        Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
-        obdn_f_FreePrimitive(&fprim);
-        primId = obdn_s_AddRPrim(renderScene, prim, NULL);
-    }
-    else
-    {
-        assert(obdn_s_PrimExists(renderScene, 0) && "we need to load a prim");
-    }
+    assert(obdn_s_PrimExists(renderScene, 0) && "we need to load a prim");
     Obdn_S_TextureId texId = ++renderScene->textureCount;
     Obdn_S_MaterialId matId = obdn_s_CreateMaterial(renderScene, (Vec3){1, 1, 1}, 1.0, texId, 0, 0);
     obdn_s_BindPrimToMaterial(renderScene, primId, matId);

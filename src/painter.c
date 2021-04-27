@@ -20,7 +20,6 @@
 #include <obsidian/v_swapchain.h>
 #include <obsidian/r_raytrace.h>
 #include <obsidian/u_ui.h>
-#include <obsidian/v_private.h>
 #include <obsidian/dtags.h>
 #include <hell/input.h>
 #include <hell/window.h>
@@ -132,16 +131,15 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 
 #define DL_PATH_LEN 256
 
-    hell_DPrint("ROOT %s\n", ROOT);
-
     char gmodbuf[DL_PATH_LEN];
     assert(strnlen(gModuleName, DL_PATH_LEN) < DL_PATH_LEN - 3);
-    strcpy(gmodbuf, ROOT);
-    strcat(gmodbuf, "/");
-    strcat(gmodbuf, gModuleName);
+    strcpy(gmodbuf, "/home/michaelb/dev/painter/build/src/");
     #ifdef UNIX
+    strcat(gmodbuf, "lib");
+    strcat(gmodbuf, gModuleName);
     strcat(gmodbuf, ".so");
     #elif defined(WINDOWS)
+    strcat(gmodbuf, gModuleName);
     strcat(gmodbuf, ".dll");
     #else
     #error
@@ -231,7 +229,7 @@ void painter_ShutDown(void)
 
 void painter_LocalCleanUp(void)
 {
-    vkDeviceWaitIdle(device);
+    vkDeviceWaitIdle(obdn_v_GetDevice());
     ge.cleanUp();
     hell_Print("PAINTER: game shutdown.\n");
     r_CleanUp();

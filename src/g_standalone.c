@@ -14,7 +14,6 @@
 #include <obsidian/u_ui.h>
 #include <obsidian/r_pipeline.h>
 #include <obsidian/f_file.h>
-#include <obsidian/v_private.h>
 #include <hell/input.h>
 #include <hell/evcodes.h>
 #include <hell/locations.h>
@@ -26,7 +25,7 @@
 static bool pivotChanged;
 
 //#define SPVDIR "/home/michaelb/dev/painter/shaders/spv"
-#define SPVDIR ROOT"/shaders/spv"
+#define SPVDIR "painter"
 //#define SPVDIR "C:/Users/Michael Buckley/dev/painter/shaders/spv"
 
 static Obdn_V_BufferRegion          selectionRegion;
@@ -277,7 +276,7 @@ static void updatePrim(void)
         .pBufferInfo = &storageBufInfoIndices
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static void initGPUSelection(const Obdn_R_Primitive* prim)
@@ -344,15 +343,15 @@ static void initGPUSelection(const Obdn_R_Primitive* prim)
         .layout = pipelineLayout,
         .raygenCount = 1,
         .raygenShaders = (char*[]){
-            SPVDIR"/select-rgen.spv",
+            SPVDIR"/select.rgen.spv",
         },
         .missCount = 1,
         .missShaders = (char*[]){
-            SPVDIR"/select-rmiss.spv",
+            SPVDIR"/select.rmiss.spv",
         },
         .chitCount = 1,
         .chitShaders = (char*[]){
-            SPVDIR"/select-rchit.spv"
+            SPVDIR"/select.rchit.spv"
         }
     };
 
@@ -388,7 +387,7 @@ static void initGPUSelection(const Obdn_R_Primitive* prim)
         .pBufferInfo = &camInfo
     }};
 
-    vkUpdateDescriptorSets(device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
 }
 
 static int getSelectionPos(Vec3* v)
@@ -485,9 +484,9 @@ static void g_CleanUp(void)
     obdn_v_FreeBufferRegion(&selectionRegion);
     obdn_v_FreeBufferRegion(&camRegion);
     obdn_r_DestroyDescription(&description);
-    vkDestroyDescriptorSetLayout(device, descriptorSetLayout, NULL);
-    vkDestroyPipelineLayout(device, pipelineLayout, NULL);
-    vkDestroyPipeline(device, selectionPipeline, NULL);
+    vkDestroyDescriptorSetLayout(obdn_v_GetDevice(), descriptorSetLayout, NULL);
+    vkDestroyPipelineLayout(obdn_v_GetDevice(), pipelineLayout, NULL);
+    vkDestroyPipeline(obdn_v_GetDevice(), selectionPipeline, NULL);
     obdn_r_DestroyShaderBindingTable(&sbt);
     obdn_r_DestroyAccelerationStruct(&blas);
     obdn_r_DestroyAccelerationStruct(&tlas);
