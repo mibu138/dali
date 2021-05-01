@@ -34,9 +34,7 @@ foreach(SRC ${SRCS})
     list(APPEND SPVS ${SPV})
 endforeach(SRC)
 
-add_custom_target(shaders DEPENDS ${SPVS})
-install(FILES ${SPVS}
-    DESTINATION shaders/painter)
+add_custom_target(painter-shaders DEPENDS ${SPVS})
 
 install(FILES ${SPVS}
-    DESTINATION ${HOUDINI_TOOL_INS_DIR}/shaders/painter)
+    DESTINATION ${SHADER_INSTALL_PREFIX}${LIBRARY_NAME})
