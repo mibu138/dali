@@ -21,6 +21,7 @@
 #include <obsidian/r_raytrace.h>
 #include <obsidian/u_ui.h>
 #include <obsidian/dtags.h>
+#include <obsidian/common.h>
 #include <hell/input.h>
 #include <hell/window.h>
 #include <hell/cmd.h>
@@ -75,6 +76,11 @@ static PaintScene   paintScene;
 static G_Export     ge;
 static Parms        parms;
 
+#define SWAPCHAIN_IMG_COUNT 2
+static Obdn_Swapchain* swapchain;
+static VkSemaphore     imgAcquiredSemaphores[SWAPCHAIN_IMG_COUNT];
+static uint8_t         frameSwitch;
+
 static void* gameModule;
 
 static const char* debugFilterTags[] = {
@@ -88,7 +94,7 @@ static const char* debugFilterTags[] = {
 void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 {
     hell_AddFilterTags(LEN(debugFilterTags), debugFilterTags);
-    hell_c_SetVar("debug_silent", "1", HELL_C_VAR_ARCHIVE_BIT);
+    hell_c_SetVar("debug_silent", "0", HELL_C_VAR_ARCHIVE_BIT);
     assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K);
     Obdn_V_Config config = {};
     config.rayTraceEnabled = true;
@@ -105,10 +111,7 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 #elif defined(WINDOWS)
     const bool initConsole = false;
 #endif
-    if (!parms.copySwapToHost)
-        hell_Init(initConsole, painter_Frame, painter_FullClean, &window);
-    else
-        hell_Init(initConsole, painter_Frame, painter_FullClean, NULL);
+    hell_Init(initConsole, painter_Frame, painter_FullClean);
     hell_c_SetVar("maxFps", "1000000", 0); // basically don't throttle us
     const char* exnames[] = {
         #if 1
@@ -123,10 +126,21 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
         case IMG_16K: getMemorySizes16k(&config.memorySizes); break;
     }
     obdn_v_Init(&config, LEN(exnames), exnames);
-    obdn_v_InitSwapchain(VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT, window);
-    obdn_u_Init(VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, finalUILayout);
-    const Hell_C_Var* varW = hell_c_GetVar("d_width", "666", HELL_C_VAR_ARCHIVE_BIT);
-    const Hell_C_Var* varH = hell_c_GetVar("d_height", "666", HELL_C_VAR_ARCHIVE_BIT);
+    swapchain = obdn_AllocSwapchain();
+    window = hell_OpenWindow(666, 666, NULL);
+    obdn_InitSwapchain(swapchain,
+                       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+                           VK_IMAGE_USAGE_TRANSFER_SRC_BIT,
+                       window);
+    obdn_InitUI(obdn_GetSwapchainFormat(swapchain), window->width,
+                window->height, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
+                obdn_GetSwapchainImageCount(swapchain),
+                obdn_GetSwapchainImageViews(swapchain));
+    const Hell_C_Var* varW =
+        hell_c_GetVar("d_width", "666", HELL_C_VAR_ARCHIVE_BIT);
+    const Hell_C_Var* varH =
+        hell_c_GetVar("d_height", "666", HELL_C_VAR_ARCHIVE_BIT);
     obdn_s_Init(&renderScene, varW->value, varH->value, 0.01, 1000);
 
 #define DL_PATH_LEN 256
@@ -168,6 +182,10 @@ void painter_Init(uint32_t texSize, bool houdiniMode, const char* gModuleName)
 
     renderScene.dirt = ~0;
     paintScene.dirt  = ~0;
+
+    assert(obdn_GetSwapchainImageCount(swapchain) == SWAPCHAIN_IMG_COUNT);
+    obdn_CreateSemaphore(&imgAcquiredSemaphores[0]);
+    obdn_CreateSemaphore(&imgAcquiredSemaphores[1]);
 }
 
 void painter_LocalInit(uint32_t texSize)
@@ -178,23 +196,36 @@ void painter_LocalInit(uint32_t texSize)
     hell_Print("PAINTER: Game Initialized.\n");
     p_Init(&renderScene, &paintScene, texSize);
     hell_Print("PAINTER: Paint Engine Initialized.\n");
-    r_InitRenderer(&renderScene, &paintScene, parms.copySwapToHost);
+    r_InitRenderer(&renderScene, &paintScene, parms.copySwapToHost, swapchain);
     hell_Print("PAINTER: Renderer Initialized.\n");
 }
 
-void painter_Frame(void)
+void
+painter_Frame(void)
 {
-//    hell_i_PumpEvents();
-//    hell_i_DrainEvents();
-//    hell_c_Execute();
-//
     ge.update();
     u_Update(&paintScene);
-    VkSemaphore s = VK_NULL_HANDLE;
-    s = p_Paint(s);
-    uint32_t i = obdn_v_RequestFrame(&renderScene.dirt, renderScene.window);
-    r_Render(i, s);
+    VkSemaphore s = p_Paint();
+    bool        swapchainDirty;
+    int         i = obdn_AcquireSwapchainImage(swapchain, &(VkFence){0},
+                                       &imgAcquiredSemaphores[frameSwitch],
+                                       &swapchainDirty);
+    if (swapchainDirty)
+    {
+        renderScene.dirt |= OBDN_S_WINDOW_BIT;
+        VkExtent2D dim       = obdn_GetSwapchainExtent(swapchain);
+        uint32_t   viewCount = obdn_GetSwapchainImageCount(swapchain);
+        obdn_RecreateSwapchainDependentUI(
+            dim.width, dim.height, viewCount,
+            obdn_GetSwapchainImageViews(swapchain));
+        r_OnRecreateSwapchain(dim.width, dim.height, viewCount,
+                              obdn_GetSwapchainImageViews(swapchain));
+        renderScene.window[0] = dim.width;
+        renderScene.window[1] = dim.height;
+    }
+    r_Render(swapchain, i, s, imgAcquiredSemaphores[frameSwitch]);
 
+    frameSwitch      = (frameSwitch + 1) % SWAPCHAIN_IMG_COUNT;
     paintScene.dirt  = 0;
     renderScene.dirt = 0;
 }
@@ -221,8 +252,8 @@ void painter_ShutDown(void)
 {
     p_CleanUp();
     hell_Print("PAINTER: painter engine shut down.\n");
-    obdn_v_CleanUpSwapchain();
-    obdn_u_CleanUp();
+    obdn_ShutdownUI(obdn_GetSwapchainImageCount(swapchain));
+    obdn_ShutdownSwapchain(swapchain);
     obdn_v_CleanUp();
     hell_Print("PAINTER: shutdown.\n");
 }
@@ -232,7 +263,7 @@ void painter_LocalCleanUp(void)
     vkDeviceWaitIdle(obdn_v_GetDevice());
     ge.cleanUp();
     hell_Print("PAINTER: game shutdown.\n");
-    r_CleanUp();
+    r_CleanUp(obdn_GetSwapchainImageCount(swapchain));
     hell_Print("PAINTER: renderer shutdown.\n");
 }
 

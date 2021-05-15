@@ -78,11 +78,11 @@ static VkSemaphore     extFrameReadSemaphore;
 
 // swap to host stuff
 
-static void initOffscreenAttachments(void)
+static void initOffscreenAttachments(uint32_t width, uint32_t height)
 {
     Obdn_V_MemoryType memType = copySwapToHost ? OBDN_V_MEMORY_EXTERNAL_DEVICE_TYPE : OBDN_V_MEMORY_DEVICE_TYPE;
     depthAttachment = obdn_v_CreateImage(
-            renderScene->window[0], renderScene->window[1],
+            width, height,
             depthFormat,
             VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT,
@@ -92,17 +92,17 @@ static void initOffscreenAttachments(void)
             memType);
 }
 
-static void initRenderPasses(void)
+static void initRenderPasses(VkFormat colorFormat)
 {
     obdn_r_CreateRenderPass_ColorDepth(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
             VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE, 
             VK_ATTACHMENT_LOAD_OP_CLEAR, VK_ATTACHMENT_STORE_OP_STORE,
-            obdn_v_GetSwapFormat(), depthFormat, &swapchainRenderPass);
+            colorFormat, depthFormat, &swapchainRenderPass);
 
     obdn_r_CreateRenderPass_Color(
             VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
-            VK_ATTACHMENT_LOAD_OP_LOAD, obdn_v_GetSwapFormat(), &postRenderPass);
+            VK_ATTACHMENT_LOAD_OP_LOAD, colorFormat, &postRenderPass);
 }
 
 static void initDescSetsAndPipeLayouts(void)
@@ -242,19 +242,17 @@ static void initRasterPipelines(void)
     obdn_r_CreateGraphicsPipelines(LEN(pipeInfosGraph), pipeInfosGraph, graphicsPipelines);
 }
 
-static void initSwapchainDependentFramebuffers(void)
+static void initSwapchainDependentFramebuffers(uint32_t width, uint32_t height, uint32_t viewCount, const VkImageView views[viewCount])
 {
-    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
+    for (int i = 0; i < viewCount; i++) 
     {
-        const Obdn_R_Frame* frame = obdn_v_GetFrame(i);
-
-        const VkImageView attachments[] = {frame->view, depthAttachment.view};
+        const VkImageView attachments[] = {views[i], depthAttachment.view};
 
         VkFramebufferCreateInfo framebufferInfo = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = renderScene->window[1],
-            .width  = renderScene->window[0],
+            .height = height,
+            .width  = width,
             .renderPass = swapchainRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments 
@@ -269,9 +267,9 @@ static void initSwapchainDependentFramebuffers(void)
     }
 }
 
-static void cleanUpSwapchainDependent(void)
+static void cleanUpSwapchainDependent(uint32_t viewCount)
 {
-    for (int i = 0; i < OBDN_FRAME_COUNT; i++) 
+    for (int i = 0; i < viewCount; i++) 
     {
         vkDestroyFramebuffer(obdn_v_GetDevice(), swapchainFrameBuffers[i], NULL);
         vkDestroyFramebuffer(obdn_v_GetDevice(), postFrameBuffers[i], NULL);
@@ -284,16 +282,16 @@ static void cleanUpSwapchainDependent(void)
     }
 }
 
-static void onRecreateSwapchain(void)
+void r_OnRecreateSwapchain(uint32_t width, uint32_t height, uint32_t viewCount, const VkImageView views[viewCount])
 {
-    cleanUpSwapchainDependent();
+    cleanUpSwapchainDependent(viewCount);
 
-    initOffscreenAttachments();
-    initSwapchainDependentFramebuffers();
+    initOffscreenAttachments(width, height);
+    initSwapchainDependentFramebuffers(width, height, viewCount, views);
 
     if (copySwapToHost)
     {
-        const uint64_t size = obdn_v_GetFrame(obdn_v_GetCurrentFrameIndex())->size;
+        const uint64_t size = width * height * 4;
         swapHostBufferColor = obdn_v_RequestBufferRegion(size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     }
@@ -333,14 +331,10 @@ static void syncScene(const uint32_t frameIndex)
             updateProj();
         if (paintScene->dirt & SCENE_BRUSH_BIT)
             updateBrush();
-        if (renderScene->dirt & OBDN_S_WINDOW_BIT)
-        {
-            onRecreateSwapchain();
-        }
     }
 }
 
-static void rasterize(const VkCommandBuffer cmdBuf)
+static void rasterize(const uint32_t frameIndex, const VkCommandBuffer cmdBuf)
 {
     VkClearValue clearValueColor =     {0.0f, 0.0f, 0.0f, 0.0f};
     VkClearValue clearValueDepth = {1.0, 0};
@@ -363,7 +357,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
             .pClearValues = clears,
             .renderArea = {{0, 0}, {renderScene->window[0], renderScene->window[1]}},
             .renderPass =  swapchainRenderPass,
-            .framebuffer = swapchainFrameBuffers[obdn_v_GetCurrentFrameIndex()]
+            .framebuffer = swapchainFrameBuffers[frameIndex]
         };
 
         vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
@@ -379,7 +373,7 @@ static void rasterize(const VkCommandBuffer cmdBuf)
             .pClearValues = &clearValueColor,
             .renderArea = {{0, 0}, {renderScene->window[0], renderScene->window[1]}},
             .renderPass =  postRenderPass,
-            .framebuffer = postFrameBuffers[obdn_v_GetCurrentFrameIndex()]
+            .framebuffer = postFrameBuffers[frameIndex]
         };
 
         vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, graphicsPipelines[PIPELINE_POST]);
@@ -422,12 +416,13 @@ static void updateRenderCommands(const int8_t frameIndex)
     vkCmdSetViewport(cmdBuf, 0, 1, &vp);
     vkCmdSetScissor(cmdBuf, 0, 1, &scissor);
 
-    rasterize(cmdBuf);
+    rasterize(frameIndex, cmdBuf);
 
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
-void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const bool copyToHost)
+void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene,
+               const bool copyToHost, const Obdn_Swapchain* swapchain)
 {
     renderScene = scene;
     paintScene  = pScene;
@@ -437,9 +432,11 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const b
 
     renderCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    initOffscreenAttachments();
+    VkExtent2D ex = obdn_GetSwapchainExtent(swapchain);
 
-    initRenderPasses();
+    initOffscreenAttachments(ex.width, ex.height);
+
+    initRenderPasses(obdn_GetSwapchainFormat(swapchain));
     initDescSetsAndPipeLayouts();
     initRasterPipelines();
 
@@ -447,12 +444,11 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const b
     updateUbos();
     updatePaintTexture();
 
-    initSwapchainDependentFramebuffers();
+    initSwapchainDependentFramebuffers(ex.width, ex.height, obdn_GetSwapchainImageCount(swapchain), obdn_GetSwapchainImageViews(swapchain));
 
     if (copySwapToHost)
     {
-        VkDeviceSize swapImageSize = obdn_v_GetFrame(0)->size;
-        swapHostBufferColor = obdn_v_RequestBufferRegion(swapImageSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        swapHostBufferColor = obdn_v_RequestBufferRegion(obdn_GetSwapchainImageSize(swapchain), VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         swapHostBufferDepth = obdn_v_RequestBufferRegion(depthAttachment.size, VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
         copyToHostCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
         VkSemaphoreCreateInfo semCI = {
@@ -463,17 +459,20 @@ void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene, const b
     }
 }
 
-void r_Render(uint32_t fi, VkSemaphore waitSemaphore)
+void
+r_Render(const Obdn_Swapchain* swapchain, uint32_t fi,
+         VkSemaphore waitSemaphore, VkSemaphore imgAcquiredSemaphore)
 {
     assert(renderScene->primCount == 1);
     syncScene(fi);
+    VkExtent3D swapExtent = obdn_GetSwapchainExtent3D(swapchain);
     obdn_v_WaitForFence(&renderCommand.fence);
     obdn_v_ResetCommand(&renderCommand);
     updateRenderCommands(fi);
     obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            waitSemaphore, renderCommand.semaphore, 
+            1, &waitSemaphore, 1, &renderCommand.semaphore, 
             renderCommand.fence, renderCommand.buffer);
-    waitSemaphore = obdn_u_Render(renderCommand.semaphore);
+    waitSemaphore = obdn_RenderUI(fi, swapExtent.width, swapExtent.height, renderCommand.semaphore);
     if (copySwapToHost)
     {
         if (fastPath)
@@ -481,8 +480,8 @@ void r_Render(uint32_t fi, VkSemaphore waitSemaphore)
             obdn_v_ResetCommand(&copyToHostCommand);
             obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
             obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
-            obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, waitSemaphore, 
-                    VK_NULL_HANDLE,
+            obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, 1, &waitSemaphore, 
+                    0, NULL,
                     copyToHostCommand.fence, 
                     copyToHostCommand.buffer);
             obdn_v_WaitForFence(&copyToHostCommand.fence);
@@ -492,17 +491,25 @@ void r_Render(uint32_t fi, VkSemaphore waitSemaphore)
             obdn_v_ResetCommand(&copyToHostCommand);
             obdn_v_BeginCommandBuffer(copyToHostCommand.buffer);
 
-            const Image* swapImage = obdn_v_GetFrame(fi);
+            VkImage swapImage = obdn_GetSwapchainImage(swapchain, fi);
+            VkOffset3D offset = {0, 0, 0};
 
-            assert(swapImage->size == swapHostBufferColor.size);
+            assert(swapExtent.width * swapExtent.height * 4 == swapHostBufferColor.size);
 
-            obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, swapImage, VK_IMAGE_ASPECT_COLOR_BIT, &swapHostBufferColor);
-            obdn_v_CmdCopyImageToBuffer(copyToHostCommand.buffer, &depthAttachment, VK_IMAGE_ASPECT_DEPTH_BIT, &swapHostBufferDepth);
+            obdn_CmdCopyImageToBuffer(
+                copyToHostCommand.buffer, swapImage, offset,
+                swapExtent, VK_IMAGE_ASPECT_COLOR_BIT, 0,
+                swapHostBufferColor.buffer, swapHostBufferColor.offset);
+
+            obdn_CmdCopyImageToBuffer(
+                copyToHostCommand.buffer, depthAttachment.handle, offset,
+                swapExtent, VK_IMAGE_ASPECT_DEPTH_BIT, 0,
+                swapHostBufferDepth.buffer, swapHostBufferDepth.offset);
 
             obdn_v_EndCommandBuffer(copyToHostCommand.buffer);
 
-            obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, waitSemaphore, 
-                    VK_NULL_HANDLE,
+            obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, 1, &waitSemaphore, 
+                    0, NULL,
                     copyToHostCommand.fence, 
                     copyToHostCommand.buffer);
 
@@ -510,13 +517,16 @@ void r_Render(uint32_t fi, VkSemaphore waitSemaphore)
         }
     }
     else   
-        obdn_v_PresentFrame(waitSemaphore);
+    {
+        assert(obdn_GetSwapchainImageCount(swapchain) == 2);
+        VkSemaphore semaphores[2] = {waitSemaphore, imgAcquiredSemaphore};
+        obdn_PresentFrame(swapchain, 2, semaphores);
+    }
 }
 
-void r_CleanUp(void)
+void r_CleanUp(uint32_t swapviewCount)
 {
-    cleanUpSwapchainDependent();
-    obdn_v_UnregisterSwapchainRecreateFn(onRecreateSwapchain);
+    cleanUpSwapchainDependent(swapviewCount);
     for (int i = 0; i < G_PIPELINE_COUNT; i++)  // first 2 handles in swapcleanup
     {
         vkDestroyPipeline(obdn_v_GetDevice(), graphicsPipelines[i], NULL);
@@ -547,18 +557,18 @@ void r_GetSwapBufferData(uint32_t* width, uint32_t* height, uint32_t* elementSiz
     *depthData = swapHostBufferDepth.hostData;
 }
 
-void r_GetColorDepthExternal(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
-        uint64_t* colorOffset, uint64_t* depthOffset)
-{
-    *width = renderScene->window[0];
-    *height = renderScene->window[1];
-    *elementSize = 4;
-
-    uint32_t frameId = obdn_v_GetCurrentFrameIndex();
-    *colorOffset = obdn_v_GetFrame(frameId)->offset;
-    *depthOffset = depthAttachment.offset;
-}
-
+//void r_GetColorDepthExternal(uint32_t* width, uint32_t* height, uint32_t* elementSize, 
+//        uint64_t* colorOffset, uint64_t* depthOffset)
+//{
+//    *width = renderScene->window[0];
+//    *height = renderScene->window[1];
+//    *elementSize = 4;
+//
+//    uint32_t frameId = obdn_v_GetCurrentFrameIndex();
+//    *colorOffset = obdn_v_GetFrame(frameId)->offset;
+//    *depthOffset = depthAttachment.offset;
+//}
+//
 bool r_GetExtMemoryFd(int* fd, uint64_t* size)
 {
     // fast path

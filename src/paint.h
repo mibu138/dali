@@ -39,7 +39,7 @@ typedef struct {
     PaintScene_DirtMask dirt;
 } PaintScene;
 
-VkSemaphore p_Paint(VkSemaphore waitSemaphore);
+VkSemaphore p_Paint(void);
 void        p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSize);
 void        p_CleanUp(void);
 

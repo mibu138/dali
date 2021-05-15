@@ -1184,13 +1184,17 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
 
     obdn_v_EndCommandBuffer(cmdBuf);
 
-    obdn_v_SubmitGraphicsCommand(0, 0, NULL, releaseImageCommand.semaphore, VK_NULL_HANDLE, releaseImageCommand.buffer);
-    
-    obdn_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT, &releaseImageCommand.semaphore, VK_NULL_HANDLE, &transferImageCommand);
+    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, NULL, 1,
+                                 &releaseImageCommand.semaphore, 
+                                 VK_NULL_HANDLE, releaseImageCommand.buffer);
+
+    obdn_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 &releaseImageCommand.semaphore, VK_NULL_HANDLE,
+                                 &transferImageCommand);
 
     obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-            transferImageCommand.semaphore, 
-            acquireImageCommand.semaphore, 
+            1, &transferImageCommand.semaphore, 
+            1, &acquireImageCommand.semaphore, 
             acquireImageCommand.fence, 
             acquireImageCommand.buffer);
 }
@@ -1509,15 +1513,15 @@ void p_SavePaintImage(void)
     obdn_v_SaveImage(&imageA, fileType, strbuf);
 }
 
-VkSemaphore p_Paint(VkSemaphore waitSemaphore)
+VkSemaphore p_Paint(void)
 {
     assert(renderScene->primCount == 1);
     obdn_v_WaitForFence(&paintCommand.fence);
     obdn_v_ResetCommand(&paintCommand);
-    waitSemaphore = syncScene();
+    VkSemaphore waitSemaphore = syncScene();
     updateCommands();
     obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            waitSemaphore, paintCommand.semaphore, 
+            waitSemaphore == VK_NULL_HANDLE ? 0 : 1, &waitSemaphore, 1, &paintCommand.semaphore, 
             paintCommand.fence, paintCommand.buffer);
     return paintCommand.semaphore;
 }
