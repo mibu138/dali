@@ -19,29 +19,21 @@ set(PUBLIC_HEADERS
 add_library(chalkboard SHARED g_chalkboard.c)
 #add_library(houdini SHARED g_houdini.c)
 add_library(standalone SHARED g_standalone.c)
-add_library(painter SHARED ${SRCS})
 
-set_target_properties(painter PROPERTIES PUBLIC_HEADER "${PUBLIC_HEADERS}")
-#target_link_libraries(houdini coal hell obsidian)
-target_link_libraries(painter coal hell obsidian vulkan)
+add_library(${LIBRARY_NAME} SHARED ${SRCS})
+
+target_link_libraries(${LIBRARY_NAME} PRIVATE coal hell obsidian vulkan)
+
+install_library()
 
 if (NOT DEFINED LIB_ONLY)
     add_executable(painter-bin main.c)
-    target_link_libraries(painter-bin painter)
+    target_link_libraries(painter-bin ${LIBRARY_NAME})
     add_dependencies(painter-bin standalone chalkboard)
-endif()
-
-add_subdirectory(shaders)
-add_dependencies(painter painter-shaders)
-
-install(TARGETS ${LIBRARY_NAME} 
-    LIBRARY DESTINATION ${LIB_INSTALL_PREFIX})
-
-if (NOT DEFINED NO_HEADER_INSTALL)
-    install(TARGETS ${LIBRARY_NAME} 
-        PUBLIC_HEADER DESTINATION ${HEADER_INSTALL_PREFIX}${LIBRARY_NAME})
-endif()
-
-if (NOT DEFINED LIB_ONLY)
     install(TARGETS painter-bin)
 endif()
+
+set(SHADER_TARGET_NAME painter-shaders)
+add_subdirectory(shaders)
+add_dependencies(${LIBRARY_NAME} painter-shaders)
+

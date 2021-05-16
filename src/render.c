@@ -24,8 +24,6 @@
 
 #include "ubo-shared.h"
 
-#include <pthread.h>
-
 #define SPVDIR "painter"
 
 typedef Obdn_V_Command Command;

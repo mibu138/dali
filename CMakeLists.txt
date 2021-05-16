@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.10)
 
-project(Painter)
+project(painter)
 
 if (NOT DEFINED GLOBAL_CMAKE_PATH)
     include(/home/michaelb/dev/cmake/global.cmake)
