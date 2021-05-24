@@ -1,0 +1,8 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@Targets.cmake")
+find_dependency(Hell REQUIRED)
+find_dependency(Vulkan REQUIRED)
+find_dependency(Obsidian REQUIRED)
+check_required_components("@PROJECT_NAME@")
+set(Painter_FOUND TRUE)

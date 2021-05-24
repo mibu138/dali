@@ -1,9 +1,9 @@
-#include "painter.h"
-#include "render.h"
 #include <unistd.h>
 #include <string.h>
 #include <hell/platform.h>
 #include <hell/common.h>
+#include <painter/painter.h>
+#include <painter/render.h>
 
 int painterMain(const char* gmod)
 {

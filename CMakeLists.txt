@@ -1,13 +1,14 @@
-cmake_minimum_required(VERSION 3.10)
+cmake_minimum_required(VERSION 3.17)
 
-project(painter)
+project(Painter VERSION 1.0.0)
 
-if (NOT DEFINED GLOBAL_CMAKE_PATH)
-    include(/home/michaelb/dev/cmake/global.cmake)
-else()
-    include({GLOBAL_CMAKE_PATH})
-endif()
+include(GNUInstallDirs)
 
-set(LIBRARY_NAME painter)
+include(cmake/shaders.cmake)
 
-add_subdirectory(src)
+add_subdirectory(cmake)
+
+find_package(Obsidian REQUIRED FATAL_ERROR)
+
+add_subdirectory(src/lib)
+add_subdirectory(src/bin)

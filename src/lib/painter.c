@@ -286,3 +286,9 @@ static void painter_FullClean(void)
     painter_LocalCleanUp();
     painter_ShutDown();
 }
+
+
+void  painter_Bell(void)
+{
+    hell_Print("Brrring brrggg!\n");
+}
