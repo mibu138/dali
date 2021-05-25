@@ -19,5 +19,6 @@ set(SRCS
     select.rgen
     select.rmiss)
 
-build_shaders()
-install_shaders()
+include(author_shaders)
+author_shaders(painter_shaders painter
+    SOURCES ${SRCS})

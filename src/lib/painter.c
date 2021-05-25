@@ -271,7 +271,7 @@ void painter_LoadFprim(Obdn_F_Primitive* fprim)
 {
     Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(fprim);
     obdn_f_FreePrimitive(fprim);
-    Obdn_S_PrimId primId = obdn_s_AddRPrim(&renderScene, prim, NULL);
+    Obdn_S_PrimId primId = obdn_s_AddRPrim(&renderScene, prim, COAL_MAT4_IDENT);
     hell_Print("PAINTER: Loaded prim. Id %d\n", primId);
 }
 

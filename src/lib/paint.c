@@ -457,11 +457,11 @@ static void initUniformBuffers(void)
     matrixRegion = obdn_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->model   = m_Ident_Mat4();
-    matrices->view    = m_Ident_Mat4();
-    matrices->proj    = m_Ident_Mat4();
-    matrices->viewInv = m_Ident_Mat4();
-    matrices->projInv = m_Ident_Mat4();
+    matrices->model   = coal_Ident_Mat4();
+    matrices->view    = coal_Ident_Mat4();
+    matrices->proj    = coal_Ident_Mat4();
+    matrices->viewInv = coal_Ident_Mat4();
+    matrices->projInv = coal_Ident_Mat4();
 
     brushRegion = obdn_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
@@ -1225,7 +1225,7 @@ static void updateProj(void)
 {
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
     matrices->proj = renderScene->camera.proj;
-    matrices->projInv = m_Invert4x4(&renderScene->camera.proj);
+    matrices->projInv = coal_Invert4x4(renderScene->camera.proj);
 }
 
 static void updateBrushColor(float r, float g, float b)
@@ -1463,7 +1463,7 @@ static void updateCommands()
     if (brushActive)
     {
         static const float unit = 0.001; //in screen space
-        const float brushDist = m_Distance(brushPos, prevBrushPos);
+        const float brushDist = coal_Distance(brushPos, prevBrushPos);
         const int splatCount = MIN(MAX(brushDist / unit, 1), 30);
         for (int i = 0; i < splatCount; i++)
         {

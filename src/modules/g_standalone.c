@@ -1,11 +1,9 @@
-#include "coal/m_math.h"
+#include "coal/coal.h"
 #include "hell/cmd.h"
 #include "obsidian/r_raytrace.h"
 #include "obsidian/r_render.h"
 #include "obsidian/s_scene.h"
 #include "obsidian/v_memory.h"
-#include "render.h"
-#include "common.h"
 #include <assert.h>
 #include <string.h>
 #include <stdio.h>
@@ -18,8 +16,6 @@
 #include <hell/evcodes.h>
 #include <hell/locations.h>
 #include <hell/len.h>
-#include <pthread.h>
-#include <vulkan/vulkan_core.h>
 #include "g_api.h"
 
 static bool pivotChanged;
@@ -105,12 +101,12 @@ static void lerpTargetToPivot(void)
     }
     t += inc;
     if (t >= 1.0) return;
-    player.target = m_Lerp_Vec3(&player.target, &player.pivot, t);
+    player.target = coal_Lerp_Vec3(player.target, player.pivot, t);
 }
 
 static Mat4 generateCameraXform(void)
 {
-    return m_LookAt(&player.pos, &player.target, &UP_VEC);
+    return coal_LookAt(player.pos, player.target, UP_VEC);
 }
 
 static void setBrushActive(bool active)
@@ -138,16 +134,16 @@ static void handleMouseMovement(void)
                 float angleX = mousePos.y - drag.startPos.y;
                 angleY *= -3.14;
                 angleX *=  3.14;
-                const Vec3 pivotToPos = m_Sub_Vec3(&cached.pos, &cached.pivot);
-                const Vec3 z = m_Normalize_Vec3(&pivotToPos);
-                Vec3 temp = m_Cross(&z, &UP_VEC);
-                const Vec3 x = m_Normalize_Vec3(&temp);
-                const Mat4 rotY = m_BuildRotate(angleY, &UP_VEC);
-                const Mat4 rotX = m_BuildRotate(angleX, &x);
-                const Mat4 rot = m_Mult_Mat4(&rotX, &rotY);
-                Vec3 pos = m_Sub_Vec3(&cached.pos, &cached.pivot);
-                pos = m_Mult_Mat4Vec3(&rot, &pos);
-                pos = m_Add_Vec3(&pos, &cached.pivot);
+                const Vec3 pivotToPos = coal_Sub_Vec3(cached.pos, cached.pivot);
+                const Vec3 z = coal_Normalize_Vec3(pivotToPos);
+                Vec3 temp = coal_Cross(z, UP_VEC);
+                const Vec3 x = coal_Normalize_Vec3(temp);
+                const Mat4 rotY = coal_BuildRotate(angleY, UP_VEC);
+                const Mat4 rotX = coal_BuildRotate(angleX, x);
+                const Mat4 rot = coal_Mult_Mat4(rotX, rotY);
+                Vec3 pos = coal_Sub_Vec3(cached.pos, cached.pivot);
+                pos = coal_Mult_Mat4Vec3(rot, pos);
+                pos = coal_Add_Vec3(pos, cached.pivot);
                 player.pos = pos;
                 lerpTargetToPivot();
             } break;
@@ -157,17 +153,17 @@ static void handleMouseMovement(void)
                 float deltaY = mousePos.y - drag.startPos.y;
                 deltaX *= 3;
                 deltaY *= 3;
-                Vec3 temp = m_Sub_Vec3(&cached.pos, &cached.target);
-                const Vec3 z = m_Normalize_Vec3(&temp);
-                temp = m_Cross(&z, &UP_VEC);
-                Vec3 x = m_Normalize_Vec3(&temp);
-                temp = m_Cross(&x, &z);
-                Vec3 y = m_Normalize_Vec3(&temp);
-                x = m_Scale_Vec3(deltaX, &x);
-                y = m_Scale_Vec3(deltaY, &y);
-                const Vec3 delta = m_Add_Vec3(&x, &y);
-                player.pos = m_Add_Vec3(&cached.pos, &delta);
-                player.target = m_Add_Vec3(&cached.target, &delta);
+                Vec3 temp = coal_Sub_Vec3(cached.pos, cached.target);
+                const Vec3 z = coal_Normalize_Vec3(temp);
+                temp = coal_Cross(z, UP_VEC);
+                Vec3 x = coal_Normalize_Vec3(temp);
+                temp = coal_Cross(x, z);
+                Vec3 y = coal_Normalize_Vec3(temp);
+                x = coal_Scale_Vec3(deltaX, x);
+                y = coal_Scale_Vec3(deltaY, y);
+                const Vec3 delta = coal_Add_Vec3(x, y);
+                player.pos = coal_Add_Vec3(cached.pos, delta);
+                player.target = coal_Add_Vec3(cached.target, delta);
             } break;
             case ZOOM: 
             {
@@ -175,10 +171,10 @@ static void handleMouseMovement(void)
                 //float deltaY = mousePos.y - drag.startPos.y;
                 //float scale = -1 * (deltaX + deltaY * -1);
                 float scale = -1 * deltaX;
-                Vec3 temp = m_Sub_Vec3(&cached.pos, &cached.pivot);
-                Vec3 z = m_Normalize_Vec3(&temp);
-                z = m_Scale_Vec3(scale, &z);
-                player.pos = m_Add_Vec3(&cached.pos, &z);
+                Vec3 temp = coal_Sub_Vec3(cached.pos, cached.pivot);
+                Vec3 z = coal_Normalize_Vec3(temp);
+                z = coal_Scale_Vec3(scale, z);
+                player.pos = coal_Add_Vec3(cached.pos, z);
                 lerpTargetToPivot();
             } break;
             default: break;
@@ -228,8 +224,8 @@ static void updatePrim(void)
     if (tlas.bufferRegion.size)
         obdn_r_DestroyAccelerationStruct(&tlas);
     obdn_r_BuildBlas(prim, &blas);
-    Mat4 xform = m_Ident_Mat4();
-    obdn_r_BuildTlasNew(1, &blas, &xform.x, &tlas);
+    Mat4 xform = coal_Ident_Mat4();
+    obdn_r_BuildTlasNew(1, &blas, &xform, &tlas);
 
     
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
@@ -421,9 +417,9 @@ static int getSelectionPos(Vec3* v)
     Selection* sel = (Selection*)selectionRegion.hostData;
     if (sel->hit)
     {
-        v->x[0] = sel->x;
-        v->x[1] = sel->y;
-        v->x[2] = sel->z;
+        v->x = sel->x;
+        v->y = sel->y;
+        v->z = sel->z;
         return 1;
     }
     else
@@ -497,7 +493,7 @@ static void g_CleanUp(void)
 static void g_SetCameraXform(const Mat4* xform)
 {
     renderScene->camera.xform = *xform;
-    renderScene->camera.view = m_Invert4x4(xform);
+    renderScene->camera.view = coal_Invert4x4(*xform);
     renderScene->dirt |= OBDN_S_CAMERA_VIEW_BIT;
 }
 
@@ -548,7 +544,7 @@ static void g_Init(Obdn_S_Scene* scene_, PaintScene* paintScene_)
         obdn_f_ReadPrimitive(ROOT"/data/pig.tnt", &fprim);
         Obdn_R_Primitive prim = obdn_f_CreateRPrimFromFPrim(&fprim);
         obdn_f_FreePrimitive(&fprim);
-        primId = obdn_s_AddRPrim(renderScene, prim, NULL);
+        primId = obdn_s_AddRPrim(renderScene, prim, COAL_MAT4_IDENT);
     }
     else
         assert(0 && "we need to load a prim");

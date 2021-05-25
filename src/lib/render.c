@@ -1,5 +1,5 @@
 #include "render.h"
-#include "coal/m_math.h"
+#include "coal/coal.h"
 #include "layer.h"
 #include "obsidian/r_geo.h"
 #include "obsidian/u_ui.h"
@@ -139,11 +139,11 @@ static void initUbos(void)
     matrixRegion = obdn_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
     UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->model   = m_Ident_Mat4();
-    matrices->view    = m_Ident_Mat4();
-    matrices->proj    = m_Ident_Mat4();
-    matrices->viewInv = m_Ident_Mat4();
-    matrices->projInv = m_Ident_Mat4();
+    matrices->model   = COAL_MAT4_IDENT;
+    matrices->view    = COAL_MAT4_IDENT;
+    matrices->proj    = COAL_MAT4_IDENT;
+    matrices->viewInv = COAL_MAT4_IDENT;
+    matrices->projInv = COAL_MAT4_IDENT;
 
     brushRegion = obdn_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
