@@ -1,157 +1,144 @@
 #include "undo.h"
 #include "layer.h"
-#include "layer.h"
-#include "render.h"
+#include "engine.h"
+#include "private.h"
 #include "dtags.h"
 #include <hell/debug.h>
 #include <hell/common.h>
 #include <string.h>
 
-#define MAX_UNDOS 8
-#define MAX_STACKS 4
 
-_Static_assert(MAX_UNDOS % 2 == 0, "MAX_UNDOS must be a multiple of 2 for bottom wrap around to work");
 
-typedef Obdn_V_BufferRegion BufferRegion;
+typedef Dali_UndoManager UndoManager;
 
-typedef struct UndoStack {
-    uint8_t              trl; // cur cannot cross this
-    uint8_t              cur;
-    Obdn_V_BufferRegion bufferRegions[MAX_UNDOS];
-} UndoStack;
-
-static uint8_t maxStacks;
-static uint8_t maxUndos;
-
-static uint8_t   curStackIndex;
-static uint8_t   stackNotUsedCounters[MAX_STACKS];
-static L_LayerId layerCache[MAX_STACKS];
-static UndoStack undoStacks[MAX_STACKS];
-
-static void initStack(const uint8_t index, const uint32_t size)
+static void createStack(Obdn_Memory* memory, UndoManager* undo, const uint8_t index, const uint32_t size)
 {
-    undoStacks[index].cur = 0;
-    undoStacks[index].trl = 0;
-    for (int i = 0; i < maxUndos; i++) 
+    undo->undoStacks[index].cur = 0;
+    undo->undoStacks[index].trl = 0;
+    for (int i = 0; i < undo->maxUndos; i++) 
     {
-        undoStacks[index].bufferRegions[i] = obdn_v_RequestBufferRegion(size, 
+        undo->undoStacks[index].bufferRegions[i] = obdn_RequestBufferRegion(memory, size, 
                 VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_TRANSFER_TYPE);
     }
 }
 
-static void onLayerChange(L_LayerId newLayerId)
+static void onLayerChange(UndoManager* undo, L_LayerId newLayerId)
 {
     uint8_t highestLRUCounter = 0;
     uint8_t leastRecentlyUsedStack = 0;
     bool    layerInCache = false;
-    for (int i = 0; i < maxStacks; i++) 
+    for (int i = 0; i < undo->maxStacks; i++) 
     {
-        if (layerCache[i] == newLayerId)
+        if (undo->layerCache[i] == newLayerId)
         {
-            curStackIndex = i;
+            undo->curStackIndex = i;
             layerInCache = true;
         }
         else
         {
-            stackNotUsedCounters[i]++;
-            if (stackNotUsedCounters[i] > highestLRUCounter)
+            undo->stackNotUsedCounters[i]++;
+            if (undo->stackNotUsedCounters[i] > highestLRUCounter)
             {
-                highestLRUCounter = stackNotUsedCounters[i];
+                highestLRUCounter = undo->stackNotUsedCounters[i];
                 leastRecentlyUsedStack = i;
             }
         }
     }
     if (!layerInCache)
     {
-        curStackIndex = leastRecentlyUsedStack;
-        layerCache[curStackIndex] = newLayerId; 
-        undoStacks[curStackIndex].cur = undoStacks[curStackIndex].trl;
+        undo->curStackIndex = leastRecentlyUsedStack;
+        undo->layerCache[undo->curStackIndex] = newLayerId; 
+        undo->undoStacks[undo->curStackIndex].cur = undo->undoStacks[undo->curStackIndex].trl;
     }
-    stackNotUsedCounters[curStackIndex] = 0;
-    assert(curStackIndex < maxStacks);
+    undo->stackNotUsedCounters[undo->curStackIndex] = 0;
+    assert(undo->curStackIndex < undo->maxStacks);
 }
 
-void u_InitUndo(const uint32_t size, const uint8_t maxStacks_, const uint8_t maxUndos_)
+void dali_CreateUndoManager(Obdn_Memory* memory, const uint32_t size, const uint8_t maxStacks_, const uint8_t maxUndos_, UndoManager* undo)
 {
+    assert(memory);
+    assert(undo);
     assert(maxStacks_ > 0 && maxStacks_ <= MAX_STACKS);
     assert(maxUndos_ > 0 && maxUndos_  <= MAX_UNDOS);
     assert(maxUndos_ % 2 == 0);
-    maxStacks = maxStacks_;
-    maxUndos = maxUndos_;
-    curStackIndex = 0;
-    for (int i = 0; i < maxStacks; i++) 
+    memset(undo, 0, sizeof(UndoManager));
+    undo->maxStacks = maxStacks_;
+    undo->maxUndos = maxUndos_;
+    undo->curStackIndex = 0;
+    for (int i = 0; i < undo->maxStacks; i++) 
     {
-        layerCache[i] = 0;
-        initStack(i, size);
+        undo->layerCache[i] = 0;
+        createStack(memory, undo, i, size);
     }
 
-    onLayerChange(0);
+    onLayerChange(undo, 0);
 }
 
-void u_CleanUp(void)
+void dali_DestroyUndoManager(UndoManager* undo)
 {
-    for (int i = 0; i < maxStacks; i++)
+    for (int i = 0; i < undo->maxStacks; i++)
     {
-        for (int j = 0; j < maxUndos; j++)
+        for (int j = 0; j < undo->maxUndos; j++)
         {
-            obdn_v_FreeBufferRegion(&undoStacks[i].bufferRegions[j]);
+            obdn_FreeBufferRegion(&undo->undoStacks[i].bufferRegions[j]);
         }
     }
-    curStackIndex = 0;
-    memset(stackNotUsedCounters, 0, sizeof(stackNotUsedCounters));
-    memset(layerCache, 0, sizeof(layerCache));
-    memset(undoStacks, 0, sizeof(undoStacks));
+    memset(undo, 0, sizeof(UndoManager));
 }
 
-Obdn_V_BufferRegion* u_GetNextBuffer(void)
+Obdn_V_BufferRegion* dali_GetNextUndoBuffer(UndoManager* undo)
 {
-    UndoStack* undoStack = &undoStacks[curStackIndex];
+    UndoStack* undoStack = &undo->undoStacks[undo->curStackIndex];
     const uint8_t stackIndex = undoStack->cur;
-    undoStack->cur = (undoStack->cur + 1) % maxUndos;
+    undoStack->cur = (undoStack->cur + 1) % undo->maxUndos;
     if (undoStack->cur == undoStack->trl)
     {
         undoStack->trl++;
-        undoStack->trl = undoStack->trl % maxUndos;
+        undoStack->trl = undoStack->trl % undo->maxUndos;
     }
     hell_DebugPrint(PAINT_DEBUG_TAG_UNDO, "cur: %d\n", undoStack->cur);
     return &undoStack->bufferRegions[stackIndex];
 }
 
-Obdn_V_BufferRegion* u_GetLastBuffer(void)
+Obdn_V_BufferRegion* dali_GetLastUndoBuffer(UndoManager* undo)
 {
-    UndoStack* undoStack = &undoStacks[curStackIndex];
+    UndoStack* undoStack = &undo->undoStacks[undo->curStackIndex];
     uint8_t stackIndex = undoStack->cur - 1;
-    if (stackIndex % maxUndos == undoStack->trl)
+    if (stackIndex % undo->maxUndos == undoStack->trl)
     {
         hell_Print("Nothing to undo!\n");
         return NULL; // cannot cross trl
     }
     stackIndex--;
-    stackIndex = stackIndex % maxUndos;
+    stackIndex = stackIndex % undo->maxUndos;
     hell_DebugPrint(PAINT_DEBUG_TAG_UNDO, "undoStack->cur - 1 = %d\n", undoStack->cur - 1);
     undoStack->cur--;
-    undoStack->cur = undoStack->cur % maxUndos;
+    undoStack->cur = undoStack->cur % undo->maxUndos;
     hell_DebugPrint(PAINT_DEBUG_TAG_UNDO, "cur: %d\n", undoStack->cur);
     return &undoStack->bufferRegions[stackIndex];
 }
 
-bool u_LayerInCache(L_LayerId layer)
+bool dali_LayerInUndoCache(UndoManager* undo, L_LayerId layer)
 {
-    for (int i = 0; i < maxStacks; i++)
+    for (int i = 0; i < undo->maxStacks; i++)
     {
-        if (layerCache[i] == layer)
+        if (undo->layerCache[i] == layer)
             return true;
     }
     return false;
 }
 
-void u_Update(PaintScene* scene)
+void dali_UpdateUndo(UndoManager* undo, Dali_LayerStack* layerStack)
 {
-    assert(scene);
-    if (scene->dirt & SCENE_LAYER_CHANGED_BIT)
+    if (layerStack->dirt & LAYER_CHANGED_BIT)
     {
-        if (!u_LayerInCache(scene->layer))
-            scene->dirt |= SCENE_LAYER_BACKUP_BIT;
-        onLayerChange(scene->layer);
+        if (!dali_LayerInUndoCache(undo, layerStack->activeLayer))
+            layerStack->dirt |= LAYER_BACKUP_BIT;
+        onLayerChange(undo, layerStack->activeLayer);
     }
+}
+
+Dali_UndoManager* dali_AllocUndo(void)
+{
+    return hell_Malloc(sizeof(Dali_UndoManager));
 }

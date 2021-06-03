@@ -7,12 +7,14 @@
 #include <hell/locations.h>
 #include <hell/len.h>
 #include <hell/minmax.h>
+#include <hell/len.h>
 #include <hell/common.h>
 #include <hell/debug.h>
 #include <string.h>
+#include "private.h"
 #include "layer.h"
 #include <stdio.h>
-#include "paint.h"
+#include "engine.h"
 #include "undo.h"
 #include "dtags.h"
 #include "ubo-shared.h"
@@ -40,64 +42,70 @@ typedef Obdn_V_BufferRegion BufferRegion;
 typedef Obdn_V_Command Command;
 typedef Obdn_V_Image   Image;
 
-static BufferRegion  matrixRegion;
-static BufferRegion  brushRegion;
+typedef struct Dali_Engine {
+    BufferRegion  matrixRegion;
+    BufferRegion  brushRegion;
+    
+    VkPipeline                 paintPipeline;
+    Obdn_R_ShaderBindingTable  shaderBindingTable;
+    
+    VkPipeline                 compPipelines[PIPELINE_COMP_COUNT];
+    
+    VkDescriptorSetLayout descriptorSetLayouts[DESC_SET_COUNT];
+    Obdn_R_Description    description;
+    
+    uint32_t graphicsQueueFamilyIndex;
+    uint32_t transferQueueFamilyIndex;
+    
+    uint32_t textureSize;// = 0x1000; // 0x1000 = 4096
+    
+    Command releaseImageCommand;
+    Command transferImageCommand;
+    Command acquireImageCommand;
+    
+    Command paintCommand;
+    
+    Image   imageA; // will use for brush and then as final frambuffer target
+    Image   imageB;
+    Image   imageC; // primarily background layers
+    Image   imageD; // primarily foreground layers
+    
+    VkFramebuffer   applyPaintFrameBuffer;
+    VkFramebuffer   compositeFrameBuffer;
+    VkFramebuffer   backgroundFrameBuffer;
+    VkFramebuffer   foregroundFrameBuffer;
+    
+    VkRenderPass singleCompositeRenderPass;
+    VkRenderPass applyPaintRenderPass;
+    VkRenderPass compositeRenderPass;
+    
+    VkFormat textureFormat;// = VK_FORMAT_R8G8B8A8_UNORM;
+    
+    //Obdn_S_Scene* renderScene;
+    //const Dali_Brush* brush;
+    
+    VkPipelineLayout pipelineLayout;
+    
+    Obdn_R_AccelerationStructure bottomLevelAS;
+    Obdn_R_AccelerationStructure topLevelAS;
+    
+    Dali_LayerId curLayerId;
+    
+    bool brushActive;
+    Vec2 prevBrushPos;
+    Vec2 brushPos;
+    Obdn_Memory*         memory;
+    const Obdn_Instance* instance;
+    VkDevice             device;
+} Dali_Engine;
 
-static VkPipeline                 paintPipeline;
-static Obdn_R_ShaderBindingTable  shaderBindingTable;
-
-static VkPipeline                 compPipelines[PIPELINE_COMP_COUNT];
-
-static VkDescriptorSetLayout descriptorSetLayouts[DESC_SET_COUNT];
-static Obdn_R_Description    description;
-
-static uint32_t graphicsQueueFamilyIndex;
-static uint32_t transferQueueFamilyIndex;
-
-static uint32_t textureSize = 0x1000; // 0x1000 = 4096
-
-static Command releaseImageCommand;
-static Command transferImageCommand;
-static Command acquireImageCommand;
-
-static Command paintCommand;
-
-static Image   imageA; // will use for brush and then as final frambuffer target
-static Image   imageB;
-static Image   imageC; // primarily background layers
-static Image   imageD; // primarily foreground layers
-
-static VkFramebuffer   applyPaintFrameBuffer;
-static VkFramebuffer   compositeFrameBuffer;
-static VkFramebuffer   backgroundFrameBuffer;
-static VkFramebuffer   foregroundFrameBuffer;
-
-static VkRenderPass singleCompositeRenderPass;
-static VkRenderPass applyPaintRenderPass;
-static VkRenderPass compositeRenderPass;
-
-static const VkFormat textureFormat = VK_FORMAT_R8G8B8A8_UNORM;
-
-static Obdn_S_Scene* renderScene;
-static const PaintScene* paintScene;
-
-static VkPipelineLayout pipelineLayout;
-
-static Obdn_R_AccelerationStructure bottomLevelAS;
-static Obdn_R_AccelerationStructure topLevelAS;
-
-static L_LayerId curLayerId;
-
-static bool brushActive;
-static Vec2 prevBrushPos;
-static Vec2 brushPos;
+typedef Dali_Engine Engine;
 
 #define DTAG PAINT_DEBUG_TAG_PAINT
 
-
-static void initPaintImages(void)
+static void initPaintImages(Dali_Engine* engine)
 {
-    imageA = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
+    engine->imageA = obdn_CreateImageAndSampler(engine->memory, engine->textureSize, engine->textureSize, engine->textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_STORAGE_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -106,7 +114,7 @@ static void initPaintImages(void)
             VK_FILTER_NEAREST, 
             OBDN_V_MEMORY_DEVICE_TYPE);
 
-    imageB = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
+    engine->imageB = obdn_CreateImageAndSampler(engine->memory, engine->textureSize, engine->textureSize, engine->textureFormat, 
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -115,7 +123,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             OBDN_V_MEMORY_DEVICE_TYPE);
 
-    imageC = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
+    engine->imageC = obdn_CreateImageAndSampler(engine->memory, engine->textureSize, engine->textureSize, engine->textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -124,7 +132,7 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             OBDN_V_MEMORY_DEVICE_TYPE);
     
-    imageD = obdn_v_CreateImageAndSampler(textureSize, textureSize, textureFormat, 
+    engine->imageD = obdn_CreateImageAndSampler(engine->memory, engine->textureSize, engine->textureSize, engine->textureFormat, 
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | 
             VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
             VK_IMAGE_ASPECT_COLOR_BIT,
@@ -133,28 +141,28 @@ static void initPaintImages(void)
             VK_FILTER_LINEAR, 
             OBDN_V_MEMORY_DEVICE_TYPE);
 
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageA);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageB);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageC);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &imageD);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &engine->imageA);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &engine->imageB);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &engine->imageC);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &engine->imageD);
 
-    obdn_v_ClearColorImage(&imageA);
-    obdn_v_ClearColorImage(&imageB);
-    obdn_v_ClearColorImage(&imageC);
-    obdn_v_ClearColorImage(&imageD);
+    obdn_v_ClearColorImage(&engine->imageA);
+    obdn_v_ClearColorImage(&engine->imageB);
+    obdn_v_ClearColorImage(&engine->imageC);
+    obdn_v_ClearColorImage(&engine->imageD);
 
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageA);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageB);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageC);
-    obdn_v_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &imageD);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &engine->imageA);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &engine->imageB);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &engine->imageC);
+    obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL, &engine->imageD);
 }
 
-static void initRenderPasses(void)
+static void initRenderPasses(Engine* engine)
 {
     // apply paint renderpass
     {
         const VkAttachmentDescription attachmentA = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -163,7 +171,7 @@ static void initRenderPasses(void)
         };
 
         const VkAttachmentDescription attachmentB = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -227,13 +235,13 @@ static void initRenderPasses(void)
             .pDependencies = dependencies,
         };
 
-        V_ASSERT( vkCreateRenderPass(obdn_v_GetDevice(), &ci, NULL, &applyPaintRenderPass) );
+        V_ASSERT( vkCreateRenderPass(engine->device, &ci, NULL, &engine->applyPaintRenderPass) );
     }
 
     // comp renderpass
     {
         const VkAttachmentDescription attachmentB = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -242,7 +250,7 @@ static void initRenderPasses(void)
         };
 
         const VkAttachmentDescription attachmentC = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -251,7 +259,7 @@ static void initRenderPasses(void)
         };
 
         const VkAttachmentDescription attachmentD = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -260,7 +268,7 @@ static void initRenderPasses(void)
         };
 
         const VkAttachmentDescription attachmentA2 = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -376,12 +384,12 @@ static void initRenderPasses(void)
             .pDependencies = dependencies,
         };
 
-        V_ASSERT( vkCreateRenderPass(obdn_v_GetDevice(), &ci, NULL, &compositeRenderPass) );
+        V_ASSERT( vkCreateRenderPass(engine->device, &ci, NULL, &engine->compositeRenderPass) );
     }
 
     {
         const VkAttachmentDescription srcAttachment = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -390,7 +398,7 @@ static void initRenderPasses(void)
         };
 
         const VkAttachmentDescription dstAttachment = {
-            .format        = textureFormat,
+            .format        = engine->textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -448,26 +456,26 @@ static void initRenderPasses(void)
             .pDependencies = dependencies,
         };
 
-        V_ASSERT( vkCreateRenderPass(obdn_v_GetDevice(), &ci, NULL, &singleCompositeRenderPass) );
+        V_ASSERT( vkCreateRenderPass(engine->device, &ci, NULL, &engine->singleCompositeRenderPass) );
     }
 }
 
-static void initUniformBuffers(void)
+static void initUniformBuffers(Engine* engine)
 {
-    matrixRegion = obdn_v_RequestBufferRegion(sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    engine->matrixRegion = obdn_RequestBufferRegion(engine->memory, sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
-    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
+    UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
     matrices->model   = coal_Ident_Mat4();
     matrices->view    = coal_Ident_Mat4();
     matrices->proj    = coal_Ident_Mat4();
     matrices->viewInv = coal_Ident_Mat4();
     matrices->projInv = coal_Ident_Mat4();
 
-    brushRegion = obdn_v_RequestBufferRegion(sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+    engine->brushRegion = obdn_RequestBufferRegion(engine->memory, sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 }
 
-static void initDescSetsAndPipeLayouts(void)
+static void initDescSetsAndPipeLayouts(Engine* engine)
 {
     const Obdn_R_DescriptorSetInfo descSets[] = {{
             .bindingCount = 3, 
@@ -523,9 +531,9 @@ static void initDescSetsAndPipeLayouts(void)
         }
     };
 
-    obdn_r_CreateDescriptorSetLayouts(LEN(descSets), descSets, descriptorSetLayouts);
+    obdn_CreateDescriptorSetLayouts(engine->device, LEN(descSets), descSets, engine->descriptorSetLayouts);
 
-    obdn_r_CreateDescriptorSets(LEN(descSets), descSets, descriptorSetLayouts, &description);
+    obdn_CreateDescriptorSets(engine->device, LEN(descSets), descSets, engine->descriptorSetLayouts, &engine->description);
 
     VkPushConstantRange pcRange = {
         .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
@@ -535,23 +543,23 @@ static void initDescSetsAndPipeLayouts(void)
 
     const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = LEN(descSets), 
-        .descriptorSetLayouts = descriptorSetLayouts,
+        .descriptorSetLayouts = engine->descriptorSetLayouts,
         .pushConstantCount = 1,
         .pushConstantsRanges = &pcRange
     }};
 
-    obdn_r_CreatePipelineLayouts(LEN(pipeLayoutInfos), pipeLayoutInfos, &pipelineLayout);
+    obdn_CreatePipelineLayouts(engine->device, LEN(pipeLayoutInfos), pipeLayoutInfos, &engine->pipelineLayout);
 }
 
-static void updateDescSetPrim(void)
+static void updateDescSetPrim(Engine* engine, Obdn_Scene* scene)
 {
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,
         .accelerationStructureCount = 1,
-        .pAccelerationStructures    = &topLevelAS.handle
+        .pAccelerationStructures    = &engine->topLevelAS.handle
     };
 
-    Obdn_R_Primitive* prim = &renderScene->prims[0].rprim;
+    Obdn_R_Primitive* prim = &scene->prims[0].rprim;
 
     VkDescriptorBufferInfo uvBufInfo = {
         .offset = obdn_r_GetAttrOffset(prim, "uv"),
@@ -568,7 +576,7 @@ static void updateDescSetPrim(void)
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_PRIM],
+            .dstSet = engine->description.descriptorSets[DESC_SET_PRIM],
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -576,7 +584,7 @@ static void updateDescSetPrim(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_PRIM],
+            .dstSet = engine->description.descriptorSets[DESC_SET_PRIM],
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -584,40 +592,40 @@ static void updateDescSetPrim(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_PRIM],
+            .dstSet = engine->description.descriptorSets[DESC_SET_PRIM],
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
             .pNext = &asInfo
     }};
 
-    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(engine->device, LEN(writes), writes, 0, NULL);
 }
 
-static void updateDescSetPaint(void)
+static void updateDescSetPaint(Engine* engine)
 {
     VkDescriptorBufferInfo uniformInfoMatrices = {
-        .range  = matrixRegion.size,
-        .offset = matrixRegion.offset,
-        .buffer = matrixRegion.buffer,
+        .range  = engine->matrixRegion.size,
+        .offset = engine->matrixRegion.offset,
+        .buffer = engine->matrixRegion.buffer,
     };
 
     VkDescriptorBufferInfo uniformInfoBrush = {
-        .range  = brushRegion.size,
-        .offset = brushRegion.offset,
-        .buffer = brushRegion.buffer,
+        .range  = engine->brushRegion.size,
+        .offset = engine->brushRegion.offset,
+        .buffer = engine->brushRegion.buffer,
     };
 
     VkDescriptorImageInfo imageInfo = {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-        .imageView = imageA.view,
-        .sampler   = imageA.sampler
+        .imageView = engine->imageA.view,
+        .sampler   = engine->imageA.sampler
     };
 
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_PAINT],
+            .dstSet = engine->description.descriptorSets[DESC_SET_PAINT],
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -625,7 +633,7 @@ static void updateDescSetPaint(void)
     },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_PAINT],
+            .dstSet = engine->description.descriptorSets[DESC_SET_PAINT],
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -633,46 +641,46 @@ static void updateDescSetPaint(void)
     },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_PAINT], 
+            .dstSet = engine->description.descriptorSets[DESC_SET_PAINT], 
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
             .pImageInfo = &imageInfo
     }};
 
-    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(engine->device, LEN(writes), writes, 0, NULL);
 }
 
-static void updateDescSetComp(void)
+static void updateDescSetComp(Engine* engine)
 {
     VkDescriptorImageInfo imageInfoA = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageA.view,
-        .sampler     = imageA.sampler
+        .imageView   = engine->imageA.view,
+        .sampler     = engine->imageA.sampler
     };
 
     VkDescriptorImageInfo imageInfoB = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageB.view,
-        .sampler     = imageB.sampler
+        .imageView   = engine->imageB.view,
+        .sampler     = engine->imageB.sampler
     };
 
     VkDescriptorImageInfo imageInfoC = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageC.view,
-        .sampler     = imageC.sampler
+        .imageView   = engine->imageC.view,
+        .sampler     = engine->imageC.sampler
     };
 
     VkDescriptorImageInfo imageInfoD = {
         .imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .imageView   = imageD.view,
-        .sampler     = imageD.sampler
+        .imageView   = engine->imageD.view,
+        .sampler     = engine->imageD.sampler
     };
 
     VkWriteDescriptorSet writes[] = {{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
+            .dstSet = engine->description.descriptorSets[DESC_SET_COMP], 
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
@@ -680,7 +688,7 @@ static void updateDescSetComp(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
+            .dstSet = engine->description.descriptorSets[DESC_SET_COMP], 
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
@@ -688,7 +696,7 @@ static void updateDescSetComp(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
+            .dstSet = engine->description.descriptorSets[DESC_SET_COMP], 
             .dstBinding = 2,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
@@ -696,21 +704,21 @@ static void updateDescSetComp(void)
         },{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
             .dstArrayElement = 0,
-            .dstSet = description.descriptorSets[DESC_SET_COMP], 
+            .dstSet = engine->description.descriptorSets[DESC_SET_COMP], 
             .dstBinding = 3,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
             .pImageInfo = &imageInfoD
     }};
 
-    vkUpdateDescriptorSets(obdn_v_GetDevice(), LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(engine->device, LEN(writes), writes, 0, NULL);
 }
 
-static void initPaintPipelineAndShaderBindingTable(void)
+static void initPaintPipelineAndShaderBindingTable(Engine* engine)
 {
     const Obdn_R_RayTracePipelineInfo pipeInfosRT[] = {{
         // ray trace
-        .layout = pipelineLayout,
+        .layout = engine->pipelineLayout,
         .raygenCount = 1,
         .raygenShaders = (char*[]){
             SPVDIR"/paint.rgen.spv",
@@ -725,68 +733,68 @@ static void initPaintPipelineAndShaderBindingTable(void)
         }
     }};
 
-    obdn_r_CreateRayTracePipelines(LEN(pipeInfosRT), pipeInfosRT, &paintPipeline, &shaderBindingTable);
+    obdn_CreateRayTracePipelines(engine->device, engine->memory, LEN(pipeInfosRT), pipeInfosRT, &engine->paintPipeline, &engine->shaderBindingTable);
 }
 
-static void initCompPipelines(const Obdn_R_BlendMode blendMode)
+static void initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
 {
     assert(blendMode != OBDN_R_BLEND_MODE_NONE);
 
     const Obdn_R_GraphicsPipelineInfo pipeInfo1 = {
-        .layout  = pipelineLayout,
-        .renderPass = applyPaintRenderPass, 
+        .layout  = engine->pipelineLayout,
+        .renderPass = engine->applyPaintRenderPass, 
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
+        .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = blendMode,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfo2 = {
-        .layout  = pipelineLayout,
-        .renderPass = compositeRenderPass, 
+        .layout  =engine-> pipelineLayout,
+        .renderPass = engine->compositeRenderPass, 
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
+        .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp2a.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfo3 = {
-        .layout  = pipelineLayout,
-        .renderPass = compositeRenderPass, 
+        .layout  = engine->pipelineLayout,
+        .renderPass = engine->compositeRenderPass, 
         .subpass = 1,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
+        .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp3a.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfo4 = {
-        .layout  = pipelineLayout,
-        .renderPass = compositeRenderPass, 
+        .layout  = engine->pipelineLayout,
+        .renderPass = engine->compositeRenderPass, 
         .subpass = 2,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
+        .viewportDim = {engine->textureSize,engine-> textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp4a.frag.spv"
     };
 
     const Obdn_R_GraphicsPipelineInfo pipeInfoSingle = {
-        .layout  = pipelineLayout,
-        .renderPass = singleCompositeRenderPass, 
+        .layout  = engine->pipelineLayout,
+        .renderPass = engine->singleCompositeRenderPass, 
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
-        .viewportDim = {textureSize, textureSize},
+        .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp.frag.spv"
@@ -798,105 +806,105 @@ static void initCompPipelines(const Obdn_R_BlendMode blendMode)
 
     assert(LEN(infos) == PIPELINE_COMP_COUNT);
 
-    obdn_r_CreateGraphicsPipelines(LEN(infos), infos, compPipelines);
+    obdn_CreateGraphicsPipelines(engine->device, LEN(infos), infos, engine->compPipelines);
 }
 
-static void destroyCompPipelines(void)
+static void destroyCompPipelines(Engine* engine)
 {
     for (int i = PIPELINE_COMP_1; i < PIPELINE_COMP_COUNT; i++)
     {
-        vkDestroyPipeline(obdn_v_GetDevice(), compPipelines[i], NULL);
+        vkDestroyPipeline(engine->device, engine->compPipelines[i], NULL);
     }
 }
 
-static void initFramebuffers(void)
+static void initFramebuffers(Engine* engine)
 {
     // applyPaintFrameBuffer 
     {
         const VkImageView attachments[] = {
-            imageA.view, imageB.view,
+            engine->imageA.view, engine->imageB.view,
         };
 
         VkFramebufferCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = applyPaintRenderPass,
+            .height = engine->textureSize,
+            .width  = engine->textureSize,
+            .renderPass = engine->applyPaintRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &applyPaintFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(engine->device, &info, NULL, &engine->applyPaintFrameBuffer) );
     }
 
     // compositeFrameBuffer
     {
         const VkImageView attachments[] = {
-            imageB.view, imageC.view, imageD.view, imageA.view
+            engine->imageB.view, engine->imageC.view, engine->imageD.view, engine->imageA.view
         };
 
         VkFramebufferCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = compositeRenderPass,
+            .height = engine->textureSize,
+            .width  = engine->textureSize,
+            .renderPass = engine->compositeRenderPass,
             .attachmentCount = 4,
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &compositeFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(engine->device, &info, NULL, &engine->compositeFrameBuffer) );
     }
 
     // backgroundFrameBuffer
     {
         const VkImageView attachments[] = {
-            imageA.view, imageC.view, 
+            engine->imageA.view, engine->imageC.view, 
         };
 
         VkFramebufferCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = singleCompositeRenderPass,
+            .height = engine->textureSize,
+            .width  = engine->textureSize,
+            .renderPass = engine->singleCompositeRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &backgroundFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(engine->device, &info, NULL, &engine->backgroundFrameBuffer) );
     }
 
     // foregroundFrameBuffer
     {
         const VkImageView attachments[] = {
-            imageA.view, imageD.view, 
+            engine->imageA.view, engine->imageD.view, 
         };
 
         VkFramebufferCreateInfo info = {
             .sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO,
             .layers = 1,
-            .height = textureSize,
-            .width  = textureSize,
-            .renderPass = singleCompositeRenderPass,
+            .height = engine->textureSize,
+            .width  = engine->textureSize,
+            .renderPass = engine->singleCompositeRenderPass,
             .attachmentCount = 2,
             .pAttachments = attachments
         };
 
-        V_ASSERT( vkCreateFramebuffer(obdn_v_GetDevice(), &info, NULL, &foregroundFrameBuffer) );
+        V_ASSERT( vkCreateFramebuffer(engine->device, &info, NULL, &engine->foregroundFrameBuffer) );
     }
 }
 
-static void onLayerChange(L_LayerId newLayerId)
+static void onLayerChange(Engine* engine, Dali_LayerStack* stack, Dali_LayerId newLayerId)
 {
     hell_DebugPrint(PAINT_DEBUG_TAG_PAINT, "Begin\n");
 
-    Obdn_V_Command cmd = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+    Obdn_V_Command cmd = obdn_CreateCommand(engine->instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    obdn_v_BeginCommandBuffer(cmd.buffer);
+    obdn_BeginCommandBuffer(cmd.buffer);
 
-    BufferRegion* prevLayerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
+    BufferRegion* prevLayerBuffer = &dali_GetLayer(stack, engine->curLayerId)->bufferRegion;
 
     VkImageSubresourceRange subResRange = {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -915,32 +923,32 @@ static void onLayerChange(L_LayerId newLayerId)
 
     VkImageMemoryBarrier barriers[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageA.handle,
-        .oldLayout = imageA.layout,
+        .image = engine->imageA.handle,
+        .oldLayout = engine->imageA.layout,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .subresourceRange = subResRange,
         .srcAccessMask = 0,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageB.handle,
-        .oldLayout = imageB.layout,
+        .image = engine->imageB.handle,
+        .oldLayout = engine->imageB.layout,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .subresourceRange = subResRange,
         .srcAccessMask = 0,
         .dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageC.handle,
-        .oldLayout = imageC.layout,
+        .image = engine->imageC.handle,
+        .oldLayout = engine->imageC.layout,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .subresourceRange = subResRange,
         .srcAccessMask = 0,
         .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageD.handle,
-        .oldLayout = imageD.layout,
+        .image = engine->imageD.handle,
+        .oldLayout = engine->imageD.layout,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .subresourceRange = subResRange,
         .srcAccessMask = 0,
@@ -950,14 +958,14 @@ static void onLayerChange(L_LayerId newLayerId)
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
             0, 0, NULL, 0, NULL, LEN(barriers), barriers);
 
-    obdn_v_CmdCopyImageToBuffer(cmd.buffer, &imageB, VK_IMAGE_ASPECT_COLOR_BIT, prevLayerBuffer);
+    obdn_CmdCopyImageToBuffer(cmd.buffer, 0, &engine->imageB, prevLayerBuffer);
 
-    vkCmdClearColorImage(cmd.buffer, imageC.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
-    vkCmdClearColorImage(cmd.buffer, imageD.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
+    vkCmdClearColorImage(cmd.buffer, engine->imageC.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
+    vkCmdClearColorImage(cmd.buffer, engine->imageD.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &subResRange);
 
     VkImageMemoryBarrier barriers0[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageC.handle,
+        .image = engine->imageC.handle,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .subresourceRange = subResRange,
@@ -965,7 +973,7 @@ static void onLayerChange(L_LayerId newLayerId)
         .dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageD.handle,
+        .image = engine->imageD.handle,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .subresourceRange = subResRange,
@@ -976,13 +984,13 @@ static void onLayerChange(L_LayerId newLayerId)
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
             0, 0, NULL, 0, NULL, LEN(barriers0), barriers0);
 
-    curLayerId = newLayerId;
+    engine->curLayerId = newLayerId;
 
-    for (int l = 0; l < curLayerId; l++) 
+    for (int l = 0; l < engine->curLayerId; l++) 
     {
-        BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
+        BufferRegion* layerBuffer = &dali_GetLayer(stack, l)->bufferRegion;
 
-        obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
+        obdn_CmdCopyBufferToImage(cmd.buffer, 0, layerBuffer, &engine->imageA);
 
         VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
 
@@ -990,9 +998,9 @@ static void onLayerChange(L_LayerId newLayerId)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .clearValueCount = 1,
             .pClearValues = &clear,
-            .renderArea = {{0, 0}, {textureSize, textureSize}},
-            .renderPass =  singleCompositeRenderPass,
-            .framebuffer = backgroundFrameBuffer,
+            .renderArea = {{0, 0}, {engine->textureSize, engine->textureSize}},
+            .renderPass =  engine->singleCompositeRenderPass,
+            .framebuffer = engine->backgroundFrameBuffer,
         };
 
         vkCmdBeginRenderPass(cmd.buffer, &rpass, VK_SUBPASS_CONTENTS_INLINE);
@@ -1000,24 +1008,24 @@ static void onLayerChange(L_LayerId newLayerId)
         vkCmdBindDescriptorSets(
             cmd.buffer, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            pipelineLayout,
-            DESC_SET_COMP, 1, &description.descriptorSets[DESC_SET_COMP], 
+            engine->pipelineLayout,
+            DESC_SET_COMP, 1, &engine->description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
-        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_SINGLE]);
+        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, engine->compPipelines[PIPELINE_COMP_SINGLE]);
 
         vkCmdDraw(cmd.buffer, 3, 1, 0, 0);
 
         vkCmdEndRenderPass(cmd.buffer);
     }
 
-    const int layerCount = l_GetLayerCount();
+    const int layerCount = dali_GetLayerCount(stack);
 
-    for (int l = curLayerId + 1; l < layerCount; l++) 
+    for (int l = engine->curLayerId + 1; l < layerCount; l++) 
     {
-        BufferRegion* layerBuffer = &l_GetLayer(l)->bufferRegion;
+        BufferRegion* layerBuffer = &dali_GetLayer(stack, l)->bufferRegion;
 
-        obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageA);
+        obdn_CmdCopyBufferToImage(cmd.buffer, 0, layerBuffer, &engine->imageA);
 
         VkClearValue clear = {0.0f, 0.903f, 0.009f, 1.0f};
 
@@ -1025,9 +1033,9 @@ static void onLayerChange(L_LayerId newLayerId)
             .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
             .clearValueCount = 1,
             .pClearValues = &clear,
-            .renderArea = {{0, 0}, {textureSize, textureSize}},
-            .renderPass =  singleCompositeRenderPass,
-            .framebuffer = foregroundFrameBuffer,
+            .renderArea = {{0, 0}, {engine->textureSize, engine->textureSize}},
+            .renderPass =  engine->singleCompositeRenderPass,
+            .framebuffer = engine->foregroundFrameBuffer,
         };
 
         vkCmdBeginRenderPass(cmd.buffer, &rpass, VK_SUBPASS_CONTENTS_INLINE);
@@ -1036,11 +1044,11 @@ static void onLayerChange(L_LayerId newLayerId)
         vkCmdBindDescriptorSets(
             cmd.buffer, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            pipelineLayout,
-            DESC_SET_COMP, 1, &description.descriptorSets[DESC_SET_COMP], 
+            engine->pipelineLayout,
+            DESC_SET_COMP, 1, &engine->description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
-        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_SINGLE]);
+        vkCmdBindPipeline(cmd.buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, engine->compPipelines[PIPELINE_COMP_SINGLE]);
 
         vkCmdDraw(cmd.buffer, 3, 1, 0, 0);
 
@@ -1049,7 +1057,7 @@ static void onLayerChange(L_LayerId newLayerId)
 
     VkImageMemoryBarrier barrier1 = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageB.handle,
+        .image = engine->imageB.handle,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .subresourceRange = subResRange,
@@ -1060,13 +1068,13 @@ static void onLayerChange(L_LayerId newLayerId)
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
             0, 0, NULL, 0, NULL, 1, &barrier1);
 
-    BufferRegion* layerBuffer = &l_GetLayer(curLayerId)->bufferRegion;
+    BufferRegion* layerBuffer = &dali_GetLayer(stack, engine->curLayerId)->bufferRegion;
 
-    obdn_v_CmdCopyBufferToImage(cmd.buffer, layerBuffer, &imageB);
+    obdn_CmdCopyBufferToImage(cmd.buffer, 0, layerBuffer, &engine->imageB);
 
     VkImageMemoryBarrier barriers2[] = {{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageA.handle,
+        .image = engine->imageA.handle,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .subresourceRange = subResRange,
@@ -1074,7 +1082,7 @@ static void onLayerChange(L_LayerId newLayerId)
         .dstAccessMask = 0
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageB.handle,
+        .image = engine->imageB.handle,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .subresourceRange = subResRange,
@@ -1082,7 +1090,7 @@ static void onLayerChange(L_LayerId newLayerId)
         .dstAccessMask = 0 
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageC.handle,
+        .image = engine->imageC.handle,
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .subresourceRange = subResRange,
@@ -1090,7 +1098,7 @@ static void onLayerChange(L_LayerId newLayerId)
         .dstAccessMask = 0 
     },{
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageD.handle,
+        .image = engine->imageD.handle,
         .oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .subresourceRange = subResRange,
@@ -1101,26 +1109,26 @@ static void onLayerChange(L_LayerId newLayerId)
     vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT, 
             0, 0, NULL, 0, NULL, LEN(barriers), barriers2);
 
-    obdn_v_EndCommandBuffer(cmd.buffer);
+    obdn_EndCommandBuffer(cmd.buffer);
 
-    obdn_v_SubmitAndWait(&cmd, 0);
+    obdn_SubmitAndWait(&cmd, 0);
 
-    obdn_v_DestroyCommand(cmd);
+    obdn_DestroyCommand(cmd);
 
     hell_DebugPrint(PAINT_DEBUG_TAG_PAINT, "End\n");
 }
 
-static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
+static void runUndoCommands(Engine* engine, const bool toHost, BufferRegion* bufferRegion)
 {
-    obdn_v_WaitForFence(&acquireImageCommand.fence);
+    obdn_WaitForFence(engine->device, &engine->acquireImageCommand.fence);
 
-    obdn_v_ResetCommand(&releaseImageCommand);
-    obdn_v_ResetCommand(&transferImageCommand);
-    obdn_v_ResetCommand(&acquireImageCommand);
+    obdn_ResetCommand(&engine->releaseImageCommand);
+    obdn_ResetCommand(&engine->transferImageCommand);
+    obdn_ResetCommand(&engine->acquireImageCommand);
 
-    VkCommandBuffer cmdBuf = releaseImageCommand.buffer;
+    VkCommandBuffer cmdBuf = engine->releaseImageCommand.buffer;
 
-    obdn_v_BeginCommandBuffer(cmdBuf);
+    obdn_BeginCommandBuffer(cmdBuf);
 
     const VkImageSubresourceRange range = {
         .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT,
@@ -1140,170 +1148,171 @@ static void runUndoCommands(const bool toHost, BufferRegion* bufferRegion)
         .dstAccessMask = otherAccessMask,
         .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .newLayout = otherLayout,
-        .srcQueueFamilyIndex = graphicsQueueFamilyIndex,
-        .dstQueueFamilyIndex = transferQueueFamilyIndex,
-        .image = imageB.handle,
+        .srcQueueFamilyIndex = engine->graphicsQueueFamilyIndex,
+        .dstQueueFamilyIndex = engine->transferQueueFamilyIndex,
+        .image = engine->imageB.handle,
         .subresourceRange = range
     };
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
-    obdn_v_EndCommandBuffer(cmdBuf);
+    obdn_EndCommandBuffer(cmdBuf);
 
-    cmdBuf = transferImageCommand.buffer;
+    cmdBuf = engine->transferImageCommand.buffer;
 
-    obdn_v_BeginCommandBuffer(cmdBuf);
+    obdn_BeginCommandBuffer(cmdBuf);
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, VK_PIPELINE_STAGE_TRANSFER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
     if (toHost)
-        obdn_v_CmdCopyImageToBuffer(cmdBuf, &imageB, VK_IMAGE_ASPECT_COLOR_BIT, bufferRegion);
+        obdn_CmdCopyImageToBuffer(cmdBuf, 0, &engine->imageB, bufferRegion);
     else
-        obdn_v_CmdCopyBufferToImage(cmdBuf, bufferRegion, &imageB);
+        obdn_CmdCopyBufferToImage(cmdBuf, 0, bufferRegion, &engine->imageB);
 
     imgBarrier.srcAccessMask = otherAccessMask;
     imgBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
     imgBarrier.oldLayout = otherLayout;
     imgBarrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imgBarrier.srcQueueFamilyIndex = transferQueueFamilyIndex;
-    imgBarrier.dstQueueFamilyIndex = graphicsQueueFamilyIndex;
+    imgBarrier.srcQueueFamilyIndex = engine->transferQueueFamilyIndex;
+    imgBarrier.dstQueueFamilyIndex = engine->graphicsQueueFamilyIndex;
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
-    obdn_v_EndCommandBuffer(cmdBuf);
+    obdn_EndCommandBuffer(cmdBuf);
 
-    cmdBuf = acquireImageCommand.buffer;
+    cmdBuf = engine->acquireImageCommand.buffer;
 
-    obdn_v_BeginCommandBuffer(cmdBuf);
+    obdn_BeginCommandBuffer(cmdBuf);
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 
             VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1, &imgBarrier);
 
-    obdn_v_EndCommandBuffer(cmdBuf);
+    obdn_EndCommandBuffer(cmdBuf);
 
-    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, NULL, 1,
-                                 &releaseImageCommand.semaphore, 
-                                 VK_NULL_HANDLE, releaseImageCommand.buffer);
+    obdn_SubmitGraphicsCommand(engine->instance, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, NULL, 1,
+                                 &engine->releaseImageCommand.semaphore, 
+                                 VK_NULL_HANDLE, engine->releaseImageCommand.buffer);
 
-    obdn_v_SubmitTransferCommand(0, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                                 &releaseImageCommand.semaphore, VK_NULL_HANDLE,
-                                 &transferImageCommand);
+    obdn_SubmitTransferCommand(engine->instance, 0, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                                 &engine->releaseImageCommand.semaphore, VK_NULL_HANDLE,
+                                 &engine->transferImageCommand);
 
-    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
-            1, &transferImageCommand.semaphore, 
-            1, &acquireImageCommand.semaphore, 
-            acquireImageCommand.fence, 
-            acquireImageCommand.buffer);
+    obdn_SubmitGraphicsCommand(engine->instance, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 
+            1, &engine->transferImageCommand.semaphore, 
+            1, &engine->acquireImageCommand.semaphore, 
+            engine->acquireImageCommand.fence, 
+            engine->acquireImageCommand.buffer);
 }
 
-static void backupLayer(void)
+static void backupLayer(Engine* engine, Dali_UndoManager* undo)
 {
-    runUndoCommands(true, u_GetNextBuffer());
+    runUndoCommands(engine, true, dali_GetNextUndoBuffer(undo));
     hell_DebugPrint(DTAG, "layer backed up\n");
 }
 
-static bool undo(void)
+static bool undo(Engine* engine, Dali_UndoManager* undo)
 {
     hell_DebugPrint(DTAG, "undo\n");
-    BufferRegion* buf = u_GetLastBuffer();
+    BufferRegion* buf = dali_GetLastUndoBuffer(undo);
     if (!buf) return false; // nothing to undo
-    runUndoCommands(false, buf);
+    runUndoCommands(engine, false, buf);
     return true;
 }
 
-static void updateView(void)
+static void updateView(Engine* engine, Obdn_Scene* scene)
 {
-    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->view = renderScene->camera.view;
-    matrices->viewInv = renderScene->camera.xform;
+    UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
+    matrices->view = scene->camera.view;
+    matrices->viewInv = scene->camera.xform;
 }
 
-static void updateProj(void)
+static void updateProj(Engine* engine, Obdn_Scene* scene)
 {
-    UboMatrices* matrices = (UboMatrices*)matrixRegion.hostData;
-    matrices->proj = renderScene->camera.proj;
-    matrices->projInv = coal_Invert4x4(renderScene->camera.proj);
+    UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
+    matrices->proj = scene->camera.proj;
+    matrices->projInv = coal_Invert4x4(scene->camera.proj);
 }
 
-static void updateBrushColor(float r, float g, float b)
+static void updateBrushColor(Engine* engine, float r, float g, float b)
 {
-    UboBrush* brush = (UboBrush*)brushRegion.hostData;
+    UboBrush* brush = (UboBrush*)engine->brushRegion.hostData;
     brush->r = r;
     brush->g = g;
     brush->b = b;
 }
 
-static void updateBrush(void)
+static void updateBrush(Engine* engine, Dali_Brush* b)
 {
-    UboBrush* brush = (UboBrush*)brushRegion.hostData;
-    if (paintScene->paint_mode != PAINT_MODE_ERASE)
-        updateBrushColor(paintScene->brush_r, paintScene->brush_g, paintScene->brush_b);
+    UboBrush* brush = (UboBrush*)engine->brushRegion.hostData;
+    if (b->mode != PAINT_MODE_ERASE)
+        updateBrushColor(engine, b->r, b->g, b->b);
     else
-        updateBrushColor(1, 1, 1); // must be white for erase to work
+        updateBrushColor(engine, 1, 1, 1); // must be white for erase to work
 
-    brushActive = paintScene->brush_active;
+    engine->brushActive = b->active;
 
-    prevBrushPos.x = brushPos.x;
-    prevBrushPos.y = brushPos.y;
-    brushPos.x = paintScene->brush_x;
-    brushPos.y = paintScene->brush_y;
+    engine->prevBrushPos.x = engine->brushPos.x;
+    engine->prevBrushPos.y = engine->brushPos.y;
+    engine->brushPos.x = b->x;
+    engine->brushPos.y = b->y;
 
-    brush->radius = paintScene->brush_radius;
-    brush->x = paintScene->brush_x;
-    brush->y = paintScene->brush_y;
-    brush->opacity = paintScene->brush_opacity;
-    brush->anti_falloff = (1.0 - paintScene->brush_falloff) * paintScene->brush_radius;
+    brush->radius = b->radius;
+    brush->x = b->x;
+    brush->y = b->y;
+    brush->opacity = b->opacity;
+    brush->anti_falloff = (1.0 - b->falloff) * b->radius;
 }
 
-static void updatePaintMode(void)
+static void updatePaintMode(Engine* engine, Dali_Brush* b)
 {
-    vkDeviceWaitIdle(obdn_v_GetDevice());
-    destroyCompPipelines();
-    switch (paintScene->paint_mode)
+    vkDeviceWaitIdle(engine->device);
+    destroyCompPipelines(engine);
+    switch (b->mode)
     {
-        case PAINT_MODE_OVER:  initCompPipelines(OBDN_R_BLEND_MODE_OVER); break;
-        case PAINT_MODE_ERASE: initCompPipelines(OBDN_R_BLEND_MODE_ERASE); break;
+        case PAINT_MODE_OVER:  initCompPipelines(engine, OBDN_R_BLEND_MODE_OVER); break;
+        case PAINT_MODE_ERASE: initCompPipelines(engine, OBDN_R_BLEND_MODE_ERASE); break;
     }
 }
 
-static void updatePrim(void)
+static void updatePrim(Engine* engine, Obdn_Scene* scene)
 {
-    Obdn_R_Primitive* prim = &renderScene->prims[0].rprim;
+    Obdn_R_Primitive* prim = &scene->prims[0].rprim;
     assert(prim->vertexRegion.size);
-    if (bottomLevelAS.bufferRegion.size)
-        obdn_r_DestroyAccelerationStruct(&bottomLevelAS);
-    if (topLevelAS.bufferRegion.size)
-        obdn_r_DestroyAccelerationStruct(&topLevelAS);
+    if (engine->bottomLevelAS.bufferRegion.size)
+        obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
+    if (engine->topLevelAS.bufferRegion.size)
+        obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
 
-    obdn_r_BuildBlas(prim, &bottomLevelAS);
-    obdn_r_BuildTlas(&bottomLevelAS, &topLevelAS);
+    Coal_Mat4 xform = COAL_MAT4_IDENT;
+    obdn_BuildBlas(engine->memory, prim, &engine->bottomLevelAS);
+    obdn_BuildTlas(engine->memory, 1, &engine->bottomLevelAS, &xform, &engine->topLevelAS);
 
-    updateDescSetPrim();
+    updateDescSetPrim(engine, scene);
 }
 
-static void splat(const VkCommandBuffer cmdBuf, const float x, const float y)
+static void splat(Engine* engine, const VkCommandBuffer cmdBuf, const float x, const float y)
 {
-    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, paintPipeline);
+    vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, engine->paintPipeline);
 
     vkCmdBindDescriptorSets(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR, 
-            pipelineLayout, 0, 2, description.descriptorSets, 0, NULL);
+            engine->pipelineLayout, 0, 2, engine->description.descriptorSets, 0, NULL);
 
     float pc[4] = {coal_Rand(), coal_Rand(), x, y};
 
-    vkCmdPushConstants(cmdBuf, pipelineLayout, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(pc), pc);
+    vkCmdPushConstants(cmdBuf, engine->pipelineLayout, VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(pc), pc);
 
     vkCmdTraceRaysKHR(cmdBuf, 
-            &shaderBindingTable.raygenTable,
-            &shaderBindingTable.missTable,
-            &shaderBindingTable.hitTable,
-            &shaderBindingTable.callableTable,
+            &engine->shaderBindingTable.raygenTable,
+            &engine->shaderBindingTable.missTable,
+            &engine->shaderBindingTable.hitTable,
+            &engine->shaderBindingTable.callableTable,
             2000, 2000, 1);
 }
 
-static void applyPaint(const VkCommandBuffer cmdBuf)
+static void applyPaint(Engine* engine, const VkCommandBuffer cmdBuf)
 {
     VkClearValue clear = {0, 0, 0, 0};
 
@@ -1311,9 +1320,9 @@ static void applyPaint(const VkCommandBuffer cmdBuf)
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .clearValueCount = 1,
         .pClearValues = &clear,
-        .renderArea = {{0, 0}, {textureSize, textureSize}},
-        .renderPass =  applyPaintRenderPass,
-        .framebuffer = applyPaintFrameBuffer 
+        .renderArea = {{0, 0}, {engine->textureSize, engine->textureSize}},
+        .renderPass =  engine->applyPaintRenderPass,
+        .framebuffer = engine->applyPaintFrameBuffer 
     };
 
     vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
@@ -1321,18 +1330,18 @@ static void applyPaint(const VkCommandBuffer cmdBuf)
         vkCmdBindDescriptorSets(
             cmdBuf, 
             VK_PIPELINE_BIND_POINT_GRAPHICS, 
-            pipelineLayout,
-            DESC_SET_COMP, 1, &description.descriptorSets[DESC_SET_COMP], 
+            engine->pipelineLayout,
+            DESC_SET_COMP, 1, &engine->description.descriptorSets[DESC_SET_COMP], 
             0, NULL);
 
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_1]);
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, engine->compPipelines[PIPELINE_COMP_1]);
 
         vkCmdDraw(cmdBuf, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(cmdBuf);
 }
 
-static void comp(const VkCommandBuffer cmdBuf)
+static void comp(Engine* engine, const VkCommandBuffer cmdBuf)
 {
     VkClearValue clear = {0, 0, 0, 0};
 
@@ -1344,72 +1353,72 @@ static void comp(const VkCommandBuffer cmdBuf)
         .sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO,
         .clearValueCount = LEN(clears),
         .pClearValues = clears,
-        .renderArea = {{0, 0}, {textureSize, textureSize}},
-        .renderPass =  compositeRenderPass,
-        .framebuffer = compositeFrameBuffer
+        .renderArea = {{0, 0}, {engine->textureSize, engine->textureSize}},
+        .renderPass =  engine->compositeRenderPass,
+        .framebuffer = engine->compositeFrameBuffer
     };
 
     vkCmdBeginRenderPass(cmdBuf, &rpass, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_2]);
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, engine->compPipelines[PIPELINE_COMP_2]);
 
         vkCmdDraw(cmdBuf, 3, 1, 0, 0);
 
         vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_3]);
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, engine->compPipelines[PIPELINE_COMP_3]);
 
         vkCmdDraw(cmdBuf, 3, 1, 0, 0);
 
         vkCmdNextSubpass(cmdBuf, VK_SUBPASS_CONTENTS_INLINE);
 
-        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, compPipelines[PIPELINE_COMP_4]);
+        vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_GRAPHICS, engine->compPipelines[PIPELINE_COMP_4]);
 
         vkCmdDraw(cmdBuf, 3, 1, 0, 0);
 
     vkCmdEndRenderPass(cmdBuf);
 }
 
-static VkSemaphore syncScene()
+static VkSemaphore sync(Engine* engine, Obdn_Scene* scene, Dali_LayerStack* stack, Dali_Brush* brush, Dali_UndoManager* u)
 {
     VkSemaphore semaphore = VK_NULL_HANDLE;
-    if (paintScene->dirt || renderScene->dirt)
+    if (brush->dirt || scene->dirt || stack->dirt || u->dirt)
     {
-        if (renderScene->dirt & OBDN_S_CAMERA_VIEW_BIT)
-            updateView();
-        if (renderScene->dirt & OBDN_S_CAMERA_PROJ_BIT)
-            updateProj();
-        if (paintScene->dirt & SCENE_BRUSH_BIT)
-            updateBrush();
-        if (paintScene->dirt & OBDN_S_PRIMS_BIT)
-            updatePrim();
-        if (paintScene->dirt & SCENE_UNDO_BIT)
+        if (scene->dirt & OBDN_S_CAMERA_VIEW_BIT)
+            updateView(engine, scene);
+        if (scene->dirt & OBDN_S_CAMERA_PROJ_BIT)
+            updateProj(engine, scene);
+        if (brush->dirt & BRUSH_BIT)
+            updateBrush(engine, brush);
+        if (scene->dirt & OBDN_S_PRIMS_BIT)
+            updatePrim(engine, scene);
+        if (u->dirt & UNDO_BIT)
         {
-            if (undo())
-                semaphore = acquireImageCommand.semaphore;
+            if (undo(engine, u))
+                semaphore = engine->acquireImageCommand.semaphore;
         }
-        if (paintScene->dirt & SCENE_LAYER_CHANGED_BIT)
+        if (stack->dirt & LAYER_CHANGED_BIT)
         {
-            onLayerChange(paintScene->layer);
+            onLayerChange(engine, stack, stack->activeLayer); // only one that needs the stack
         }
-        if (paintScene->dirt & SCENE_LAYER_BACKUP_BIT)
+        if (stack->dirt & LAYER_BACKUP_BIT)
         {
-            backupLayer();
-            semaphore = acquireImageCommand.semaphore;
+            backupLayer(engine, u);
+            semaphore = engine->acquireImageCommand.semaphore;
         }
-        if (paintScene->dirt & SCENE_PAINT_MODE_BIT)
+        if (brush->dirt & PAINT_MODE_BIT)
         {
-            updatePaintMode();
+            updatePaintMode(engine, brush);
         }
     }
     return semaphore;
 }
 
-static void updateCommands()
+static void updateCommands(Engine* engine)
 {
-    VkCommandBuffer cmdBuf = paintCommand.buffer;
+    VkCommandBuffer cmdBuf = engine->paintCommand.buffer;
 
-    obdn_v_BeginCommandBuffer(cmdBuf);
+    obdn_BeginCommandBuffer(cmdBuf);
 
     VkClearColorValue clearColor = {
         .float32[0] = 0,
@@ -1428,7 +1437,7 @@ static void updateCommands()
 
     VkImageMemoryBarrier imgBarrier0 = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageA.handle,
+        .image = engine->imageA.handle,
         .oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .subresourceRange = imageRange,
@@ -1442,11 +1451,11 @@ static void updateCommands()
             0, 0, NULL, 
             0, NULL, 1, &imgBarrier0);
 
-    vkCmdClearColorImage(cmdBuf, imageA.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageRange);
+    vkCmdClearColorImage(cmdBuf, engine->imageA.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &clearColor, 1, &imageRange);
 
     VkImageMemoryBarrier imgBarrier1 = {
         .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .image = imageA.handle,
+        .image = engine->imageA.handle,
         .oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
         .newLayout = VK_IMAGE_LAYOUT_GENERAL,
         .subresourceRange = imageRange,
@@ -1460,35 +1469,42 @@ static void updateCommands()
             0, 0, NULL, 
             0, NULL, 1, &imgBarrier1);
 
-    if (brushActive)
+    if (engine->brushActive)
     {
         static const float unit = 0.001; //in screen space
-        const float brushDist = coal_Distance(brushPos, prevBrushPos);
+        const float brushDist = coal_Distance(engine->brushPos, engine->prevBrushPos);
         const int splatCount = MIN(MAX(brushDist / unit, 1), 30);
         for (int i = 0; i < splatCount; i++)
         {
             float t = (float)i / splatCount;
-            float xstep = t * (brushPos.x - prevBrushPos.x);
-            float ystep = t * (brushPos.y - prevBrushPos.y);
-            float x = prevBrushPos.x + xstep;
-            float y = prevBrushPos.y + ystep;
+            float xstep = t * (engine->brushPos.x - engine->prevBrushPos.x);
+            float ystep = t * (engine->brushPos.y - engine->prevBrushPos.y);
+            float x = engine->prevBrushPos.x + xstep;
+            float y = engine->prevBrushPos.y + ystep;
 
-            splat(cmdBuf, x, y);
+            splat(engine, cmdBuf, x, y);
 
-            applyPaint(cmdBuf);
+            applyPaint(engine, cmdBuf);
 
-            vkCmdClearColorImage(cmdBuf, imageA.handle, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &imageRange);
+            vkCmdClearColorImage(cmdBuf, engine->imageA.handle, VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1, &imageRange);
         }
     }
     else
-        applyPaint(cmdBuf);
+        applyPaint(engine, cmdBuf);
 
-    comp(cmdBuf);
+    comp(engine, cmdBuf);
 
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
-void p_SavePaintImage(void)
+static void printTextureDim(void* enginePtr)
+{
+    Engine* engine = (Engine*)enginePtr;
+    hell_Print("%dx%d\n", engine->textureSize, engine->textureSize);
+}
+
+// TODO: see if we can do this by pass a layerstack instead of the engine
+void dali_SavePaintImage(Dali_Engine* engine)
 {
     hell_Print("Please enter a file name with extension.\n");
     char strbuf[32];
@@ -1510,57 +1526,65 @@ void p_SavePaintImage(void)
         hell_Print("Bad extension.\n");
         return;
     }
-    obdn_v_SaveImage(&imageA, fileType, strbuf);
+    obdn_SaveImage(engine->memory, &engine->imageA, fileType, strbuf);
 }
 
-VkSemaphore p_Paint(void)
+VkSemaphore dali_Paint(Dali_Engine* engine, Obdn_Scene* scene, Dali_LayerStack* stack, Dali_Brush* brush, Dali_UndoManager* um)
 {
-    assert(renderScene->primCount == 1);
-    obdn_v_WaitForFence(&paintCommand.fence);
-    obdn_v_ResetCommand(&paintCommand);
-    VkSemaphore waitSemaphore = syncScene();
-    updateCommands();
-    obdn_v_SubmitGraphicsCommand(0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
-            waitSemaphore == VK_NULL_HANDLE ? 0 : 1, &waitSemaphore, 1, &paintCommand.semaphore, 
-            paintCommand.fence, paintCommand.buffer);
-    return paintCommand.semaphore;
+    assert(scene->primCount == 1);
+    obdn_WaitForFence(engine->device, &engine->paintCommand.fence);
+    obdn_ResetCommand(&engine->paintCommand);
+    VkSemaphore waitSemaphore = sync(engine, scene, stack, brush, um);
+    updateCommands(engine);
+    obdn_SubmitGraphicsCommand(engine->instance, 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, 
+            waitSemaphore == VK_NULL_HANDLE ? 0 : 1, &waitSemaphore, 1, &engine->paintCommand.semaphore, 
+            engine->paintCommand.fence, engine->paintCommand.buffer);
+    return engine->paintCommand.semaphore;
 }
 
-void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSize)
+void
+dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory, Hell_Grimoire* grimoire, Dali_UndoManager* undo,
+                  Obdn_S_Scene* scene, const Dali_Brush* brush,
+                  const uint32_t texSize, Engine* engine, Dali_LayerStack* stack)
 {
-    hell_Print("PAINT: starting initialization...\n");
-    assert(sScene->primCount > 0);
-    paintScene = pScene;
-    renderScene = sScene;
+    hell_Print("DALI Engine: starting initialization...\n");
+    assert(scene->primCount > 0);
+    memset(engine, 0, sizeof(Engine));
+    memset(stack, 0, sizeof(Dali_LayerStack));
+    engine->instance = instance;
+    engine->memory = memory;
+    engine->device = obdn_GetDevice(instance);
+    engine->textureSize = texSize;
+    engine->textureFormat = VK_FORMAT_R8G8B8A8_UNORM; //TODO: should probably be passed in...
+
 
     assert(texSize > 0);
     assert(texSize % 256 == 0);
     assert(texSize == IMG_4K || texSize == IMG_8K || texSize == IMG_16K); // for now
 
-    textureSize = texSize;
-    curLayerId = 0;
-    graphicsQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_GRAPHICS_TYPE);
-    transferQueueFamilyIndex = obdn_v_GetQueueFamilyIndex(OBDN_V_QUEUE_TRANSFER_TYPE);
+    engine->curLayerId = 0;
+    engine->graphicsQueueFamilyIndex = obdn_GetQueueFamilyIndex(instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
+    engine->transferQueueFamilyIndex = obdn_GetQueueFamilyIndex(instance, OBDN_V_QUEUE_TRANSFER_TYPE);
 
-    paintCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+    engine->paintCommand = obdn_CreateCommand(instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    releaseImageCommand  = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
-    transferImageCommand = obdn_v_CreateCommand(OBDN_V_QUEUE_TRANSFER_TYPE);
-    acquireImageCommand  = obdn_v_CreateCommand(OBDN_V_QUEUE_GRAPHICS_TYPE);
+    engine->releaseImageCommand  = obdn_CreateCommand(instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
+    engine->transferImageCommand = obdn_CreateCommand(instance, OBDN_V_QUEUE_TRANSFER_TYPE);
+    engine->acquireImageCommand  = obdn_CreateCommand(instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    initPaintImages();
+    initPaintImages(engine);
 
-    initRenderPasses();
-    initDescSetsAndPipeLayouts();
-    initUniformBuffers();
-    initPaintPipelineAndShaderBindingTable();
-    initCompPipelines(OBDN_R_BLEND_MODE_OVER);
+    initRenderPasses(engine);
+    initDescSetsAndPipeLayouts(engine);
+    initUniformBuffers(engine);
+    initPaintPipelineAndShaderBindingTable(engine);
+    initCompPipelines(engine, OBDN_R_BLEND_MODE_OVER);
 
-    initFramebuffers();
+    initFramebuffers(engine);
 
-    assert(imageA.size > 0);
+    assert(engine->imageA.size > 0);
 
-    l_Init(imageA.size); // eventually will move this out
+    dali_CreateLayerStack(memory, engine->imageA.size, stack); // eventually will move this out
     uint8_t maxUndoStacks, maxUndosPerStack;
     switch (texSize)
     {
@@ -1569,47 +1593,54 @@ void p_Init(Obdn_S_Scene* sScene, const PaintScene* pScene, const uint32_t texSi
         case IMG_16K: maxUndoStacks = 1; maxUndosPerStack = 8; break;
         default: assert(0);
     }
-    u_InitUndo(imageA.size, maxUndoStacks, maxUndosPerStack);
-    onLayerChange(0);
+    onLayerChange(engine, stack, 0);
 
-    updateDescSetPaint();
-    updateDescSetComp();
+    updateDescSetPaint(engine);
+    updateDescSetComp(engine);
 
-    renderScene->textures[1].devImage = imageA;
+    scene->textures[1].devImage = engine->imageA;
+
+    hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
+
     hell_Print("PAINT: initialized.\n");
 }
 
-void p_CleanUp(void)
+void dali_DestroyEngine(Engine* engine)
 {
-    obdn_v_FreeBufferRegion(&matrixRegion);
-    obdn_v_FreeBufferRegion(&brushRegion);
-    vkDestroyPipeline(obdn_v_GetDevice(), paintPipeline, NULL);
-    vkDestroyPipelineLayout(obdn_v_GetDevice(), pipelineLayout, NULL);
-    obdn_r_DestroyShaderBindingTable(&shaderBindingTable);
+    obdn_FreeBufferRegion(&engine->matrixRegion);
+    obdn_FreeBufferRegion(&engine->brushRegion);
+    vkDestroyPipeline(engine->device, engine->paintPipeline, NULL);
+    vkDestroyPipelineLayout(engine->device, engine->pipelineLayout, NULL);
+    obdn_DestroyShaderBindingTable(&engine->shaderBindingTable);
     for (int i = 0; i < PIPELINE_COMP_COUNT; i++)
     {
-        vkDestroyPipeline(obdn_v_GetDevice(), compPipelines[i], NULL);
+        vkDestroyPipeline(engine->device, engine->compPipelines[i], NULL);
     }
     for (int i = 0; i < DESC_SET_COUNT; i++)
     {
-        vkDestroyDescriptorSetLayout(obdn_v_GetDevice(), descriptorSetLayouts[i], NULL);
+        vkDestroyDescriptorSetLayout(engine->device, engine->descriptorSetLayouts[i], NULL);
     }
-    obdn_r_DestroyDescription(&description);
-    obdn_v_DestroyCommand(releaseImageCommand);
-    obdn_v_DestroyCommand(transferImageCommand);
-    obdn_v_DestroyCommand(acquireImageCommand);
-    obdn_v_DestroyCommand(paintCommand);
-    obdn_v_FreeImage(&imageA);
-    obdn_v_FreeImage(&imageB);
-    obdn_v_FreeImage(&imageC);
-    obdn_v_FreeImage(&imageD);
-    vkDestroyFramebuffer(obdn_v_GetDevice(), applyPaintFrameBuffer, NULL);
-    vkDestroyFramebuffer(obdn_v_GetDevice(), compositeFrameBuffer, NULL);
-    vkDestroyFramebuffer(obdn_v_GetDevice(), backgroundFrameBuffer, NULL);
-    vkDestroyFramebuffer(obdn_v_GetDevice(), foregroundFrameBuffer, NULL);
-    vkDestroyRenderPass(obdn_v_GetDevice(), singleCompositeRenderPass, NULL);
-    vkDestroyRenderPass(obdn_v_GetDevice(), applyPaintRenderPass, NULL);
-    vkDestroyRenderPass(obdn_v_GetDevice(), compositeRenderPass, NULL);
-    obdn_r_DestroyAccelerationStruct(&bottomLevelAS);
-    obdn_r_DestroyAccelerationStruct(&topLevelAS);
+    obdn_DestroyDescription(engine->device, &engine->description);
+    obdn_DestroyCommand(engine->releaseImageCommand);
+    obdn_DestroyCommand(engine->transferImageCommand);
+    obdn_DestroyCommand(engine->acquireImageCommand);
+    obdn_DestroyCommand(engine->paintCommand);
+    obdn_FreeImage(&engine->imageA);
+    obdn_FreeImage(&engine->imageB);
+    obdn_FreeImage(&engine->imageC);
+    obdn_FreeImage(&engine->imageD);
+    vkDestroyFramebuffer(engine->device, engine->applyPaintFrameBuffer, NULL);
+    vkDestroyFramebuffer(engine->device, engine->compositeFrameBuffer, NULL);
+    vkDestroyFramebuffer(engine->device, engine->backgroundFrameBuffer, NULL);
+    vkDestroyFramebuffer(engine->device, engine->foregroundFrameBuffer, NULL);
+    vkDestroyRenderPass(engine->device, engine->singleCompositeRenderPass, NULL);
+    vkDestroyRenderPass(engine->device, engine->applyPaintRenderPass, NULL);
+    vkDestroyRenderPass(engine->device, engine->compositeRenderPass, NULL);
+    obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
+    obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
+}
+
+Dali_Engine* dali_AllocEngine(void)
+{
+    return hell_Malloc(sizeof(Dali_Engine));
 }

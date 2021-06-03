@@ -3,14 +3,21 @@
 
 #include <obsidian/v_memory.h>
 #include "layer.h"
-#include "render.h"
 
-void u_InitUndo(const uint32_t size, const uint8_t maxStacks, const uint8_t maxUndos);
-void u_CleanUp(void);
-bool u_LayerInCache(L_LayerId layer);
-void u_Update(PaintScene* scene);
+typedef uint32_t Dali_DirtMask;
+typedef struct Dali_UndoManager Dali_UndoManager;
 
-Obdn_V_BufferRegion* u_GetNextBuffer(void);
-Obdn_V_BufferRegion* u_GetLastBuffer(void);
+void dali_CreateUndoManager(Obdn_Memory* memory, const uint32_t size, const uint8_t maxStacks_, const uint8_t maxUndos_, Dali_UndoManager* undo);
+
+void dali_DestroyUndoManager(Dali_UndoManager* undo);
+
+Obdn_V_BufferRegion* dali_GetNextUndoBuffer(Dali_UndoManager* undo);
+
+Obdn_V_BufferRegion* dali_GetLastUndoBuffer(Dali_UndoManager* undo);
+
+bool dali_LayerInUndoCache(Dali_UndoManager* undo, Dali_LayerId layer);
+
+Dali_UndoManager* dali_AllocUndo(void);
+void dali_UpdateUndo(Dali_UndoManager* undo, Dali_LayerStack* layerStack);
 
 #endif /* end of include guard: UNDO_H */

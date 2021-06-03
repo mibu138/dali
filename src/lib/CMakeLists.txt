@@ -1,8 +1,7 @@
 set(SRCS 
     layer.c
-    paint.c 
-    painter.c
-    render.c
+    engine.c 
+    brush.c
     undo.c)
 
 set(PUBLIC_HEADERS
@@ -11,14 +10,13 @@ set(PUBLIC_HEADERS
     g_api.h
     g_houdini_api.h
     layer.h
-    painter.h
-    paint.h
-    render.h
+    brush.h
+    engine.h
     undo.h)
 
 include(author_library)
-author_library(painter
-    EXPORT_NAME Painter
+author_library(dali
+    EXPORT_NAME Dali
     SOURCES ${SRCS}
     PUBLIC_HEADERS ${PUBLIC_HEADERS}
     DEPS Obsidian::Obsidian)

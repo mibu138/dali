@@ -3,12 +3,6 @@
 
 #include <stdbool.h>
 
-typedef struct {
-    bool   shouldRun;
-    bool   reload;
-    bool   restart;
-    bool   copySwapToHost;
-} Parms;
 
 #endif /* end of include guard: VIEWER_COMMON_H */
 

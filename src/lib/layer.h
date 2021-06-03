@@ -3,25 +3,24 @@
 
 #include <obsidian/v_memory.h>
 
-#define MAX_LAYERS 64
+typedef uint16_t Dali_LayerId;
 
-typedef uint16_t L_LayerId;
-
-typedef struct {
-    Obdn_V_BufferRegion bufferRegion;
-} L_Layer;
+typedef struct Dali_Layer Dali_Layer;
+typedef struct Dali_LayerStack Dali_LayerStack;
 
 // returns number of layer or -1 on failure
-void        l_Init(const VkDeviceSize size);
-void        l_CleanUp(void);
-int         l_CreateLayer(void);
-void        l_SetActiveLayer(uint16_t id);
-L_LayerId   l_GetActiveLayerId(void);
-int         l_GetLayerCount(void);
-L_Layer*    l_GetLayer(L_LayerId id);
-bool        l_IncrementLayer(L_LayerId* const id);
-bool        l_DecrementLayer(L_LayerId* const id);
+void        dali_CreateLayerStack(Obdn_Memory* memory, const VkDeviceSize size, Dali_LayerStack*);
+void        dali_DestroyLayerStack(Dali_LayerStack*);
+int         dali_CreateLayer(Dali_LayerStack*);
+void        dali_SetActiveLayer(Dali_LayerStack*, uint16_t id);
+Dali_LayerId   dali_GetActiveLayerId(const Dali_LayerStack*);
+int         dali_GetLayerCount(const Dali_LayerStack*);
+Dali_Layer*    dali_GetLayer(Dali_LayerStack*, Dali_LayerId id);
+bool        dali_IncrementLayer(Dali_LayerStack*, Dali_LayerId* const id);
+bool        dali_DecrementLayer(Dali_LayerStack*, Dali_LayerId* const id);
 // returns address to the layer data
-uint8_t*    l_CopyTextureToLayer(const L_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
+uint8_t*    dali_CopyTextureToLayer(Dali_LayerStack*, const Dali_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
+
+Dali_LayerStack* dali_AllocLayerStack(void);
 
 #endif /* end of include guard: LAYER_H */

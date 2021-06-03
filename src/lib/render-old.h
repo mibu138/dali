@@ -4,7 +4,7 @@
 #include <obsidian/r_geo.h>
 #include <obsidian/s_scene.h>
 #include <obsidian/v_swapchain.h>
-#include "paint.h"
+#include "engine.h"
 #include "common.h"
 
 void r_InitRenderer(const Obdn_S_Scene* scene, const PaintScene* pScene,
