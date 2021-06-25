@@ -1,7 +1,7 @@
 #include "layer.h"
 #include "private.h"
-#include <obsidian/r_renderpass.h>
-#include <obsidian/v_image.h>
+#include <obsidian/renderpass.h>
+#include <obsidian/image.h>
 #include <hell/debug.h>
 #include <hell/common.h>
 #include "dtags.h"

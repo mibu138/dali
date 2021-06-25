@@ -5,7 +5,7 @@
 #include "layer.h"
 #include "undo.h"
 #include <hell/cmd.h>
-#include <obsidian/s_scene.h>
+#include <obsidian/scene.h>
 
 #define IMG_4K 4096
 #define IMG_8K IMG_4K * 2
@@ -15,7 +15,7 @@ typedef struct Dali_Engine Dali_Engine;
 
 void        dali_CreateEngineAndStack(const Obdn_Instance* instance,
                                       Obdn_Memory*         memory, Hell_Grimoire*,
-                                      Dali_UndoManager* undo, Obdn_S_Scene* sScene,
+                                      Dali_UndoManager* undo, Obdn_Scene* sScene,
                                       const Dali_Brush* brush, const uint32_t texSize,
                                       Dali_Engine* engine, Dali_LayerStack* stack);
 VkSemaphore dali_Paint(Dali_Engine* engine, Obdn_Scene* scene,

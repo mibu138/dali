@@ -1,5 +1,5 @@
 add_executable(paint painter-bin.c)
-target_link_libraries(paint Dali::Dali)
+target_link_libraries(paint Dali::Dali Shiv::Shiv)
 set_target_properties(paint PROPERTIES RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 install(TARGETS paint DESTINATION ${CMAKE_INSTALL_BINDIR})

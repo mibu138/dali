@@ -7,6 +7,7 @@ include(header)
 
 find_package(Obsidian REQUIRED FATAL_ERROR)
 find_package(Coal REQUIRED FATAL_ERROR)
+find_package(Shiv REQUIRED)
 
 add_subdirectory(cmake)
 add_subdirectory(src/lib)

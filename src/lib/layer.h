@@ -1,7 +1,7 @@
 #ifndef LAYER_H
 #define LAYER_H
 
-#include <obsidian/v_memory.h>
+#include <obsidian/memory.h>
 
 typedef uint16_t Dali_LayerId;
 

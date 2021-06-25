@@ -1,9 +1,9 @@
 #ifndef PRIVATE_H
 #define PRIVATE_H
 
-#include <obsidian/v_def.h>
-#include <obsidian/v_video.h>
-#include "obsidian/v_memory.h"
+#include <obsidian/def.h>
+#include <obsidian/video.h>
+#include "obsidian/memory.h"
 #define MAX_LAYERS 64
 
 typedef uint32_t DirtMask;

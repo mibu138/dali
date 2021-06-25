@@ -1,7 +1,7 @@
 #ifndef UNDO_H
 #define UNDO_H
 
-#include <obsidian/v_memory.h>
+#include <obsidian/memory.h>
 #include "layer.h"
 
 typedef uint32_t Dali_DirtMask;

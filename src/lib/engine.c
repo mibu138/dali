@@ -1,9 +1,9 @@
-#include <obsidian/v_image.h>
-#include <obsidian/v_memory.h>
-#include <obsidian/r_raytrace.h>
-#include <obsidian/r_pipeline.h>
-#include <obsidian/r_geo.h>
-#include <obsidian/v_command.h>
+#include <obsidian/image.h>
+#include <obsidian/memory.h>
+#include <obsidian/raytrace.h>
+#include <obsidian/pipeline.h>
+#include <obsidian/geo.h>
+#include <obsidian/command.h>
 #include <hell/locations.h>
 #include <hell/len.h>
 #include <hell/minmax.h>
@@ -477,9 +477,7 @@ static void initUniformBuffers(Engine* engine)
 
 static void initDescSetsAndPipeLayouts(Engine* engine)
 {
-    const Obdn_R_DescriptorSetInfo descSets[] = {{
-            .bindingCount = 3, 
-            .bindings = {{
+    Obdn_DescriptorBinding bindingsA[] = {{
                 // uv buffer
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
@@ -492,10 +490,9 @@ static void initDescSetsAndPipeLayouts(Engine* engine)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR,
                 .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR | VK_SHADER_STAGE_CLOSEST_HIT_BIT_KHR
-            }},
-        },{
-            .bindingCount = 3, 
-            .bindings = {{
+    }};
+
+    Obdn_DescriptorBinding bindingsB[] = {{
                 // matrices
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
@@ -508,28 +505,36 @@ static void initDescSetsAndPipeLayouts(Engine* engine)
                 .descriptorCount = 1,
                 .type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                 .stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR
-            }},
+    }};
+
+    Obdn_DescriptorBinding bindingsC[] = {{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+            },{
+                .descriptorCount = 1,
+                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
+                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
+    }};
+
+    const Obdn_DescriptorSetInfo descSets[] = {{
+            .bindingCount = LEN(bindingsA), 
+            .bindings = bindingsA,
+        },{
+            .bindingCount = LEN(bindingsB), 
+            .bindings = bindingsB,
         },{ // comp 
-            .bindingCount = 4,
-            .bindings = {{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            },{
-                .descriptorCount = 1,
-                .type = VK_DESCRIPTOR_TYPE_INPUT_ATTACHMENT,
-                .stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT,
-            }}
-        }
-    };
+            .bindingCount = LEN(bindingsC),
+            .bindings = bindingsC
+        }};
 
     obdn_CreateDescriptorSetLayouts(engine->device, LEN(descSets), descSets, engine->descriptorSetLayouts);
 
@@ -541,7 +546,7 @@ static void initDescSetsAndPipeLayouts(Engine* engine)
         .size       = sizeof(float) * 4
     }; 
 
-    const Obdn_R_PipelineLayoutInfo pipeLayoutInfos[] = {{
+    const Obdn_PipelineLayoutInfo pipeLayoutInfos[] = {{
         .descriptorSetCount = LEN(descSets), 
         .descriptorSetLayouts = engine->descriptorSetLayouts,
         .pushConstantCount = 1,
@@ -559,18 +564,18 @@ static void updateDescSetPrim(Engine* engine, Obdn_Scene* scene)
         .pAccelerationStructures    = &engine->topLevelAS.handle
     };
 
-    Obdn_R_Primitive* prim = &scene->prims[0].rprim;
+    Obdn_Primitive* prim = obdn_GetPrimitive(scene, 0);
 
     VkDescriptorBufferInfo uvBufInfo = {
-        .offset = obdn_r_GetAttrOffset(prim, "uv"),
-        .range  = obdn_r_GetAttrRange(prim, "uv"),
-        .buffer = prim->vertexRegion.buffer,
+        .offset = obdn_GetAttrOffset(&prim->geo, "uv"),
+        .range  = obdn_GetAttrRange(&prim->geo, "uv"),
+        .buffer = prim->geo.vertexRegion.buffer,
     };
 
     VkDescriptorBufferInfo indexBufInfo = {
-        .offset = prim->indexRegion.offset,
-        .range  = prim->indexRegion.size,
-        .buffer = prim->indexRegion.buffer,
+        .offset = prim->geo.indexRegion.offset,
+        .range  = prim->geo.indexRegion.size,
+        .buffer = prim->geo.indexRegion.buffer,
     };
 
     VkWriteDescriptorSet writes[] = {{
@@ -716,7 +721,7 @@ static void updateDescSetComp(Engine* engine)
 
 static void initPaintPipelineAndShaderBindingTable(Engine* engine)
 {
-    const Obdn_R_RayTracePipelineInfo pipeInfosRT[] = {{
+    const Obdn_RayTracePipelineInfo pipeInfosRT[] = {{
         // ray trace
         .layout = engine->pipelineLayout,
         .raygenCount = 1,
@@ -740,67 +745,72 @@ static void initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
 {
     assert(blendMode != OBDN_R_BLEND_MODE_NONE);
 
-    const Obdn_R_GraphicsPipelineInfo pipeInfo1 = {
+    const Obdn_GraphicsPipelineInfo pipeInfo1 = {
         .layout  = engine->pipelineLayout,
         .renderPass = engine->applyPaintRenderPass, 
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = blendMode,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp.frag.spv"
     };
 
-    const Obdn_R_GraphicsPipelineInfo pipeInfo2 = {
+    const Obdn_GraphicsPipelineInfo pipeInfo2 = {
         .layout  =engine-> pipelineLayout,
         .renderPass = engine->compositeRenderPass, 
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp2a.frag.spv"
     };
 
-    const Obdn_R_GraphicsPipelineInfo pipeInfo3 = {
+    const Obdn_GraphicsPipelineInfo pipeInfo3 = {
         .layout  = engine->pipelineLayout,
         .renderPass = engine->compositeRenderPass, 
         .subpass = 1,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp3a.frag.spv"
     };
 
-    const Obdn_R_GraphicsPipelineInfo pipeInfo4 = {
+    const Obdn_GraphicsPipelineInfo pipeInfo4 = {
         .layout  = engine->pipelineLayout,
         .renderPass = engine->compositeRenderPass, 
         .subpass = 2,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim = {engine->textureSize,engine-> textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp4a.frag.spv"
     };
 
-    const Obdn_R_GraphicsPipelineInfo pipeInfoSingle = {
+    const Obdn_GraphicsPipelineInfo pipeInfoSingle = {
         .layout  = engine->pipelineLayout,
         .renderPass = engine->singleCompositeRenderPass, 
         .subpass = 0,
         .frontFace = VK_FRONT_FACE_CLOCKWISE,
         .sampleCount = VK_SAMPLE_COUNT_1_BIT,
+        .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim = {engine->textureSize, engine->textureSize},
         .blendMode   = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
         .vertShader = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader = SPVDIR"/comp.frag.spv"
     };
 
-    const Obdn_R_GraphicsPipelineInfo infos[] = {
+    const Obdn_GraphicsPipelineInfo infos[] = {
         pipeInfo1, pipeInfo2, pipeInfo3, pipeInfo4, pipeInfoSingle
     };
 
@@ -1225,15 +1235,15 @@ static bool undo(Engine* engine, Dali_UndoManager* undo)
 static void updateView(Engine* engine, Obdn_Scene* scene)
 {
     UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
-    matrices->view = scene->camera.view;
-    matrices->viewInv = scene->camera.xform;
+    matrices->view = obdn_GetCameraView(scene);
+    matrices->viewInv = coal_Invert4x4(matrices->proj);
 }
 
 static void updateProj(Engine* engine, Obdn_Scene* scene)
 {
     UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
-    matrices->proj = scene->camera.proj;
-    matrices->projInv = coal_Invert4x4(scene->camera.proj);
+    matrices->proj = obdn_GetCameraProjection(scene);
+    matrices->projInv = coal_Invert4x4(matrices->proj);
 }
 
 static void updateBrushColor(Engine* engine, float r, float g, float b)
@@ -1279,15 +1289,15 @@ static void updatePaintMode(Engine* engine, Dali_Brush* b)
 
 static void updatePrim(Engine* engine, Obdn_Scene* scene)
 {
-    Obdn_R_Primitive* prim = &scene->prims[0].rprim;
-    assert(prim->vertexRegion.size);
+    Obdn_Primitive* prim = obdn_GetPrimitive(scene, 0);
+    assert(prim->geo.vertexRegion.size);
     if (engine->bottomLevelAS.bufferRegion.size)
         obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
     if (engine->topLevelAS.bufferRegion.size)
         obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
 
     Coal_Mat4 xform = COAL_MAT4_IDENT;
-    obdn_BuildBlas(engine->memory, prim, &engine->bottomLevelAS);
+    obdn_BuildBlas(engine->memory, &prim->geo, &engine->bottomLevelAS);
     obdn_BuildTlas(engine->memory, 1, &engine->bottomLevelAS, &xform, &engine->topLevelAS);
 
     updateDescSetPrim(engine, scene);
@@ -1382,15 +1392,16 @@ static void comp(Engine* engine, const VkCommandBuffer cmdBuf)
 static VkSemaphore sync(Engine* engine, Obdn_Scene* scene, Dali_LayerStack* stack, Dali_Brush* brush, Dali_UndoManager* u)
 {
     VkSemaphore semaphore = VK_NULL_HANDLE;
-    if (brush->dirt || scene->dirt || stack->dirt || u->dirt)
+    const Obdn_SceneDirtyFlags sceneDirt = obdn_GetSceneDirt(scene);
+    if (brush->dirt || sceneDirt || stack->dirt || u->dirt)
     {
-        if (scene->dirt & OBDN_S_CAMERA_VIEW_BIT)
+        if (sceneDirt & OBDN_SCENE_CAMERA_VIEW_BIT)
             updateView(engine, scene);
-        if (scene->dirt & OBDN_S_CAMERA_PROJ_BIT)
+        if (sceneDirt & OBDN_SCENE_CAMERA_PROJ_BIT)
             updateProj(engine, scene);
         if (brush->dirt & BRUSH_BIT)
             updateBrush(engine, brush);
-        if (scene->dirt & OBDN_S_PRIMS_BIT)
+        if (sceneDirt & OBDN_SCENE_PRIMS_BIT)
             updatePrim(engine, scene);
         if (u->dirt & UNDO_BIT)
         {
@@ -1497,7 +1508,7 @@ static void updateCommands(Engine* engine)
     V_ASSERT( vkEndCommandBuffer(cmdBuf) );
 }
 
-static void printTextureDim(void* enginePtr)
+static void printTextureDim(const Hell_Grimoire* grim, void* enginePtr)
 {
     Engine* engine = (Engine*)enginePtr;
     hell_Print("%dx%d\n", engine->textureSize, engine->textureSize);
@@ -1531,7 +1542,7 @@ void dali_SavePaintImage(Dali_Engine* engine)
 
 VkSemaphore dali_Paint(Dali_Engine* engine, Obdn_Scene* scene, Dali_LayerStack* stack, Dali_Brush* brush, Dali_UndoManager* um)
 {
-    assert(scene->primCount == 1);
+    assert(obdn_GetPrimCount(scene) == 1);
     obdn_WaitForFence(engine->device, &engine->paintCommand.fence);
     obdn_ResetCommand(&engine->paintCommand);
     VkSemaphore waitSemaphore = sync(engine, scene, stack, brush, um);
@@ -1544,11 +1555,11 @@ VkSemaphore dali_Paint(Dali_Engine* engine, Obdn_Scene* scene, Dali_LayerStack* 
 
 void
 dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory, Hell_Grimoire* grimoire, Dali_UndoManager* undo,
-                  Obdn_S_Scene* scene, const Dali_Brush* brush,
+                  Obdn_Scene* scene, const Dali_Brush* brush,
                   const uint32_t texSize, Engine* engine, Dali_LayerStack* stack)
 {
     hell_Print("DALI Engine: starting initialization...\n");
-    assert(scene->primCount > 0);
+    assert(obdn_GetPrimCount(scene) > 0);
     memset(engine, 0, sizeof(Engine));
     memset(stack, 0, sizeof(Dali_LayerStack));
     engine->instance = instance;
@@ -1598,7 +1609,9 @@ dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory, He
     updateDescSetPaint(engine);
     updateDescSetComp(engine);
 
-    scene->textures[1].devImage = engine->imageA;
+    Obdn_TextureHandle tex = obdn_SceneCreateTexture(scene, engine->imageA);
+    Obdn_MaterialHandle mat = obdn_SceneCreateMaterial(scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
+    obdn_BindPrimToMaterial(scene, (Obdn_PrimitiveHandle){0}, mat);
 
     hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
 
