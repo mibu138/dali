@@ -18,9 +18,10 @@ void        dali_CreateEngineAndStack(const Obdn_Instance* instance,
                                       Dali_UndoManager* undo, Obdn_Scene* sScene,
                                       const Dali_Brush* brush, const uint32_t texSize,
                                       Dali_Engine* engine, Dali_LayerStack* stack);
-VkSemaphore dali_Paint(Dali_Engine* engine, Obdn_Scene* scene,
-                       Dali_LayerStack* stack, Dali_Brush* brush,
-                       Dali_UndoManager* um);
+// returns a semaphore to wait on... dont like this but thats a refactor for another day
+VkSemaphore dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
+           const Dali_Brush* brush, Dali_LayerStack* stack,
+           Dali_UndoManager* um, VkCommandBuffer cmdbuf);
 void        dali_DestroyEngine(Dali_Engine* engine);
 
 Dali_Engine* dali_AllocEngine(void);
