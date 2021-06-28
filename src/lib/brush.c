@@ -14,8 +14,9 @@ void dali_CreateBrush(Dali_Brush *brush)
     brush->opacity = 1.0;
     brush->r = 1.0;
     brush->g = 1.0;
-    brush->b = 1.0;
+    brush->b = .5;
     brush->radius = 1.0;
+    brush->falloff = 0.8;
     brush->mode = PAINT_MODE_OVER;
     brush->dirt |= BRUSH_BIT;
 }
@@ -24,5 +25,11 @@ void dali_SetBrushPos(Dali_Brush* brush, float x, float y)
 {
     brush->x = x;
     brush->y = y;
+    brush->dirt |= BRUSH_BIT;
+}
+
+void dali_ActivateBrush(Dali_Brush* brush)
+{
+    brush->active = true;
     brush->dirt |= BRUSH_BIT;
 }

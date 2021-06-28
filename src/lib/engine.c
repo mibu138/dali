@@ -1465,12 +1465,8 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
 }
 
 static void
-updateCommands(Engine* engine)
+updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
 {
-    VkCommandBuffer cmdBuf = engine->paintCommand.buffer;
-
-    obdn_BeginCommandBuffer(cmdBuf);
-
     VkClearColorValue clearColor = {
         .float32[0] = 0,
         .float32[1] = 0,
@@ -1544,8 +1540,6 @@ updateCommands(Engine* engine)
         applyPaint(engine, cmdBuf);
 
     comp(engine, cmdBuf);
-
-    V_ASSERT(vkEndCommandBuffer(cmdBuf));
 }
 
 static void
@@ -1585,22 +1579,15 @@ dali_SavePaintImage(Dali_Engine* engine)
     obdn_SaveImage(engine->memory, &engine->imageA, fileType, strbuf);
 }
 
-VkSemaphore
+VkSemaphore 
 dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
            const Dali_Brush* brush, Dali_LayerStack* stack,
-           Dali_UndoManager* um)
+           Dali_UndoManager* um, VkCommandBuffer cmdbuf)
 {
     assert(obdn_GetPrimCount(scene) == 1);
-    obdn_WaitForFence(engine->device, &engine->paintCommand.fence);
-    obdn_ResetCommand(&engine->paintCommand);
     VkSemaphore waitSemaphore = sync(engine, scene, stack, brush, um);
-    updateCommands(engine);
-    obdn_SubmitGraphicsCommand(
-        engine->instance, 0, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-        waitSemaphore == VK_NULL_HANDLE ? 0 : 1, &waitSemaphore, 1,
-        &engine->paintCommand.semaphore, engine->paintCommand.fence,
-        engine->paintCommand.buffer);
-    return engine->paintCommand.semaphore;
+    updateCommands(engine, cmdbuf);
+    return waitSemaphore;
 }
 
 void
@@ -1656,25 +1643,7 @@ dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory,
 
     dali_CreateLayerStack(memory, engine->imageA.size,
                           stack); // eventually will move this out
-    uint8_t maxUndoStacks, maxUndosPerStack;
-    switch (texSize)
-    {
-    case IMG_4K:
-        maxUndoStacks    = 4;
-        maxUndosPerStack = 8;
-        break;
-    case IMG_8K:
-        maxUndoStacks    = 2;
-        maxUndosPerStack = 8;
-        break;
-    case IMG_16K:
-        maxUndoStacks    = 1;
-        maxUndosPerStack = 8;
-        break;
-    default:
-        assert(0);
-    }
-    //onLayerChange(engine, stack, 0);
+    onLayerChange(engine, stack, 0);
 
     updateDescSetPaint(engine);
     updateDescSetComp(engine);

@@ -25,7 +25,6 @@ void dali_CreateLayerStack(Obdn_Memory* memory, const VkDeviceSize textureSize, 
             OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
 
     dali_CreateLayer(layerStack); // create one layer to start
-    dali_CreateLayer(layerStack); // create one layer to start
 }
 
 void dali_DestroyLayerStack(Dali_LayerStack* layerStack)

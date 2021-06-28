@@ -27,6 +27,9 @@ Dali_Brush*       brush;
 
 Shiv_Renderer* renderer;
 
+Obdn_Command renderCommand;
+Obdn_Command paintCommand;
+
 #define WWIDTH 666
 #define WHEIGHT 666
 
@@ -86,33 +89,59 @@ handleMouseEvent(const Hell_Event* ev, void* data)
 static VkSemaphore acquireSemaphore;
 
 static void
-draw(VkSemaphore waitSemaphore)
+draw(VkCommandBuffer cmdbuf)
 {
-    static Hell_Tick timeOfLastRender    = 0;
-    static Hell_Tick timeSinceLastRender = TARGET_RENDER_INTERVAL;
-    static uint64_t  frameCounter        = 0;
-    timeSinceLastRender                  = hell_Time() - timeOfLastRender;
-    //if (timeSinceLastRender < TARGET_RENDER_INTERVAL)
-    //    return;
-    timeOfLastRender    = hell_Time();
-    timeSinceLastRender = 0;
-
-    VkFence                 fence = VK_NULL_HANDLE;
-    const Obdn_Framebuffer* fb =
-        obdn_AcquireSwapchainFramebuffer(swapchain, &fence, &acquireSemaphore);
-    VkSemaphore waitSemas[] = {acquireSemaphore, waitSemaphore};
-    VkSemaphore s = shiv_Render(renderer, scene, fb, LEN(waitSemas), waitSemas);
-    obdn_PresentFrame(swapchain, 1, &s);
-
-    obdn_SceneClearDirt(scene);
 }
 
 void
 daliFrame(void)
 {
     dali_SetBrushPos(brush, 0.5, 0.5);
-    VkSemaphore semaphore = dali_Paint(engine, scene, brush, layerStack, undoManager);
-    draw(semaphore);
+    dali_ActivateBrush(brush);
+
+    obdn_WaitForFence(obdn_GetDevice(oInstance), &paintCommand.fence);
+
+    VkFence                 fence = VK_NULL_HANDLE;
+    const Obdn_Framebuffer* fb =
+        obdn_AcquireSwapchainFramebuffer(swapchain, &fence, &acquireSemaphore);
+
+    obdn_ResetCommand(&paintCommand);
+    obdn_BeginCommandBuffer(paintCommand.buffer);
+    VkSemaphore undoWaitSemaphore = dali_Paint(engine, scene, brush, layerStack, undoManager, paintCommand.buffer);
+    obdn_EndCommandBuffer(paintCommand.buffer);
+
+    obdn_ResetCommand(&renderCommand);
+    obdn_BeginCommandBuffer(renderCommand.buffer);
+    shiv_Render(renderer, scene, fb, renderCommand.buffer);
+    obdn_EndCommandBuffer(renderCommand.buffer);
+
+    obdn_SceneClearDirt(scene);
+
+    VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkSubmitInfo paintSubmit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .waitSemaphoreCount = undoWaitSemaphore == VK_NULL_HANDLE ? 0 : 1,
+        .signalSemaphoreCount = 1,
+        .pWaitDstStageMask = &stageFlags,
+        .pSignalSemaphores = &paintCommand.semaphore,
+        .pWaitSemaphores = &undoWaitSemaphore,
+        .pCommandBuffers = &paintCommand.buffer,
+    };
+    VkSubmitInfo renderSubmit = {
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .commandBufferCount = 1,
+        .waitSemaphoreCount = 1,
+        .signalSemaphoreCount = 1,
+        .pWaitDstStageMask = &stageFlags,
+        .pSignalSemaphores = &renderCommand.semaphore,
+        .pWaitSemaphores = &paintCommand.semaphore,
+        .pCommandBuffers = &renderCommand.buffer,
+    };
+    VkSubmitInfo submitinfos[] = {paintSubmit, renderSubmit};
+    obdn_SubmitGraphicsCommands(oInstance, 0, LEN(submitinfos), submitinfos, paintCommand.fence);
+    VkSemaphore waitSemas[] = {acquireSemaphore, renderCommand.semaphore};
+    obdn_PresentFrame(swapchain, LEN(waitSemas), waitSemas);
 }
 
 int
@@ -159,6 +188,8 @@ painterMain(const char* gmod)
                               brush, 4096, engine, layerStack);
 
     obdn_CreateSemaphore(obdn_GetDevice(oInstance), &acquireSemaphore);
+    paintCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
+    renderCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
     renderer = shiv_AllocRenderer();
     shiv_CreateRenderer(oInstance, oMemory, grimoire,
                         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
