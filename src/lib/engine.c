@@ -103,7 +103,8 @@ initPaintImages(Dali_Engine* engine)
     engine->imageA = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
         engine->textureFormat,
-        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+        VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | 
+        VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_STORAGE_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_NEAREST,
@@ -1518,7 +1519,7 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
         static const float unit = 0.001; // in screen space
         const float        brushDist =
             coal_Distance(engine->brushPos, engine->prevBrushPos);
-        const int splatCount = MIN(MAX(brushDist / unit, 1), 30);
+        const int splatCount = MIN(MAX(brushDist / unit, 10), 30);
         for (int i = 0; i < splatCount; i++)
         {
             float t     = (float)i / splatCount;
@@ -1576,6 +1577,33 @@ dali_SavePaintImage(Dali_Engine* engine)
         hell_Print("Bad extension.\n");
         return;
     }
+    obdn_SaveImage(engine->memory, &engine->imageA, fileType, strbuf);
+}
+
+static void 
+savePaintCmd(const Hell_Grimoire* grim, void* pengine)
+{
+    Dali_Engine* engine = pengine;
+    const char* strbuf = hell_GetArg(grim, 1);
+    uint8_t len = strlen(strbuf);
+    if (len < 5)
+    {
+        hell_Print("Filename too small. Must include extension.\n");
+        return;
+    }
+    const char* ext = strbuf + len - 3;
+    hell_Print("%s", ext);
+    Obdn_V_ImageFileType fileType;
+    if (strncmp(ext, "png", 3) == 0)
+        fileType = OBDN_V_IMAGE_FILE_TYPE_PNG;
+    else if (strncmp(ext, "jpg", 3) == 0)
+        fileType = OBDN_V_IMAGE_FILE_TYPE_JPG;
+    else
+    {
+        hell_Print("Bad extension.\n");
+        return;
+    }
+    vkDeviceWaitIdle(engine->device);
     obdn_SaveImage(engine->memory, &engine->imageA, fileType, strbuf);
 }
 
@@ -1643,7 +1671,6 @@ dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory,
 
     dali_CreateLayerStack(memory, engine->imageA.size,
                           stack); // eventually will move this out
-    onLayerChange(engine, stack, 0);
 
     updateDescSetPaint(engine);
     updateDescSetComp(engine);
@@ -1654,6 +1681,7 @@ dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory,
     obdn_BindPrimToMaterial(scene, (Obdn_PrimitiveHandle){0}, mat);
 
     hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
+    hell_AddCommand(grimoire, "savepaint", savePaintCmd, engine);
 
     hell_Print("PAINT: initialized.\n");
 }

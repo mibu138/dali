@@ -49,6 +49,7 @@ int dali_CreateLayer(Dali_LayerStack* layerStack)
     
     hell_DebugPrint(PAINT_DEBUG_TAG_LAYER, "Layer created!");
     hell_Print("Adding layer. There are now %d layers. Active layer is %d\n", layerStack->layerCount, layerStack->activeLayer);
+    layerStack->dirt |= LAYER_CHANGED_BIT;
     return curId;
 }
 
@@ -104,4 +105,9 @@ uint8_t* dali_CopyTextureToLayer(Dali_LayerStack* layerStack, const LayerId id, 
 Dali_LayerStack* dali_AllocLayerStack(void)
 {
     return hell_Malloc(sizeof(Dali_LayerStack));
+}
+
+void dali_LayerStackClearDirt(Dali_LayerStack* layerStack)
+{
+    layerStack->dirt = 0;
 }

@@ -33,3 +33,9 @@ void dali_ActivateBrush(Dali_Brush* brush)
     brush->active = true;
     brush->dirt |= BRUSH_BIT;
 }
+
+void dali_DeactivateBrush(Dali_Brush* brush)
+{
+    brush->active = false;
+    brush->dirt |= BRUSH_BIT;
+}

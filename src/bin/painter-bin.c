@@ -36,8 +36,21 @@ Obdn_Command paintCommand;
 static int windowWidth  = WWIDTH;
 static int windowHeight = WHEIGHT;
 
-bool
-handleMouseEvent(const Hell_Event* ev, void* data)
+static bool spaceDown = false;
+
+bool 
+handleKeyEvent(const Hell_Event* ev, void* data)
+{
+    uint8_t code = hell_GetEventKeyCode(ev);
+    if (code == HELL_KEY_SPACE)
+    {
+        spaceDown = !spaceDown;
+    }
+    return false;
+}
+
+static bool 
+handleViewEvent(const Hell_Event* ev, void* data)
 {
     int         mx     = ev->data.winData.data.mouseData.x;
     int         my     = ev->data.winData.data.mouseData.y;
@@ -84,14 +97,37 @@ handleMouseEvent(const Hell_Event* ev, void* data)
     return false;
 }
 
+static bool 
+handlePaintEvent(const Hell_Event* ev, void* data)
+{
+    int         mx     = ev->data.winData.data.mouseData.x;
+    int         my     = ev->data.winData.data.mouseData.y;
+    if (ev->type == HELL_EVENT_TYPE_MOUSEDOWN) 
+    {
+        dali_ActivateBrush(brush);
+        dali_SetBrushPos(brush, mx, my);
+    }
+    if (ev->type == HELL_EVENT_TYPE_MOTION)
+    {
+        dali_SetBrushPos(brush, mx, my);
+    }
+    if (ev->type == HELL_EVENT_TYPE_MOUSEUP)
+    {
+        dali_DeactivateBrush(brush);
+    }
+    return false;
+}
+
+bool
+handleMouseEvent(const Hell_Event* ev, void* data)
+{
+    if (spaceDown) return handleViewEvent(ev, data);
+    else return handlePaintEvent(ev, data);
+}
+
 #define TARGET_RENDER_INTERVAL 10000 // render every 30 ms
 
 static VkSemaphore acquireSemaphore;
-
-static void
-draw(VkCommandBuffer cmdbuf)
-{
-}
 
 void
 daliFrame(void)
@@ -105,10 +141,13 @@ daliFrame(void)
     const Obdn_Framebuffer* fb =
         obdn_AcquireSwapchainFramebuffer(swapchain, &fence, &acquireSemaphore);
 
+    VkSemaphore undoWaitSemaphore = VK_NULL_HANDLE;
     obdn_ResetCommand(&paintCommand);
     obdn_BeginCommandBuffer(paintCommand.buffer);
-    VkSemaphore undoWaitSemaphore = dali_Paint(engine, scene, brush, layerStack, undoManager, paintCommand.buffer);
+    undoWaitSemaphore = dali_Paint(engine, scene, brush, layerStack, undoManager, paintCommand.buffer);
     obdn_EndCommandBuffer(paintCommand.buffer);
+
+    obdn_SceneDirtyTextures(scene);
 
     obdn_ResetCommand(&renderCommand);
     obdn_BeginCommandBuffer(renderCommand.buffer);
@@ -116,8 +155,10 @@ daliFrame(void)
     obdn_EndCommandBuffer(renderCommand.buffer);
 
     obdn_SceneClearDirt(scene);
+    dali_LayerStackClearDirt(layerStack);
 
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkPipelineStageFlags renderStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     VkSubmitInfo paintSubmit = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1,
@@ -133,7 +174,7 @@ daliFrame(void)
         .commandBufferCount = 1,
         .waitSemaphoreCount = 1,
         .signalSemaphoreCount = 1,
-        .pWaitDstStageMask = &stageFlags,
+        .pWaitDstStageMask = &renderStageFlags,
         .pSignalSemaphores = &renderCommand.semaphore,
         .pWaitSemaphores = &paintCommand.semaphore,
         .pCommandBuffers = &renderCommand.buffer,
@@ -198,6 +239,7 @@ painterMain(const char* gmod)
                         obdn_GetSwapchainFramebuffers(swapchain), renderer);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);
+    hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT, hell_GetWindowID(window), handleKeyEvent, NULL);
     hell_Loop(hellmouth);
     return 0;
 }
