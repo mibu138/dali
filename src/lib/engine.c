@@ -1260,7 +1260,7 @@ updateView(Engine* engine, const Obdn_Scene* scene)
 {
     UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
     matrices->view        = obdn_GetCameraView(scene);
-    matrices->viewInv     = coal_Invert4x4(matrices->proj);
+    matrices->viewInv     = coal_Invert4x4(matrices->view);
 }
 
 static void
@@ -1519,7 +1519,7 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
         static const float unit = 0.001; // in screen space
         const float        brushDist =
             coal_Distance(engine->brushPos, engine->prevBrushPos);
-        const int splatCount = MIN(MAX(brushDist / unit, 10), 30);
+        const int splatCount = MIN(MAX(brushDist / unit, 1), 30);
         for (int i = 0; i < splatCount; i++)
         {
             float t     = (float)i / splatCount;

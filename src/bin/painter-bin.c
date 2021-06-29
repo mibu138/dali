@@ -2,6 +2,7 @@
 #include <hell/hell.h>
 #include <hell/platform.h>
 #include <hell/len.h>
+#include <hell/debug.h>
 #include <obsidian/obsidian.h>
 #include <obsidian/ui.h>
 #include <shiv/shiv.h>
@@ -49,6 +50,15 @@ handleKeyEvent(const Hell_Event* ev, void* data)
     return false;
 }
 
+bool 
+handleWindowResizeEvent(const Hell_Event* ev, void* data)
+{
+    if (ev->type != HELL_EVENT_TYPE_RESIZE) return false;
+    windowWidth = ev->data.winData.data.resizeData.width;
+    windowHeight = ev->data.winData.data.resizeData.height;
+    return false;
+}
+
 static bool 
 handleViewEvent(const Hell_Event* ev, void* data)
 {
@@ -59,6 +69,18 @@ handleViewEvent(const Hell_Event* ev, void* data)
     static bool pan    = false;
     static int  xprev  = 0;
     static int  yprev  = 0;
+    static bool spaceWasDown = false;
+    if (spaceDown && !spaceWasDown)
+    {
+        xprev = mx;
+        yprev = my;
+        spaceWasDown = true;
+    }
+    if (!spaceDown && spaceWasDown)
+    {
+        spaceWasDown = false;
+    }
+    if (!spaceDown) return false;
     if (ev->type == HELL_EVENT_TYPE_MOUSEDOWN)
     {
         switch (hell_GetEventButtonCode(ev))
@@ -100,8 +122,8 @@ handleViewEvent(const Hell_Event* ev, void* data)
 static bool 
 handlePaintEvent(const Hell_Event* ev, void* data)
 {
-    int         mx     = ev->data.winData.data.mouseData.x;
-    int         my     = ev->data.winData.data.mouseData.y;
+    float mx = (float)ev->data.winData.data.mouseData.x / windowWidth;
+    float my = (float)ev->data.winData.data.mouseData.y / windowHeight;
     if (ev->type == HELL_EVENT_TYPE_MOUSEDOWN) 
     {
         dali_ActivateBrush(brush);
@@ -121,8 +143,9 @@ handlePaintEvent(const Hell_Event* ev, void* data)
 bool
 handleMouseEvent(const Hell_Event* ev, void* data)
 {
-    if (spaceDown) return handleViewEvent(ev, data);
-    else return handlePaintEvent(ev, data);
+    handleViewEvent(ev, data);
+    if (!spaceDown) handlePaintEvent(ev, data);
+    return false;
 }
 
 #define TARGET_RENDER_INTERVAL 10000 // render every 30 ms
@@ -132,9 +155,6 @@ static VkSemaphore acquireSemaphore;
 void
 daliFrame(void)
 {
-    dali_SetBrushPos(brush, 0.5, 0.5);
-    dali_ActivateBrush(brush);
-
     obdn_WaitForFence(obdn_GetDevice(oInstance), &paintCommand.fence);
 
     VkFence                 fence = VK_NULL_HANDLE;
@@ -146,8 +166,6 @@ daliFrame(void)
     obdn_BeginCommandBuffer(paintCommand.buffer);
     undoWaitSemaphore = dali_Paint(engine, scene, brush, layerStack, undoManager, paintCommand.buffer);
     obdn_EndCommandBuffer(paintCommand.buffer);
-
-    obdn_SceneDirtyTextures(scene);
 
     obdn_ResetCommand(&renderCommand);
     obdn_BeginCommandBuffer(renderCommand.buffer);
@@ -199,6 +217,7 @@ painterMain(const char* gmod)
     hell_CreateWindow(eventQueue, WWIDTH, WHEIGHT, NULL, window);
     hell_CreateHellmouth(grimoire, eventQueue, console, 1, &window, daliFrame,
                          NULL, hellmouth);
+    hell_SetVar(grimoire, "maxFps", "1000", 0);
 
     oInstance = obdn_AllocInstance();
     oMemory   = obdn_AllocMemory();
@@ -225,6 +244,7 @@ painterMain(const char* gmod)
 
     dali_CreateUndoManager(oMemory, 4096 * 4096 * 4, 4, 4, undoManager);
     dali_CreateBrush(brush);
+    dali_SetBrushRadius(brush, 0.01);
     dali_CreateEngineAndStack(oInstance, oMemory, grimoire, undoManager, scene,
                               brush, 4096, engine, layerStack);
 
@@ -239,7 +259,10 @@ painterMain(const char* gmod)
                         obdn_GetSwapchainFramebuffers(swapchain), renderer);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);
-    hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT, hell_GetWindowID(window), handleKeyEvent, NULL);
+    hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT,
+                   hell_GetWindowID(window), handleKeyEvent, NULL);
+    hell_Subscribe(eventQueue, HELL_EVENT_MASK_WINDOW_BIT,
+                   hell_GetWindowID(window), handleWindowResizeEvent, NULL);
     hell_Loop(hellmouth);
     return 0;
 }

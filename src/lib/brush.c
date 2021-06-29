@@ -28,6 +28,12 @@ void dali_SetBrushPos(Dali_Brush* brush, float x, float y)
     brush->dirt |= BRUSH_BIT;
 }
 
+void dali_SetBrushRadius(Dali_Brush* brush, float r)
+{
+    brush->radius = r;
+    brush->dirt |= BRUSH_BIT;
+}
+
 void dali_ActivateBrush(Dali_Brush* brush)
 {
     brush->active = true;
