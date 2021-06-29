@@ -7,6 +7,7 @@
 #include <obsidian/ui.h>
 #include <shiv/shiv.h>
 #include <string.h>
+#include <stdlib.h>
 #include <unistd.h>
 
 Hell_EventQueue* eventQueue;
@@ -38,6 +39,16 @@ static int windowWidth  = WWIDTH;
 static int windowHeight = WHEIGHT;
 
 static bool spaceDown = false;
+
+void 
+setBrushColor(const Hell_Grimoire* grim, void* pbrush)
+{
+    Dali_Brush* brush = pbrush;
+    float r = atof(hell_GetArg(grim, 1));
+    float g = atof(hell_GetArg(grim, 2));
+    float b = atof(hell_GetArg(grim, 3));
+    dali_SetBrushColor(brush, r, g, b);
+}
 
 bool 
 handleKeyEvent(const Hell_Event* ev, void* data)
@@ -263,6 +274,7 @@ painterMain(const char* gmod)
                    hell_GetWindowID(window), handleKeyEvent, NULL);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_WINDOW_BIT,
                    hell_GetWindowID(window), handleWindowResizeEvent, NULL);
+    hell_AddCommand(grimoire, "brushcolor", setBrushColor, brush);
     hell_Loop(hellmouth);
     return 0;
 }
