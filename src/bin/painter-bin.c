@@ -32,8 +32,8 @@ Shiv_Renderer* renderer;
 Obdn_Command renderCommand;
 Obdn_Command paintCommand;
 
-#define WWIDTH 666
-#define WHEIGHT 666
+#define WWIDTH 888
+#define WHEIGHT 888
 
 static int windowWidth  = WWIDTH;
 static int windowHeight = WHEIGHT;
