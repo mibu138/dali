@@ -137,7 +137,7 @@ handlePaintEvent(const Hell_Event* ev, void* data)
     float my = (float)ev->data.winData.data.mouseData.y / windowHeight;
     if (ev->type == HELL_EVENT_TYPE_MOUSEDOWN) 
     {
-        dali_ActivateBrush(brush);
+        dali_SetBrushActive(brush);
         dali_SetBrushPos(brush, mx, my);
     }
     if (ev->type == HELL_EVENT_TYPE_MOTION)
@@ -146,7 +146,7 @@ handlePaintEvent(const Hell_Event* ev, void* data)
     }
     if (ev->type == HELL_EVENT_TYPE_MOUSEUP)
     {
-        dali_DeactivateBrush(brush);
+        dali_SetBrushInactive(brush);
     }
     return false;
 }
@@ -254,10 +254,11 @@ painterMain(const char* gmod)
     undoManager = dali_AllocUndo();
 
     dali_CreateUndoManager(oMemory, 4096 * 4096 * 4, 4, 4, undoManager);
-    dali_CreateBrush(brush);
+    dali_CreateBrush(grimoire, brush);
     dali_SetBrushRadius(brush, 0.01);
-    dali_CreateEngineAndStack(oInstance, oMemory, grimoire, undoManager, scene,
-                              brush, 4096, engine, layerStack);
+    dali_CreateLayerStack(oMemory, 4096 * 4096 * 4, layerStack);
+    dali_CreateEngine(oInstance, oMemory, undoManager, scene,
+                              brush, 4096, grimoire, engine);
 
     obdn_CreateSemaphore(obdn_GetDevice(oInstance), &acquireSemaphore);
     paintCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
@@ -274,7 +275,6 @@ painterMain(const char* gmod)
                    hell_GetWindowID(window), handleKeyEvent, NULL);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_WINDOW_BIT,
                    hell_GetWindowID(window), handleWindowResizeEvent, NULL);
-    hell_AddCommand(grimoire, "brushcolor", setBrushColor, brush);
     hell_Loop(hellmouth);
     return 0;
 }

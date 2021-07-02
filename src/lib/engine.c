@@ -1619,16 +1619,14 @@ dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
 }
 
 void
-dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory,
-                          Hell_Grimoire* grimoire, Dali_UndoManager* undo,
+dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
+                          Dali_UndoManager* undo,
                           Obdn_Scene* scene, const Dali_Brush* brush,
-                          const uint32_t texSize, Engine* engine,
-                          Dali_LayerStack* stack)
+                          const uint32_t texSize, Hell_Grimoire* grimoire, Engine* engine)
 {
     hell_Print("DALI Engine: starting initialization...\n");
     assert(obdn_GetPrimCount(scene) > 0);
     memset(engine, 0, sizeof(Engine));
-    memset(stack, 0, sizeof(Dali_LayerStack));
     engine->instance    = instance;
     engine->memory      = memory;
     engine->device      = obdn_GetDevice(instance);
@@ -1669,9 +1667,6 @@ dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory,
 
     assert(engine->imageA.size > 0);
 
-    dali_CreateLayerStack(memory, engine->imageA.size,
-                          stack); // eventually will move this out
-
     updateDescSetPaint(engine);
     updateDescSetComp(engine);
 
@@ -1680,8 +1675,11 @@ dali_CreateEngineAndStack(const Obdn_Instance* instance, Obdn_Memory* memory,
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
     obdn_BindPrimToMaterial(scene, (Obdn_PrimitiveHandle){0}, mat);
 
-    hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
-    hell_AddCommand(grimoire, "savepaint", savePaintCmd, engine);
+    if (grimoire)
+    {
+        hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
+        hell_AddCommand(grimoire, "savepaint", savePaintCmd, engine);
+    }
 
     hell_Print("PAINT: initialized.\n");
 }

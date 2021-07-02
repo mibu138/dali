@@ -13,15 +13,14 @@
 
 typedef struct Dali_Engine Dali_Engine;
 
-void        dali_CreateEngineAndStack(const Obdn_Instance* instance,
-                                      Obdn_Memory*         memory, Hell_Grimoire*,
-                                      Dali_UndoManager* undo, Obdn_Scene* sScene,
-                                      const Dali_Brush* brush, const uint32_t texSize,
-                                      Dali_Engine* engine, Dali_LayerStack* stack);
-// returns a semaphore to wait on... dont like this but thats a refactor for another day
+// grimoire is optional
+void dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
+                       Dali_UndoManager* undo, Obdn_Scene* scene,
+                       const Dali_Brush* brush, const uint32_t texSize,
+                       Hell_Grimoire* grimoire, Dali_Engine* engine);
 VkSemaphore dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
-           const Dali_Brush* brush, Dali_LayerStack* stack,
-           Dali_UndoManager* um, VkCommandBuffer cmdbuf);
+                       const Dali_Brush* brush, Dali_LayerStack* stack,
+                       Dali_UndoManager* um, VkCommandBuffer cmdbuf);
 void        dali_DestroyEngine(Dali_Engine* engine);
 
 Dali_Engine* dali_AllocEngine(void);
