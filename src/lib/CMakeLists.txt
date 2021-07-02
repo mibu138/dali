@@ -5,10 +5,7 @@ set(SRCS
     undo.c)
 
 set(PUBLIC_HEADERS
-    common.h
-    dtags.h
-    g_api.h
-    g_houdini_api.h
+    dali.h
     layer.h
     brush.h
     engine.h
