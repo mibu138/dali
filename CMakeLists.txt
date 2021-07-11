@@ -5,9 +5,8 @@ project(Dali VERSION 0.1.0)
 
 include(header)
 
-find_package(Obsidian REQUIRED FATAL_ERROR)
-find_package(Coal REQUIRED FATAL_ERROR)
-find_package(Shiv REQUIRED)
+find_package(Obsidian REQUIRED)
+find_package(Coal REQUIRED)
 
 add_subdirectory(cmake)
 add_subdirectory(src/lib)
