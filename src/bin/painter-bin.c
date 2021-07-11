@@ -1,4 +1,4 @@
-#include "engine.h"
+#include "dali.h"
 #include <hell/hell.h>
 #include <hell/platform.h>
 #include <hell/len.h>
@@ -253,10 +253,11 @@ painterMain(const char* gmod)
     brush       = dali_AllocBrush();
     undoManager = dali_AllocUndo();
 
-    dali_CreateUndoManager(oMemory, 4096 * 4096 * 4, 4, 4, undoManager);
+    u64 texSize = DALI_TEXSIZE(4096, 1, 4);
+    dali_CreateUndoManager(oMemory, texSize, 4, 4, undoManager);
     dali_CreateBrush(grimoire, brush);
     dali_SetBrushRadius(brush, 0.01);
-    dali_CreateLayerStack(oMemory, 4096 * 4096 * 4, layerStack);
+    dali_CreateLayerStack(oMemory, texSize, layerStack);
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, grimoire, engine);
 

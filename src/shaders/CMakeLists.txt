@@ -20,5 +20,5 @@ set(SRCS
     select.rmiss)
 
 include(author_shaders)
-author_shaders(dali_shaders painter
+author_shaders(dali_shaders dali
     SOURCES ${SRCS})

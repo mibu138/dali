@@ -1,2 +1,2 @@
 include(configure)
-configure(PainterConfig.cmake.in)
+configure(DaliConfig.cmake.in)
