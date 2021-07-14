@@ -1,3 +1,0 @@
-[submodule "cmake/cmake-common"]
-	path = cmake/cmake-common
-	url = https://github.com/mokchira/cmake-common
