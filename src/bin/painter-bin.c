@@ -40,6 +40,22 @@ static int windowHeight = WHEIGHT;
 
 static bool spaceDown = false;
 
+struct SceneMem {
+    Obdn_Scene* scene;
+    Obdn_Memory* mem;
+} sceneMem;
+
+static void setGeo(const Hell_Grimoire* grim, void* data)
+{
+    struct SceneMem* sm = data;
+    const char* geoType = hell_GetArg(grim, 1);
+    if (strcmp(geoType, "cube") == 0) 
+    {
+        Obdn_Geometry cube = obdn_CreateCube(sm->mem, true);
+        obdn_SceneSetGeoDirect(sm->scene, cube, 0);
+    }
+}
+
 void 
 setBrushColor(const Hell_Grimoire* grim, void* pbrush)
 {
@@ -276,6 +292,10 @@ painterMain(const char* gmod)
                    hell_GetWindowID(window), handleKeyEvent, NULL);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_WINDOW_BIT,
                    hell_GetWindowID(window), handleWindowResizeEvent, NULL);
+
+    sceneMem.scene = scene;
+    sceneMem.mem   = oMemory;
+    hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMem);
     hell_Loop(hellmouth);
     return 0;
 }

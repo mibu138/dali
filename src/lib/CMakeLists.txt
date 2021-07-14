@@ -17,3 +17,9 @@ author_library(dali
     SOURCES ${SRCS}
     PUBLIC_HEADERS ${PUBLIC_HEADERS}
     DEPS Obsidian::Obsidian)
+
+author_library(daliObj
+    TYPE OBJECT
+    EXPORT_NAME DaliObj
+    SOURCES ${SRCS}
+    DEPS Obsidian::ObsidianObj)

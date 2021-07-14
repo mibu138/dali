@@ -18,7 +18,7 @@
 #include <stdio.h>
 #include <string.h>
 
-#define SPVDIR "painter"
+#define SPVDIR "dali"
 
 enum { DESC_SET_PRIM, DESC_SET_PAINT, DESC_SET_COMP, DESC_SET_COUNT };
 
@@ -1625,7 +1625,6 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
                           const uint32_t texSize, Hell_Grimoire* grimoire, Engine* engine)
 {
     hell_Print("DALI Engine: starting initialization...\n");
-    assert(obdn_GetPrimCount(scene) > 0);
     memset(engine, 0, sizeof(Engine));
     engine->instance    = instance;
     engine->memory      = memory;
@@ -1636,8 +1635,6 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
 
     assert(texSize > 0);
     assert(texSize % 256 == 0);
-    assert(texSize == IMG_4K || texSize == IMG_8K ||
-           texSize == IMG_16K); // for now
 
     engine->curLayerId = 0;
     engine->graphicsQueueFamilyIndex =
@@ -1673,7 +1670,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     Obdn_TextureHandle  tex = obdn_SceneCreateTexture(scene, engine->imageA);
     Obdn_MaterialHandle mat = obdn_SceneCreateMaterial(
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
-    obdn_BindPrimToMaterial(scene, (Obdn_PrimitiveHandle){0}, mat);
+    obdn_BindPrimToMaterialDirect(scene, 0, mat);
 
     if (grimoire)
     {
