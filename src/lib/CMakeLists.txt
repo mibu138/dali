@@ -22,4 +22,5 @@ author_library(daliObj
     TYPE OBJECT
     EXPORT_NAME DaliObj
     SOURCES ${SRCS}
-    DEPS Obsidian::ObsidianObj)
+    PUBLIC_HEADERS ${PUBLIC_HEADERS}
+    DEPS Obsidian::Obsidian)
