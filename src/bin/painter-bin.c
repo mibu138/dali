@@ -40,20 +40,22 @@ static int windowHeight = WHEIGHT;
 
 static bool spaceDown = false;
 
-struct SceneMem {
+struct SceneMemEng {
     Obdn_Scene* scene;
     Obdn_Memory* mem;
-} sceneMem;
+    Dali_Engine* engine;
+} sceneMemEng;
 
 static void setGeo(const Hell_Grimoire* grim, void* data)
 {
-    struct SceneMem* sm = data;
+    struct SceneMemEng* sm = data;
     const char* geoType = hell_GetArg(grim, 1);
     if (strcmp(geoType, "cube") == 0) 
     {
         // TODO need to free the memory thats there...
         Obdn_Geometry cube = obdn_CreateCube(sm->mem, true);
-        obdn_SceneSetGeoDirect(sm->scene, cube, 0);
+        Obdn_Geometry old = obdn_SceneSwapPrimGeo(sm->scene, dali_GetActivePrim(sm->engine), cube);
+        obdn_FreeGeo(&old);
     }
 }
 
@@ -263,8 +265,6 @@ painterMain(const char* gmod)
                          swapchain);
     obdn_CreateScene(grimoire, oMemory, 0.01, 100, scene);
 
-    obdn_LoadPrim(scene, "../data/pig.tnt", COAL_MAT4_IDENT);
-
     engine      = dali_AllocEngine();
     layerStack  = dali_AllocLayerStack();
     brush       = dali_AllocBrush();
@@ -277,6 +277,9 @@ painterMain(const char* gmod)
     dali_CreateLayerStack(oMemory, texSize, layerStack);
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, grimoire, engine);
+
+    Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, "../data/pig.tnt", COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
+    dali_SetActivePrim(engine, prim);
 
     obdn_CreateSemaphore(obdn_GetDevice(oInstance), &acquireSemaphore);
     paintCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
@@ -294,9 +297,10 @@ painterMain(const char* gmod)
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_WINDOW_BIT,
                    hell_GetWindowID(window), handleWindowResizeEvent, NULL);
 
-    sceneMem.scene = scene;
-    sceneMem.mem   = oMemory;
-    hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMem);
+    sceneMemEng.scene = scene;
+    sceneMemEng.mem   = oMemory;
+    sceneMemEng.engine = engine;
+    hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMemEng);
     hell_Loop(hellmouth);
     return 0;
 }
