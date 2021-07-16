@@ -51,6 +51,7 @@ static void setGeo(const Hell_Grimoire* grim, void* data)
     const char* geoType = hell_GetArg(grim, 1);
     if (strcmp(geoType, "cube") == 0) 
     {
+        // TODO need to free the memory thats there...
         Obdn_Geometry cube = obdn_CreateCube(sm->mem, true);
         obdn_SceneSetGeoDirect(sm->scene, cube, 0);
     }
