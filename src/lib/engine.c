@@ -85,6 +85,9 @@ typedef struct Dali_Engine {
 
     Dali_LayerId curLayerId;
 
+    Obdn_MaterialHandle  activeMaterial;
+    Obdn_PrimitiveHandle activePrim;
+
     bool                 brushActive;
     Vec2                 prevBrushPos;
     Vec2                 brushPos;
@@ -1322,7 +1325,7 @@ updatePaintMode(Engine* engine, const Dali_Brush* b)
 static void
 updatePrim(Engine* engine, const Obdn_Scene* scene)
 {
-    Obdn_Primitive* prim = obdn_GetPrimitive(scene, 0);
+    Obdn_Primitive* prim = obdn_GetPrimitive(scene, engine->activePrim.id);
     assert(prim->geo.vertexRegion.size);
     if (engine->bottomLevelAS.bufferRegion.size)
         obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
@@ -1612,7 +1615,10 @@ dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
            const Dali_Brush* brush, Dali_LayerStack* stack,
            Dali_UndoManager* um, VkCommandBuffer cmdbuf)
 {
-    assert(obdn_GetPrimCount(scene) == 1);
+    if (obdn_GetPrimCount(scene) != 1)
+    {
+        hell_DPrint("Currently demanding 1 prim in the scene\n");
+    }
     VkSemaphore waitSemaphore = sync(engine, scene, stack, brush, um);
     updateCommands(engine, cmdbuf);
     return waitSemaphore;
@@ -1668,9 +1674,8 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     updateDescSetComp(engine);
 
     Obdn_TextureHandle  tex = obdn_SceneCreateTexture(scene, engine->imageA);
-    Obdn_MaterialHandle mat = obdn_SceneCreateMaterial(
+    engine->activeMaterial = obdn_SceneCreateMaterial(
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
-    obdn_BindPrimToMaterialDirect(scene, 0, mat);
 
     if (grimoire)
     {
@@ -1718,9 +1723,26 @@ dali_DestroyEngine(Engine* engine)
     obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
     obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
 }
-
 Dali_Engine*
 dali_AllocEngine(void)
 {
     return hell_Malloc(sizeof(Dali_Engine));
+}
+
+Obdn_MaterialHandle 
+dali_GetPaintMaterial(Engine* engine)
+{
+    return engine->activeMaterial;
+}
+
+void 
+dali_SetActivePrim(Engine* engine, Obdn_PrimitiveHandle prim)
+{
+    engine->activePrim = prim;
+}
+
+Obdn_PrimitiveHandle 
+dali_GetActivePrim(Dali_Engine* engine)
+{
+    return engine->activePrim;
 }

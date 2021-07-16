@@ -23,6 +23,11 @@ VkSemaphore dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
                        Dali_UndoManager* um, VkCommandBuffer cmdbuf);
 void        dali_DestroyEngine(Dali_Engine* engine);
 
+Obdn_MaterialHandle dali_GetPaintMaterial(Dali_Engine* engine);
+
+void dali_SetActivePrim(Dali_Engine* engine, Obdn_PrimitiveHandle prim);
+Obdn_PrimitiveHandle dali_GetActivePrim(Dali_Engine* engine);
+
 Dali_Engine* dali_AllocEngine(void);
 
 #endif /* end of include guard: PAINT_H */
