@@ -289,7 +289,7 @@ painterMain(const char* gmod)
                         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                         obdn_GetSwapchainFramebufferCount(swapchain),
-                        obdn_GetSwapchainFramebuffers(swapchain), renderer);
+                        obdn_GetSwapchainFramebuffers(swapchain), false, renderer);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT,
