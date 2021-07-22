@@ -12,6 +12,7 @@
 #define IMG_16K IMG_8K * 2
 
 typedef struct Dali_Engine Dali_Engine;
+typedef Obdn_V_Image Obdn_Image;
 
 // grimoire is optional
 void dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
@@ -29,5 +30,8 @@ void dali_SetActivePrim(Dali_Engine* engine, Obdn_PrimitiveHandle prim);
 Obdn_PrimitiveHandle dali_GetActivePrim(Dali_Engine* engine);
 
 Dali_Engine* dali_AllocEngine(void);
+
+Obdn_Image* 
+dali_GetTextureImage(Dali_Engine*);
 
 #endif /* end of include guard: PAINT_H */
