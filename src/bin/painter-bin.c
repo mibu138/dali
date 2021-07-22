@@ -285,11 +285,15 @@ painterMain(const char* gmod)
     paintCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
     renderCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
     renderer = shiv_AllocRenderer();
-    shiv_CreateRenderer(oInstance, oMemory, grimoire,
+    Shiv_Parms sp = {
+        .clearColor = (Vec4){0.1, 0.1, 0.1, 1.0},
+        .grim = grimoire
+    };
+    shiv_CreateRenderer(oInstance, oMemory, 
                         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                         obdn_GetSwapchainFramebufferCount(swapchain),
-                        obdn_GetSwapchainFramebuffers(swapchain), false, renderer);
+                        obdn_GetSwapchainFramebuffers(swapchain), &sp, renderer);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT,

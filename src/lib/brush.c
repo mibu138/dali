@@ -29,6 +29,20 @@ static void setBrushRadiusCmd(const Hell_Grimoire* grim, void* brushptr)
     dali_SetBrushRadius(brush, r);
 }
 
+static void setBrushOpacityCmd(const Hell_Grimoire* grim, void* brushptr)
+{
+    Dali_Brush* brush = brushptr;
+    float o = atof(hell_GetArg(grim, 1));
+    dali_SetBrushOpacity(brush, o);
+}
+
+static void setBrushFalloffCmd(const Hell_Grimoire* grim, void* brushptr)
+{
+    Dali_Brush* brush = brushptr;
+    float f = atof(hell_GetArg(grim, 1));
+    dali_SetBrushFalloff(brush, f);
+}
+
 static void setBrushActiveCmd(const Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
@@ -65,6 +79,8 @@ void dali_CreateBrush(Hell_Grimoire* grim, Dali_Brush *brush)
         hell_AddCommand(grim, "brushrad", setBrushRadiusCmd, brush);
         hell_AddCommand(grim, "brusha", setBrushActiveCmd, brush);
         hell_AddCommand(grim, "brushia", setBrushInactiveCmd, brush);
+        hell_AddCommand(grim, "brushopac", setBrushOpacityCmd, brush);
+        hell_AddCommand(grim, "brushfall", setBrushFalloffCmd, brush);
     }
 }
 
@@ -92,6 +108,18 @@ void dali_SetBrushRadius(Dali_Brush* brush, float r)
 void dali_SetBrushActive(Dali_Brush* brush)
 {
     brush->active = true;
+    brush->dirt |= BRUSH_BIT;
+}
+
+void dali_SetBrushOpacity(Dali_Brush* brush, float o)
+{
+    brush->opacity = o;
+    brush->dirt |= BRUSH_BIT;
+}
+
+void dali_SetBrushFalloff(Dali_Brush* brush, float f)
+{
+    brush->falloff = f;
     brush->dirt |= BRUSH_BIT;
 }
 
