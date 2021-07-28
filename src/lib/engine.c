@@ -18,7 +18,11 @@
 #include <stdio.h>
 #include <string.h>
 
+#ifdef SPVDIR_PREFIX 
+#define SPVDIR SPVDIR_PREFIX "/dali"
+#else
 #define SPVDIR "dali"
+#endif
 
 enum { DESC_SET_PRIM, DESC_SET_PAINT, DESC_SET_COMP, DESC_SET_COUNT };
 
