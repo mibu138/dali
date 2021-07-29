@@ -7,7 +7,7 @@ FetchContent_GetProperties(cmake-common)
 if(NOT ${cmake-common_POPULATED})
     FetchContent_Declare(
         cmake-common
-        GIT_REPOSITORY https://github.com/mokchira/cmake-common
+        GIT_REPOSITORY /home/michaelb/dev/cmake-common
         GIT_TAG origin/master)
     FetchContent_Populate(cmake-common)
 endif()
