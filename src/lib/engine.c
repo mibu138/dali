@@ -19,7 +19,7 @@
 #include <string.h>
 
 #ifdef SPVDIR_PREFIX 
-#define SPVDIR SPVDIR_PREFIX "/dali"
+#define SPVDIR SPVDIR_PREFIX "dali"
 #else
 #define SPVDIR "dali"
 #endif
