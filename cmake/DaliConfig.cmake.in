@@ -1,8 +1,0 @@
-@PACKAGE_INIT@
-include(CMakeFindDependencyMacro)
-include("${CMAKE_CURRENT_LIST_DIR}/@PROJECT_NAME@Targets.cmake")
-find_dependency(Vulkan REQUIRED)
-find_dependency(Obsidian REQUIRED)
-find_dependency(Coal REQUIRED)
-check_required_components("@PROJECT_NAME@")
-set(Dali_FOUND TRUE)

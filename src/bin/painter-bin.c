@@ -1,4 +1,4 @@
-#include "dali.h"
+#include "dali/dali.h"
 #include <hell/hell.h>
 #include <hell/platform.h>
 #include <hell/len.h>

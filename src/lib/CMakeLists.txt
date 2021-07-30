@@ -4,23 +4,15 @@ set(SRCS
     brush.c
     undo.c)
 
-set(PUBLIC_HEADERS
-    dali.h
-    layer.h
-    brush.h
-    engine.h
-    undo.h)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-include(author_library)
-author_library(dali
-    EXPORT_NAME Dali
-    SOURCES ${SRCS}
-    PUBLIC_HEADERS ${PUBLIC_HEADERS}
-    DEPS Obsidian::Obsidian)
-
-author_library(daliObj
-    TYPE OBJECT
-    EXPORT_NAME DaliObj
-    SOURCES ${SRCS}
-    PUBLIC_HEADERS ${PUBLIC_HEADERS}
-    DEPS Obsidian::Obsidian)
+add_library(daliObj OBJECT)
+add_library(dali    SHARED)
+target_sources(daliObj PRIVATE ${SRCS})
+target_include_directories(daliObj 
+    PRIVATE "../include/dali" 
+    INTERFACE "../include")
+target_link_libraries(daliObj PUBLIC Obsidian::ObsidianObj)
+target_link_libraries(dali PUBLIC daliObj Obsidian::Obsidian)
+add_library(Dali::Dali ALIAS dali)
+add_library(Dali::DaliObj ALIAS daliObj)
