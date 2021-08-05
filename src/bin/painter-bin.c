@@ -254,7 +254,16 @@ painterMain(const char* gmod)
     swapchain = obdn_AllocSwapchain();
     ui        = obdn_AllocUI();
     scene     = obdn_AllocScene();
-    obdn_CreateInstance(true, true, 0, NULL, oInstance);
+    const char* ix[] = {
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_KHR_XCB_SURFACE_EXTENSION_NAME
+    };
+    Obdn_InstanceParms ip = {
+        .enableRayTracing = true,
+        .enabledInstanceExentensionCount = LEN(ix),
+        .ppEnabledInstanceExtensionNames = ix
+    };
+    obdn_CreateInstance(&ip, oInstance);
     obdn_CreateMemory(oInstance, 1000, 100, 1000, 2000, 0, oMemory);
     Obdn_AovInfo depthAov = {.aspectFlags = VK_IMAGE_ASPECT_DEPTH_BIT,
                              .usageFlags =

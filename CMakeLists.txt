@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.17)
 
 project(Dali VERSION 0.1.0)
 
+option(DALI_SKIP_EXECUTABLE "Skip building executable" OFF)
+
 set(SHADER_BUILD_DIR ${CMAKE_BINARY_DIR}/shaders)
 
 include(FetchContent)
@@ -21,10 +23,12 @@ set(git_base_url /home/michaelb/dev)
 FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY ${git_base_url}/obsidian 
-    GIT_TAG master)
+    GIT_TAG dev)
 
 FetchContent_MakeAvailable(obsidian)
 
 add_subdirectory(src/lib)
 add_subdirectory(src/shaders)
-add_subdirectory(src/bin)
+if(NOT ${DALI_SKIP_EXECUTABLE})
+    add_subdirectory(src/bin)
+endif()
