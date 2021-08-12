@@ -8,7 +8,6 @@
 #include <shiv/shiv.h>
 #include <string.h>
 #include <stdlib.h>
-#include <unistd.h>
 
 Hell_EventQueue* eventQueue;
 Hell_Grimoire*   grimoire;
@@ -252,16 +251,26 @@ painterMain(const char* gmod)
     oInstance = obdn_AllocInstance();
     oMemory   = obdn_AllocMemory();
     swapchain = obdn_AllocSwapchain();
-    ui        = obdn_AllocUI();
     scene     = obdn_AllocScene();
-    const char* ix[] = {
+    const char* testgeopath;
+    #if UNIX
+    const char* instanceExtensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
         VK_KHR_XCB_SURFACE_EXTENSION_NAME
     };
+    testgeopath = "../flip-uv.tnt";
+    #elif WIN32
+    const char* instanceExtensions[] = {
+        VK_KHR_SURFACE_EXTENSION_NAME,
+        VK_KHR_WIN32_SURFACE_EXTENSION_NAME
+    };
+    obdn_SetRuntimeSpvPrefix("C:/dev/dali/build/shaders/");
+    testgeopath = "C:/dev/dali/data/flip-uv.tnt";
+    #endif
     Obdn_InstanceParms ip = {
         .enableRayTracing = true,
-        .enabledInstanceExentensionCount = LEN(ix),
-        .ppEnabledInstanceExtensionNames = ix
+        .enabledInstanceExentensionCount = LEN(instanceExtensions),
+        .ppEnabledInstanceExtensionNames = instanceExtensions
     };
     obdn_CreateInstance(&ip, oInstance);
     obdn_CreateMemory(oInstance, 1000, 100, 1000, 2000, 0, oMemory);
@@ -287,7 +296,7 @@ painterMain(const char* gmod)
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, grimoire, engine);
 
-    Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, "../data/pig.tnt", COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
+    Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
     dali_SetActivePrim(engine, prim);
 
     obdn_CreateSemaphore(obdn_GetDevice(oInstance), &acquireSemaphore);
@@ -318,25 +327,17 @@ painterMain(const char* gmod)
     return 0;
 }
 
-#ifdef UNIX
-int
-main(int argc, char* argv[])
+#ifdef WIN32
+int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
+    _In_ PSTR lpCmdLine, _In_ int nCmdShow)
 {
-    if (argc > 1)
-        painterMain(argv[1]);
-    else
-        painterMain("standalone");
+    hell_SetHinstance(hInstance);
+    painterMain(NULL);
+    return 0;
 }
-#endif
-
-#ifdef WINDOWS
-#include <hell/win_local.h>
-int WINAPI
-WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine,
-        int nCmdShow)
+#elif UNIX
+int main(int argc, char* argv[])
 {
-    printf("Start");
-    winVars.instance = hInstance;
-    return painterMain("standalone");
+    hellmain();
 }
 #endif

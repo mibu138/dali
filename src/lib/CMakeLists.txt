@@ -16,3 +16,7 @@ target_link_libraries(daliObj PUBLIC Obsidian::ObsidianObj)
 target_link_libraries(dali PUBLIC daliObj Obsidian::Obsidian)
 add_library(Dali::Dali ALIAS dali)
 add_library(Dali::DaliObj ALIAS daliObj)
+
+if(WIN32)
+set_target_properties(dali PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+endif()
