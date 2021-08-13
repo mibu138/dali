@@ -15,7 +15,7 @@ include(FetchContent)
 FetchContent_Declare(
     cmake-common
     GIT_REPOSITORY ${git_base_url}/cmake-common
-    GIT_TAG win)
+    GIT_TAG master)
 FetchContent_GetProperties(cmake-common)
 if(NOT ${cmake-common_POPULATED})
     FetchContent_Populate(cmake-common)
@@ -27,7 +27,7 @@ include(header)
 FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY ${git_base_url}/obsidian 
-    GIT_TAG win)
+    GIT_TAG master)
 
 FetchContent_MakeAvailable(obsidian)
 

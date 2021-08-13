@@ -2,7 +2,7 @@
 FetchContent_Declare(
     shiv
     GIT_REPOSITORY ${git_base_url}/shiv
-    GIT_TAG win)
+    GIT_TAG master)
 
 FetchContent_MakeAvailable(shiv)
 

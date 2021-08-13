@@ -258,7 +258,7 @@ painterMain(const char* gmod)
         VK_KHR_SURFACE_EXTENSION_NAME,
         VK_KHR_XCB_SURFACE_EXTENSION_NAME
     };
-    testgeopath = "../flip-uv.tnt";
+    testgeopath = "../data/flip-uv.tnt";
     #elif WIN32
     const char* instanceExtensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
@@ -338,6 +338,6 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 #elif UNIX
 int main(int argc, char* argv[])
 {
-    hellmain();
+    painterMain(NULL);
 }
 #endif
