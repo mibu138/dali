@@ -13,6 +13,7 @@ target_include_directories(daliObj
     PRIVATE "../include/dali" 
     INTERFACE "../include")
 target_link_libraries(daliObj PUBLIC Obsidian::ObsidianObj)
+target_compile_definitions(daliObj PUBLIC COAL_SIMPLE_TYPE_NAMES)
 target_link_libraries(dali PUBLIC daliObj Obsidian::Obsidian)
 add_library(Dali::Dali ALIAS dali)
 add_library(Dali::DaliObj ALIAS daliObj)
