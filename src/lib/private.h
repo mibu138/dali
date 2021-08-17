@@ -64,7 +64,9 @@ typedef uint16_t Dali_LayerId;
 typedef Obdn_V_BufferRegion BufferRegion;
 typedef Dali_LayerId L_LayerId;
 
+#ifndef WIN32
 _Static_assert(MAX_UNDOS % 2 == 0, "MAX_UNDOS must be a multiple of 2 for bottom wrap around to work");
+#endif
 
 typedef struct UndoStack {
     uint8_t              trl; // cur cannot cross this
