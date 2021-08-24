@@ -76,6 +76,17 @@ handleKeyEvent(const Hell_Event* ev, void* data)
     {
         spaceDown = !spaceDown;
     }
+    if (code == HELL_KEY_E) //erase
+    {
+        if (ev->type == HELL_EVENT_TYPE_KEYDOWN)
+        {
+            Dali_PaintMode m = dali_GetBrushPaintMode(brush);
+            if (m != DALI_PAINT_MODE_ERASE)
+                dali_SetBrushMode(brush, DALI_PAINT_MODE_ERASE);
+            else 
+                dali_SetBrushMode(brush, DALI_PAINT_MODE_OVER);
+        }
+    }
     return false;
 }
 
@@ -203,6 +214,7 @@ daliFrame(void)
 
     obdn_SceneClearDirt(scene);
     dali_LayerStackClearDirt(layerStack);
+    dali_BrushClearDirt(brush);
 
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkPipelineStageFlags renderStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -312,17 +324,18 @@ painterMain(const char* gmod)
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                         obdn_GetSwapchainFramebufferCount(swapchain),
                         obdn_GetSwapchainFramebuffers(swapchain), &sp, renderer);
-    hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
-                   hell_GetWindowID(window), handleMouseEvent, NULL);
-    hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT,
-                   hell_GetWindowID(window), handleKeyEvent, NULL);
-    hell_Subscribe(eventQueue, HELL_EVENT_MASK_WINDOW_BIT,
-                   hell_GetWindowID(window), handleWindowResizeEvent, NULL);
 
     sceneMemEng.scene = scene;
     sceneMemEng.mem   = oMemory;
     sceneMemEng.engine = engine;
     hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMemEng);
+
+    hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
+                   hell_GetWindowID(window), handleMouseEvent, NULL);
+    hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT,
+                   hell_GetWindowID(window), handleKeyEvent, &sceneMemEng);
+    hell_Subscribe(eventQueue, HELL_EVENT_MASK_WINDOW_BIT,
+                   hell_GetWindowID(window), handleWindowResizeEvent, NULL);
     hell_Loop(hellmouth);
     return 0;
 }

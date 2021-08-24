@@ -4,9 +4,13 @@
 #include <obsidian/def.h>
 #include <obsidian/video.h>
 #include "obsidian/memory.h"
+#include "brush.h"
 #define MAX_LAYERS 64
 
 typedef uint32_t DirtMask;
+
+#define PAINT_MODE_OVER  DALI_PAINT_MODE_OVER
+#define PAINT_MODE_ERASE DALI_PAINT_MODE_ERASE
 
 typedef enum {
     BRUSH_BIT         = (DirtMask)1 << 1,
@@ -37,10 +41,7 @@ typedef struct Dali_LayerStack{
     DirtMask       dirt;
 } Dali_LayerStack;
 
-typedef enum {
-    PAINT_MODE_OVER,
-    PAINT_MODE_ERASE
-} PaintMode;
+typedef Dali_PaintMode PaintMode;
 
 typedef struct Dali_Brush {
     float         x;

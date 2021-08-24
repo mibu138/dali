@@ -4,7 +4,6 @@
 #include "private.h"
 #include <stdlib.h>
 
-
 static void setBrushPosCmd(const Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
@@ -127,4 +126,21 @@ void dali_SetBrushInactive(Dali_Brush* brush)
 {
     brush->active = false;
     brush->dirt |= BRUSH_BIT;
+}
+
+PaintMode dali_GetBrushPaintMode(const Dali_Brush* brush)
+{
+    return brush->mode;
+}
+
+
+void dali_SetBrushMode(Dali_Brush* brush, Dali_PaintMode mode)
+{
+    brush->mode = mode;
+    brush->dirt |= PAINT_MODE_BIT;
+}
+
+void dali_BrushClearDirt(Dali_Brush* brush)
+{
+    brush->dirt = 0;
 }
