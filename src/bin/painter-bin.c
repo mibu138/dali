@@ -58,6 +58,16 @@ static void setGeo(const Hell_Grimoire* grim, void* data)
     }
 }
 
+static void rmGeo(const Hell_Grimoire* grim, void* data)
+{
+    struct SceneMemEng* sm = data;
+    if (obdn_GetPrimCount(sm->scene) > 0)
+    {
+        Obdn_PrimitiveHandle h = dali_GetActivePrim(sm->engine);
+        obdn_SceneRemovePrim(sm->scene, h);
+    }
+}
+
 void 
 setBrushColor(const Hell_Grimoire* grim, void* pbrush)
 {
@@ -212,7 +222,7 @@ daliFrame(void)
     shiv_Render(renderer, scene, fb, renderCommand.buffer);
     obdn_EndCommandBuffer(renderCommand.buffer);
 
-    obdn_SceneClearDirt(scene);
+    obdn_SceneEndFrame(scene);
     dali_LayerStackClearDirt(layerStack);
     dali_BrushClearDirt(brush);
 
@@ -329,6 +339,7 @@ painterMain(const char* gmod)
     sceneMemEng.mem   = oMemory;
     sceneMemEng.engine = engine;
     hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMemEng);
+    hell_AddCommand(grimoire, "rmgeo", rmGeo, &sceneMemEng);
 
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);

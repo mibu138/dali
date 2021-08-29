@@ -594,7 +594,7 @@ updateDescSetPrim(Engine* engine, const Obdn_Scene* scene)
         .accelerationStructureCount = 1,
         .pAccelerationStructures    = &engine->topLevelAS.handle};
 
-    Obdn_Primitive* prim = obdn_GetPrimitive(scene, 0);
+    Obdn_Primitive* prim = obdn_GetPrimitive(scene, engine->activePrim.id);
 
     VkDescriptorBufferInfo uvBufInfo = {
         .offset = obdn_GetAttrOffset(&prim->geo, "uv"),
@@ -1332,19 +1332,38 @@ updatePaintMode(Engine* engine, const Dali_Brush* b)
 static void
 updatePrim(Engine* engine, const Obdn_Scene* scene)
 {
+    assert(engine->activePrim.id != 0);
     Obdn_Primitive* prim = obdn_GetPrimitive(scene, engine->activePrim.id);
     assert(prim->geo.vertexRegion.size);
-    if (engine->bottomLevelAS.bufferRegion.size)
+    if (prim->dirt & OBDN_PRIM_UPDATE_REMOVED)
+    {
         obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
-    if (engine->topLevelAS.bufferRegion.size)
         obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
+        engine->activePrim = NULL_PRIM;
+        return;
+    }
+    if (prim->dirt & OBDN_PRIM_UPDATE_ADDED)
+    {
+        Coal_Mat4 xform = COAL_MAT4_IDENT;
+        obdn_BuildBlas(engine->memory, &prim->geo, &engine->bottomLevelAS);
+        obdn_BuildTlas(engine->memory, 1, &engine->bottomLevelAS, &xform,
+                       &engine->topLevelAS);
 
-    Coal_Mat4 xform = COAL_MAT4_IDENT;
-    obdn_BuildBlas(engine->memory, &prim->geo, &engine->bottomLevelAS);
-    obdn_BuildTlas(engine->memory, 1, &engine->bottomLevelAS, &xform,
-                   &engine->topLevelAS);
+        updateDescSetPrim(engine, scene);
+        return;
+    }
+    if (prim->dirt & OBDN_PRIM_UPDATE_TOPOLOGY_CHANGED)
+    {
+        obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
+        obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
+        Coal_Mat4 xform = COAL_MAT4_IDENT;
+        obdn_BuildBlas(engine->memory, &prim->geo, &engine->bottomLevelAS);
+        obdn_BuildTlas(engine->memory, 1, &engine->bottomLevelAS, &xform,
+                       &engine->topLevelAS);
 
-    updateDescSetPrim(engine, scene);
+        updateDescSetPrim(engine, scene);
+        return;
+    }
 }
 
 static void
@@ -1622,10 +1641,7 @@ dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
            const Dali_Brush* brush, Dali_LayerStack* stack,
            Dali_UndoManager* um, VkCommandBuffer cmdbuf)
 {
-    if (obdn_GetPrimCount(scene) != 1)
-    {
-        hell_DPrint("Currently demanding 1 prim in the scene\n");
-    }
+    if (engine->activePrim.id == 0) return VK_NULL_HANDLE;
     VkSemaphore waitSemaphore = sync(engine, scene, stack, brush, um);
     updateCommands(engine, cmdbuf);
     return waitSemaphore;
