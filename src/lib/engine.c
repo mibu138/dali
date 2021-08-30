@@ -1334,7 +1334,6 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
 {
     assert(engine->activePrim.id != 0);
     Obdn_Primitive* prim = obdn_GetPrimitive(scene, engine->activePrim.id);
-    assert(prim->geo.vertexRegion.size);
     if (prim->dirt & OBDN_PRIM_UPDATE_REMOVED)
     {
         obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
@@ -1342,6 +1341,7 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
         engine->activePrim = NULL_PRIM;
         return;
     }
+    assert(prim->geo.vertexRegion.size);
     if (prim->dirt & OBDN_PRIM_UPDATE_ADDED)
     {
         Coal_Mat4 xform = COAL_MAT4_IDENT;
@@ -1641,8 +1641,8 @@ dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
            const Dali_Brush* brush, Dali_LayerStack* stack,
            Dali_UndoManager* um, VkCommandBuffer cmdbuf)
 {
-    if (engine->activePrim.id == 0) return VK_NULL_HANDLE;
     VkSemaphore waitSemaphore = sync(engine, scene, stack, brush, um);
+    if (engine->activePrim.id == 0) return waitSemaphore;
     updateCommands(engine, cmdbuf);
     return waitSemaphore;
 }

@@ -53,8 +53,17 @@ static void setGeo(const Hell_Grimoire* grim, void* data)
     {
         // TODO need to free the memory thats there...
         Obdn_Geometry cube = obdn_CreateCube(sm->mem, true);
-        Obdn_Geometry old = obdn_SceneSwapPrimGeo(sm->scene, dali_GetActivePrim(sm->engine), cube);
-        obdn_FreeGeo(&old);
+        Obdn_PrimitiveHandle ap = dali_GetActivePrim(sm->engine);
+        if (ap.id == 0)
+        {
+            Obdn_PrimitiveHandle np = obdn_AddPrim(sm->scene, cube, COAL_MAT4_IDENT, dali_GetPaintMaterial(sm->engine));
+            dali_SetActivePrim(sm->engine, np);
+        }
+        else 
+        {
+            Obdn_Geometry old = obdn_SceneSwapPrimGeo(sm->scene, dali_GetActivePrim(sm->engine), cube);
+            obdn_FreeGeo(&old);
+        }
     }
 }
 
