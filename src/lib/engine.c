@@ -585,9 +585,6 @@ initDescSetsAndPipeLayouts(Engine* engine)
 static void
 updateDescSetPrim(Engine* engine, const Obdn_Scene* scene)
 {
-    hell_DPrint("UPADATING DESC_SET_PRIM\n");
-    hell_DPrint("UPADATING DESC_SET_PRIM\n");
-    hell_DPrint("UPADATING DESC_SET_PRIM\n");
     VkWriteDescriptorSetAccelerationStructureKHR asInfo = {
         .sType =
             VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET_ACCELERATION_STRUCTURE_KHR,

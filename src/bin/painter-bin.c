@@ -339,6 +339,7 @@ painterMain(const char* gmod)
 
     Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
     dali_SetActivePrim(engine, prim);
+    dali_LayerBackup(layerStack); // initial backup
 
     obdn_CreateSemaphore(obdn_GetDevice(oInstance), &acquireSemaphore);
     paintCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
