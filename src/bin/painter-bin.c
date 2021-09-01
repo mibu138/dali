@@ -106,6 +106,13 @@ handleKeyEvent(const Hell_Event* ev, void* data)
                 dali_SetBrushMode(brush, DALI_PAINT_MODE_OVER);
         }
     }
+    if (code == HELL_KEY_Z) //erase
+    {
+        if (ev->type == HELL_EVENT_TYPE_KEYDOWN)
+        {
+            hell_Print("Undo key hit\n");
+        }
+    }
     return false;
 }
 
