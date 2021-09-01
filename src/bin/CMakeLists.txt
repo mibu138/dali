@@ -1,7 +1,7 @@
 
 FetchContent_Declare(
     shiv
-    GIT_REPOSITORY ${git_base_url}/shiv
+    GIT_REPOSITORY ${GIT_BASE_URL}/shiv
     GIT_TAG master)
 set(SHIV_SKIP_EXAMPLES TRUE)
 
