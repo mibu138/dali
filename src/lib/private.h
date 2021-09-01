@@ -57,7 +57,7 @@ typedef struct Dali_Brush {
     DirtMask      dirt;
 } Dali_Brush;
 
-#define MAX_UNDOS 8
+#define MAX_UNDOS 32
 #define MAX_STACKS 4
 
 typedef uint16_t Dali_LayerId;

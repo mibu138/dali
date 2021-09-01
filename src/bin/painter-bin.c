@@ -330,7 +330,7 @@ painterMain(const char* gmod)
     undoManager = dali_AllocUndo();
 
     u64 texSize = DALI_TEXSIZE(4096, 1, 4);
-    dali_CreateUndoManager(oMemory, texSize, 4, 4, undoManager);
+    dali_CreateUndoManager(oMemory, texSize, 1, 16, undoManager);
     dali_CreateBrush(grimoire, brush);
     dali_SetBrushRadius(brush, 0.01);
     dali_CreateLayerStack(oMemory, texSize, layerStack);
