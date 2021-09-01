@@ -20,4 +20,7 @@ bool dali_LayerInUndoCache(Dali_UndoManager* undo, Dali_LayerId layer);
 Dali_UndoManager* dali_AllocUndo(void);
 void dali_UpdateUndo(Dali_UndoManager* undo, Dali_LayerStack* layerStack);
 
+void dali_Undo(Dali_UndoManager* undo);
+void dali_UndoClearDirt(Dali_UndoManager* undo);
+
 #endif /* end of include guard: UNDO_H */

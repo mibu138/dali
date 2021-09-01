@@ -111,6 +111,7 @@ handleKeyEvent(const Hell_Event* ev, void* data)
         if (ev->type == HELL_EVENT_TYPE_KEYDOWN)
         {
             hell_Print("Undo key hit\n");
+            dali_Undo(undoManager);
         }
     }
     return false;
@@ -202,6 +203,7 @@ handlePaintEvent(const Hell_Event* ev, void* data)
     if (ev->type == HELL_EVENT_TYPE_MOUSEUP)
     {
         dali_SetBrushInactive(brush);
+        dali_LayerBackup(layerStack);
     }
     return false;
 }
@@ -221,6 +223,8 @@ static VkSemaphore acquireSemaphore;
 void
 daliFrame(void)
 {
+    dali_UpdateUndo(undoManager, layerStack);
+
     obdn_WaitForFence(obdn_GetDevice(oInstance), &paintCommand.fence);
 
     VkFence                 fence = VK_NULL_HANDLE;
@@ -239,8 +243,7 @@ daliFrame(void)
     obdn_EndCommandBuffer(renderCommand.buffer);
 
     obdn_SceneEndFrame(scene);
-    dali_LayerStackClearDirt(layerStack);
-    dali_BrushClearDirt(brush);
+    dali_EndFrame(layerStack, brush, undoManager);
 
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkPipelineStageFlags renderStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;

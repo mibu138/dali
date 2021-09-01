@@ -21,6 +21,7 @@ bool        dali_DecrementLayer(Dali_LayerStack*, Dali_LayerId* const id);
 // returns address to the layer data
 uint8_t*    dali_CopyTextureToLayer(Dali_LayerStack*, const Dali_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
 void dali_LayerStackClearDirt(Dali_LayerStack* layerStack);
+void dali_LayerBackup(Dali_LayerStack* layerStack);
 
 Dali_LayerStack* dali_AllocLayerStack(void);
 

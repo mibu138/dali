@@ -142,3 +142,13 @@ Dali_UndoManager* dali_AllocUndo(void)
 {
     return hell_Malloc(sizeof(Dali_UndoManager));
 }
+
+void dali_Undo(UndoManager* undo)
+{
+    undo->dirt |= UNDO_BIT;
+}
+
+void dali_UndoClearDirt(UndoManager* undo)
+{
+    undo->dirt = 0;
+}

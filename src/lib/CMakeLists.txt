@@ -2,7 +2,8 @@ set(SRCS
     layer.c
     engine.c 
     brush.c
-    undo.c)
+    undo.c
+    dali.c)
 
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 

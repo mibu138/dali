@@ -111,3 +111,8 @@ void dali_LayerStackClearDirt(Dali_LayerStack* layerStack)
 {
     layerStack->dirt = 0;
 }
+
+void dali_LayerBackup(Dali_LayerStack* layerStack)
+{
+    layerStack->dirt |= LAYER_BACKUP_BIT;
+}
