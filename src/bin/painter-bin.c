@@ -274,7 +274,7 @@ daliFrame(void)
 }
 
 int
-painterMain(const char* gmod)
+painterMain(const char* modelpath)
 {
     eventQueue = hell_AllocEventQueue();
     grimoire   = hell_AllocGrimoire();
@@ -299,7 +299,7 @@ painterMain(const char* gmod)
         VK_KHR_SURFACE_EXTENSION_NAME,
         VK_KHR_XCB_SURFACE_EXTENSION_NAME
     };
-    testgeopath = "../data/flip-uv.tnt";
+    testgeopath = modelpath;
     #elif WIN32
     const char* instanceExtensions[] = {
         VK_KHR_SURFACE_EXTENSION_NAME,
@@ -382,6 +382,11 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 #elif UNIX
 int main(int argc, char* argv[])
 {
-    painterMain(NULL);
+    if (argc != 2)
+    {
+        hell_Print("Usage: %s path-to-model.tnt\n", argv[0]);
+        return 1;
+    }
+    painterMain(argv[1]);
 }
 #endif
