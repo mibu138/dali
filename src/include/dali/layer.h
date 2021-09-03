@@ -16,8 +16,8 @@ void        dali_SetActiveLayer(Dali_LayerStack*, uint16_t id);
 Dali_LayerId   dali_GetActiveLayerId(const Dali_LayerStack*);
 int         dali_GetLayerCount(const Dali_LayerStack*);
 Dali_Layer*    dali_GetLayer(Dali_LayerStack*, Dali_LayerId id);
-bool        dali_IncrementLayer(Dali_LayerStack*, Dali_LayerId* const id);
-bool        dali_DecrementLayer(Dali_LayerStack*, Dali_LayerId* const id);
+bool        dali_IncrementLayer(Dali_LayerStack*);
+bool        dali_DecrementLayer(Dali_LayerStack*);
 // returns address to the layer data
 uint8_t*    dali_CopyTextureToLayer(Dali_LayerStack*, const Dali_LayerId id, const void* data, uint32_t w, uint32_t h, VkFormat format);
 void dali_LayerStackClearDirt(Dali_LayerStack* layerStack);
