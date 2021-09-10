@@ -24,7 +24,7 @@ include(header)
 FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY ${GIT_BASE_URL}/obsidian 
-    GIT_TAG master)
+    GIT_TAG dali)
 
 FetchContent_MakeAvailable(obsidian)
 

@@ -114,6 +114,30 @@ handleKeyEvent(const Hell_Event* ev, void* data)
             dali_Undo(undoManager);
         }
     }
+    if (code == HELL_KEY_L) //erase
+    {
+        if (ev->type == HELL_EVENT_TYPE_KEYDOWN)
+        {
+            hell_Print("Layer create key hit\n");
+            dali_CreateLayer(layerStack);
+        }
+    }
+    if (code == HELL_KEY_D) //erase
+    {
+        if (ev->type == HELL_EVENT_TYPE_KEYDOWN)
+        {
+            hell_Print("Layer down key hit\n");
+            dali_DecrementLayer(layerStack);
+        }
+    }
+    if (code == HELL_KEY_U) //erase
+    {
+        if (ev->type == HELL_EVENT_TYPE_KEYDOWN)
+        {
+            hell_Print("Layer down key hit\n");
+            dali_IncrementLayer(layerStack);
+        }
+    }
     return false;
 }
 
@@ -127,7 +151,7 @@ handleWindowResizeEvent(const Hell_Event* ev, void* data)
 }
 
 static bool 
-handleViewEvent(const Hell_Event* ev, void* data)
+    handleViewEvent(const Hell_Event* ev, void* data)
 {
     int         mx     = ev->data.winData.data.mouseData.x;
     int         my     = ev->data.winData.data.mouseData.y;

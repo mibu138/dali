@@ -49,7 +49,6 @@ int dali_CreateLayer(Dali_LayerStack* layerStack)
     
     hell_DebugPrint(PAINT_DEBUG_TAG_LAYER, "Layer created!");
     hell_Print("Adding layer. There are now %d layers. Active layer is %d\n", layerStack->layerCount, layerStack->activeLayer);
-    layerStack->dirt |= LAYER_CHANGED_BIT;
     return curId;
 }
 
@@ -69,26 +68,28 @@ Layer* dali_GetLayer(Dali_LayerStack* layerStack, LayerId id)
     return &layerStack->layers[id];
 }
 
-bool dali_IncrementLayer(Dali_LayerStack* layerStack, LayerId* const id)
+bool dali_IncrementLayer(Dali_LayerStack* layerStack)
 {
-    *id = layerStack->activeLayer + 1;
-    if (*id >= layerStack->layerCount)
+    LayerId id = layerStack->activeLayer + 1;
+    if (id >= layerStack->layerCount)
         return false;
     else 
     {
-        layerStack->activeLayer = *id;
+        layerStack->activeLayer = id;
+        layerStack->dirt |= LAYER_CHANGED_BIT;
         return true;
     }
 }
 
-bool l_DecrementLayer(Dali_LayerStack* layerStack, LayerId* const id)
+bool dali_DecrementLayer(Dali_LayerStack* layerStack)
 {
-    *id = layerStack->activeLayer - 1;
-    if (*id >= layerStack->layerCount) // negatives will wrap around
+    LayerId id = layerStack->activeLayer - 1;
+    if (id >= layerStack->layerCount) // negatives will wrap around
         return false;
     else 
     {
-        layerStack->activeLayer = *id;
+        layerStack->activeLayer = id;
+        layerStack->dirt |= LAYER_CHANGED_BIT;
         return true;
     }
 }
