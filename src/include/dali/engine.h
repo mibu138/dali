@@ -12,7 +12,7 @@
 #define IMG_16K IMG_8K * 2
 
 typedef struct Dali_Engine Dali_Engine;
-typedef Obdn_V_Image Obdn_Image;
+typedef Obdn_Image Obdn_Image;
 
 // grimoire is optional
 void dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,

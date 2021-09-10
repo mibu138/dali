@@ -27,7 +27,7 @@ typedef enum {
 } UndoDirtyBits;
 
 typedef struct Dali_Layer {
-    Obdn_V_BufferRegion bufferRegion;
+    Obdn_BufferRegion bufferRegion;
 } Dali_Layer;
 
 typedef struct Dali_LayerStack{
@@ -35,8 +35,8 @@ typedef struct Dali_LayerStack{
     uint16_t     activeLayer;
     VkDeviceSize layerSize;
     Dali_Layer    layers[MAX_LAYERS];
-    Obdn_V_BufferRegion backBuffer;
-    Obdn_V_BufferRegion frontBuffer;
+    Obdn_BufferRegion backBuffer;
+    Obdn_BufferRegion frontBuffer;
     Obdn_Memory*        memory;
     DirtMask       dirt;
 } Dali_LayerStack;
@@ -62,7 +62,7 @@ typedef struct Dali_Brush {
 
 typedef uint16_t Dali_LayerId;
 
-typedef Obdn_V_BufferRegion BufferRegion;
+typedef Obdn_BufferRegion BufferRegion;
 typedef Dali_LayerId L_LayerId;
 
 #ifndef WIN32
@@ -72,7 +72,7 @@ _Static_assert(MAX_UNDOS % 2 == 0, "MAX_UNDOS must be a multiple of 2 for bottom
 typedef struct UndoStack {
     uint8_t              trl; // cur cannot cross this
     uint8_t              cur;
-    Obdn_V_BufferRegion  bufferRegions[MAX_UNDOS];
+    Obdn_BufferRegion  bufferRegions[MAX_UNDOS];
 } UndoStack;
 
 typedef struct Dali_UndoManager { 

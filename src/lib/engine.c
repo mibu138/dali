@@ -35,10 +35,10 @@ enum {
     PIPELINE_COMP_COUNT
 };
 
-typedef Obdn_V_BufferRegion BufferRegion;
+typedef Obdn_BufferRegion BufferRegion;
 
-typedef Obdn_V_Command Command;
-typedef Obdn_V_Image   Image;
+typedef Obdn_Command Command;
+typedef Obdn_Image   Image;
 
 typedef struct Dali_Engine {
     BufferRegion matrixRegion;
@@ -115,7 +115,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_STORAGE_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_NEAREST,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     engine->imageB = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
@@ -124,7 +124,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_LINEAR,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     engine->imageC = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
@@ -133,7 +133,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_LINEAR,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     engine->imageD = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
@@ -142,7 +142,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_LINEAR,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED,
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -481,7 +481,7 @@ initUniformBuffers(Engine* engine)
 {
     engine->matrixRegion = obdn_RequestBufferRegion(
         engine->memory, sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        OBDN_MEMORY_HOST_GRAPHICS_TYPE);
     UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
     matrices->model       = coal_Ident_Mat4();
     matrices->view        = coal_Ident_Mat4();
@@ -491,7 +491,7 @@ initUniformBuffers(Engine* engine)
 
     engine->brushRegion = obdn_RequestBufferRegion(
         engine->memory, sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        OBDN_MEMORY_HOST_GRAPHICS_TYPE);
 }
 
 static void
@@ -927,7 +927,7 @@ onLayerChange(Engine* engine, Dali_LayerStack* stack, Dali_LayerId newLayerId)
 {
     hell_DebugPrint(PAINT_DEBUG_TAG_PAINT, "Begin\n");
 
-    Obdn_V_Command cmd =
+    Obdn_Command cmd =
         obdn_CreateCommand(engine->instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
 
     obdn_BeginCommandBuffer(cmd.buffer);
