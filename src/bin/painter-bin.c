@@ -361,7 +361,11 @@ painterMain(const char* modelpath)
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, grimoire, engine);
 
-    Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
+    Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, 
+        COAL_MAT4_IDENT, dali_GetPaintMaterial(engine), 
+        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR 
+        );
     dali_SetActivePrim(engine, prim);
     dali_LayerBackup(layerStack); // initial backup
 
