@@ -20,5 +20,5 @@ set(SRCS
     select.rmiss)
 
 include(author_shaders)
-author_shaders(dali_shaders dali dali_spvs
+author_shaders(dali_shaders dali Obsidian::glslc
     SOURCES ${SRCS})

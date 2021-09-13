@@ -11,7 +11,7 @@ endif()
 include(FetchContent)
 FetchContent_Declare(
     cmake-common
-    GIT_REPOSITORY ${GIT_BASE_URL}/cmake-common
+    GIT_REPOSITORY /home/michael/dev/cmake-common
     GIT_TAG master)
 FetchContent_GetProperties(cmake-common)
 if(NOT ${cmake-common_POPULATED})
@@ -23,8 +23,8 @@ include(header)
 
 FetchContent_Declare(
     obsidian 
-    GIT_REPOSITORY ${GIT_BASE_URL}/obsidian 
-    GIT_TAG dali)
+    GIT_REPOSITORY /home/michael/dev/obsidian 
+    GIT_TAG test)
 
 FetchContent_MakeAvailable(obsidian)
 
