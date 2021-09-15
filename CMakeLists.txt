@@ -9,24 +9,16 @@ if(NOT DEFINED GIT_BASE_URL)
 endif()
 
 include(FetchContent)
-FetchContent_Declare(
-    cmake-common
-    GIT_REPOSITORY /home/michael/dev/cmake-common
-    GIT_TAG master)
-FetchContent_GetProperties(cmake-common)
-if(NOT ${cmake-common_POPULATED})
-    FetchContent_Populate(cmake-common)
-endif()
-list(APPEND CMAKE_MODULE_PATH ${cmake-common_SOURCE_DIR})
-
-include(header)
 
 FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY /home/michael/dev/obsidian 
-    GIT_TAG test)
+    GIT_TAG master)
 
 FetchContent_MakeAvailable(obsidian)
+
+# So we can use the author_shaders cmake function 
+list(APPEND CMAKE_MODULE_PATH ${obsidian_SOURCE_DIR}/cmake)
 
 add_subdirectory(src/lib)
 add_subdirectory(src/shaders)
