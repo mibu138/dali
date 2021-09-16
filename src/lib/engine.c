@@ -4,6 +4,7 @@
 #include "private.h"
 #include "ubo-shared.h"
 #include "undo.h"
+#include "stdlib.h"
 #include <hell/common.h>
 #include <hell/debug.h>
 #include <hell/len.h>
@@ -91,6 +92,8 @@ typedef struct Dali_Engine {
 
     Obdn_MaterialHandle  activeMaterial;
     Obdn_PrimitiveHandle activePrim;
+
+    uint32_t             rayWidth; // sqrt of ray count (rays per splat)
 
     bool                 brushActive;
     Vec2                 prevBrushPos;
@@ -1403,7 +1406,7 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
 
 static void
 splat(Engine* engine, const VkCommandBuffer cmdBuf, const float x,
-      const float y)
+      const float y, uint32_t rayWidth)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                       engine->paintPipeline);
@@ -1420,7 +1423,7 @@ splat(Engine* engine, const VkCommandBuffer cmdBuf, const float x,
     vkCmdTraceRaysKHR(cmdBuf, &engine->shaderBindingTable.raygenTable,
                       &engine->shaderBindingTable.missTable,
                       &engine->shaderBindingTable.hitTable,
-                      &engine->shaderBindingTable.callableTable, 2000, 2000, 1);
+                      &engine->shaderBindingTable.callableTable, rayWidth, rayWidth, 1);
 }
 
 static void
@@ -1592,7 +1595,7 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
             float x     = engine->prevBrushPos.x + xstep;
             float y     = engine->prevBrushPos.y + ystep;
 
-            splat(engine, cmdBuf, x, y);
+            splat(engine, cmdBuf, x, y, engine->rayWidth);
 
             applyPaint(engine, cmdBuf);
 
@@ -1671,6 +1674,19 @@ savePaintCmd(const Hell_Grimoire* grim, void* pengine)
     obdn_SaveImage(engine->memory, &engine->imageA, fileType, strbuf);
 }
 
+static void 
+rayWidthCmd(const Hell_Grimoire* grim, void* pengine)
+{
+    Dali_Engine* engine = pengine;
+    int rayWidth = atoi(hell_GetArg(grim, 1));
+    if (rayWidth < 1 || rayWidth > 10000)
+    {
+        hell_Print("Bad value");
+        return;
+    }
+    engine->rayWidth = rayWidth;
+}
+
 VkSemaphore 
 dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
            const Dali_Brush* brush, Dali_LayerStack* stack,
@@ -1735,10 +1751,13 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     engine->activeMaterial = obdn_SceneCreateMaterial(
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
 
+    engine->rayWidth = 2000;
+
     if (grimoire)
     {
         hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
         hell_AddCommand(grimoire, "savepaint", savePaintCmd, engine);
+        hell_AddCommand(grimoire, "raywidth", rayWidthCmd, engine);
     }
 
     hell_Print("PAINT: initialized.\n");
