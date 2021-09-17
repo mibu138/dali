@@ -18,11 +18,11 @@ void dali_CreateLayerStack(Obdn_Memory* memory, const VkDeviceSize textureSize, 
 
     layerStack->backBuffer  = obdn_RequestBufferRegion(memory, textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+            OBDN_MEMORY_HOST_GRAPHICS_TYPE);
 
     layerStack->frontBuffer = obdn_RequestBufferRegion(memory, textureSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+            OBDN_MEMORY_HOST_GRAPHICS_TYPE);
 
     dali_CreateLayer(layerStack); // create one layer to start
 }
@@ -45,7 +45,7 @@ int dali_CreateLayer(Dali_LayerStack* layerStack)
 
     layerStack->layers[curId].bufferRegion = obdn_RequestBufferRegion(layerStack->memory, layerStack->layerSize, 
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT, 
-            OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+            OBDN_MEMORY_HOST_GRAPHICS_TYPE);
     
     hell_DebugPrint(PAINT_DEBUG_TAG_LAYER, "Layer created!");
     hell_Print("Adding layer. There are now %d layers. Active layer is %d\n", layerStack->layerCount, layerStack->activeLayer);

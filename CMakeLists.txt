@@ -4,29 +4,21 @@ project(Dali VERSION 0.1.0)
 
 option(DALI_SKIP_EXECUTABLE "Skip building executable" OFF)
 
-if(NOT DEFINED GIT_BASE_URL)
-    set(GIT_BASE_URL https://github.com/mokchira)
+if(NOT DEFINED OBSIDIAN_URL)
+    set(OBSIDIAN_URL https://github.com/mokchira/obsidian)
 endif()
 
 include(FetchContent)
-FetchContent_Declare(
-    cmake-common
-    GIT_REPOSITORY ${GIT_BASE_URL}/cmake-common
-    GIT_TAG master)
-FetchContent_GetProperties(cmake-common)
-if(NOT ${cmake-common_POPULATED})
-    FetchContent_Populate(cmake-common)
-endif()
-list(APPEND CMAKE_MODULE_PATH ${cmake-common_SOURCE_DIR})
-
-include(header)
 
 FetchContent_Declare(
     obsidian 
-    GIT_REPOSITORY ${GIT_BASE_URL}/obsidian 
+    GIT_REPOSITORY ${OBSIDIAN_URL}
     GIT_TAG master)
 
 FetchContent_MakeAvailable(obsidian)
+
+# So we can use the author_shaders cmake function 
+list(APPEND CMAKE_MODULE_PATH ${obsidian_SOURCE_DIR}/cmake)
 
 add_subdirectory(src/lib)
 add_subdirectory(src/shaders)

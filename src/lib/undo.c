@@ -18,7 +18,7 @@ static void createStack(Obdn_Memory* memory, UndoManager* undo, const uint8_t in
     for (int i = 0; i < undo->maxUndos; i++) 
     {
         undo->undoStacks[index].bufferRegions[i] = obdn_RequestBufferRegion(memory, size, 
-                VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_V_MEMORY_HOST_TRANSFER_TYPE);
+                VK_BUFFER_USAGE_TRANSFER_DST_BIT, OBDN_MEMORY_HOST_TRANSFER_TYPE);
     }
 }
 
@@ -86,7 +86,7 @@ void dali_DestroyUndoManager(UndoManager* undo)
     memset(undo, 0, sizeof(UndoManager));
 }
 
-Obdn_V_BufferRegion* dali_GetNextUndoBuffer(UndoManager* undo)
+Obdn_BufferRegion* dali_GetNextUndoBuffer(UndoManager* undo)
 {
     UndoStack* undoStack = &undo->undoStacks[undo->curStackIndex];
     const uint8_t stackIndex = undoStack->cur;
@@ -100,7 +100,7 @@ Obdn_V_BufferRegion* dali_GetNextUndoBuffer(UndoManager* undo)
     return &undoStack->bufferRegions[stackIndex];
 }
 
-Obdn_V_BufferRegion* dali_GetLastUndoBuffer(UndoManager* undo)
+Obdn_BufferRegion* dali_GetLastUndoBuffer(UndoManager* undo)
 {
     UndoStack* undoStack = &undo->undoStacks[undo->curStackIndex];
     uint8_t stackIndex = undoStack->cur - 1;

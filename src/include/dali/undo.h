@@ -11,9 +11,9 @@ void dali_CreateUndoManager(Obdn_Memory* memory, const uint32_t size, const uint
 
 void dali_DestroyUndoManager(Dali_UndoManager* undo);
 
-Obdn_V_BufferRegion* dali_GetNextUndoBuffer(Dali_UndoManager* undo);
+Obdn_BufferRegion* dali_GetNextUndoBuffer(Dali_UndoManager* undo);
 
-Obdn_V_BufferRegion* dali_GetLastUndoBuffer(Dali_UndoManager* undo);
+Obdn_BufferRegion* dali_GetLastUndoBuffer(Dali_UndoManager* undo);
 
 bool dali_LayerInUndoCache(Dali_UndoManager* undo, Dali_LayerId layer);
 

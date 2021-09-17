@@ -4,6 +4,7 @@
 #include "private.h"
 #include "ubo-shared.h"
 #include "undo.h"
+#include "stdlib.h"
 #include <hell/common.h>
 #include <hell/debug.h>
 #include <hell/len.h>
@@ -35,10 +36,10 @@ enum {
     PIPELINE_COMP_COUNT
 };
 
-typedef Obdn_V_BufferRegion BufferRegion;
+typedef Obdn_BufferRegion BufferRegion;
 
-typedef Obdn_V_Command Command;
-typedef Obdn_V_Image   Image;
+typedef Obdn_Command Command;
+typedef Obdn_Image   Image;
 
 typedef struct Dali_Engine {
     BufferRegion matrixRegion;
@@ -57,9 +58,9 @@ typedef struct Dali_Engine {
 
     uint32_t textureSize; // = 0x1000; // 0x1000 = 4096
 
-    Command releaseImageCommand;
-    Command transferImageCommand;
-    Command acquireImageCommand;
+    Command cmdReleaseImageTransferSource;
+    Command cmdTranferImage;
+    Command cmdAcquireImageTranferSource;
 
     Command paintCommand;
 
@@ -92,6 +93,8 @@ typedef struct Dali_Engine {
     Obdn_MaterialHandle  activeMaterial;
     Obdn_PrimitiveHandle activePrim;
 
+    uint32_t             rayWidth; // sqrt of ray count (rays per splat)
+
     bool                 brushActive;
     Vec2                 prevBrushPos;
     Vec2                 brushPos;
@@ -115,7 +118,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_STORAGE_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_NEAREST,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     engine->imageB = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
@@ -124,7 +127,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_LINEAR,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     engine->imageC = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
@@ -133,7 +136,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_LINEAR,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     engine->imageD = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
@@ -142,7 +145,7 @@ initPaintImages(Dali_Engine* engine)
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
         VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_LINEAR,
-        OBDN_V_MEMORY_DEVICE_TYPE);
+        OBDN_MEMORY_DEVICE_TYPE);
 
     obdn_TransitionImageLayout(VK_IMAGE_LAYOUT_UNDEFINED,
                                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
@@ -481,7 +484,7 @@ initUniformBuffers(Engine* engine)
 {
     engine->matrixRegion = obdn_RequestBufferRegion(
         engine->memory, sizeof(UboMatrices), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        OBDN_MEMORY_HOST_GRAPHICS_TYPE);
     UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
     matrices->model       = coal_Ident_Mat4();
     matrices->view        = coal_Ident_Mat4();
@@ -491,7 +494,7 @@ initUniformBuffers(Engine* engine)
 
     engine->brushRegion = obdn_RequestBufferRegion(
         engine->memory, sizeof(UboBrush), VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-        OBDN_V_MEMORY_HOST_GRAPHICS_TYPE);
+        OBDN_MEMORY_HOST_GRAPHICS_TYPE);
 }
 
 static void
@@ -922,12 +925,49 @@ initFramebuffers(Engine* engine)
     }
 }
 
+static void 
+recordCmdReleaseImage(Engine* engine, VkCommandBuffer cmdBuf, VkImageLayout newLayout)
+{
+    obdn_BeginCommandBuffer(cmdBuf);
+
+    const VkImageSubresourceRange range = {.aspectMask =
+                                               VK_IMAGE_ASPECT_COLOR_BIT,
+                                           .baseMipLevel   = 0,
+                                           .levelCount     = 1,
+                                           .baseArrayLayer = 0,
+                                           .layerCount     = 1};
+
+    VkImageMemoryBarrier imgBarrier = {
+        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .pNext               = NULL,
+        .srcAccessMask       = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
+        .dstAccessMask       = 0, /* ignored for this batter */
+        .oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
+        .newLayout           = newLayout,
+        .srcQueueFamilyIndex = engine->graphicsQueueFamilyIndex,
+        .dstQueueFamilyIndex = engine->transferQueueFamilyIndex,
+        .image               = engine->imageB.handle,
+        .subresourceRange    = range};
+
+    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1,
+                         &imgBarrier);
+
+    obdn_EndCommandBuffer(cmdBuf);
+}
+
+static void 
+recordCmdTranferImage(Engine* engine, VkCommandBuffer cmdBuf, VkImageLayout layout)
+{
+}
+
 static void
 onLayerChange(Engine* engine, Dali_LayerStack* stack, Dali_LayerId newLayerId)
 {
     hell_DebugPrint(PAINT_DEBUG_TAG_PAINT, "Begin\n");
 
-    Obdn_V_Command cmd =
+    Obdn_Command cmd =
         obdn_CreateCommand(engine->instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
 
     obdn_BeginCommandBuffer(cmd.buffer);
@@ -1144,15 +1184,15 @@ onLayerChange(Engine* engine, Dali_LayerStack* stack, Dali_LayerId newLayerId)
 }
 
 static void
-runUndoCommands(Engine* engine, const bool toHost, BufferRegion* bufferRegion)
+runUndoCommands(Engine* engine, const bool toHost /*vs fromHost*/, BufferRegion* bufferRegion)
 {
-    obdn_WaitForFence(engine->device, &engine->acquireImageCommand.fence);
+    obdn_WaitForFence(engine->device, &engine->cmdAcquireImageTranferSource.fence);
 
-    obdn_ResetCommand(&engine->releaseImageCommand);
-    obdn_ResetCommand(&engine->transferImageCommand);
-    obdn_ResetCommand(&engine->acquireImageCommand);
+    obdn_ResetCommand(&engine->cmdReleaseImageTransferSource);
+    obdn_ResetCommand(&engine->cmdTranferImage);
+    obdn_ResetCommand(&engine->cmdAcquireImageTranferSource);
 
-    VkCommandBuffer cmdBuf = engine->releaseImageCommand.buffer;
+    VkCommandBuffer cmdBuf = engine->cmdReleaseImageTransferSource.buffer;
 
     obdn_BeginCommandBuffer(cmdBuf);
 
@@ -1173,7 +1213,7 @@ runUndoCommands(Engine* engine, const bool toHost, BufferRegion* bufferRegion)
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .pNext               = NULL,
         .srcAccessMask       = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-        .dstAccessMask       = otherAccessMask,
+        .dstAccessMask       = otherAccessMask, /* ignored for this batter */
         .oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .newLayout           = otherLayout,
         .srcQueueFamilyIndex = engine->graphicsQueueFamilyIndex,
@@ -1188,11 +1228,12 @@ runUndoCommands(Engine* engine, const bool toHost, BufferRegion* bufferRegion)
 
     obdn_EndCommandBuffer(cmdBuf);
 
-    cmdBuf = engine->transferImageCommand.buffer;
+    cmdBuf = engine->cmdTranferImage.buffer;
 
     obdn_BeginCommandBuffer(cmdBuf);
 
-    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+// if is where the first validation message occurs
+    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1,
                          &imgBarrier);
@@ -1210,13 +1251,13 @@ runUndoCommands(Engine* engine, const bool toHost, BufferRegion* bufferRegion)
     imgBarrier.dstQueueFamilyIndex = engine->graphicsQueueFamilyIndex;
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
                          VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1,
                          &imgBarrier);
 
     obdn_EndCommandBuffer(cmdBuf);
 
-    cmdBuf = engine->acquireImageCommand.buffer;
+    cmdBuf = engine->cmdAcquireImageTranferSource.buffer;
 
     obdn_BeginCommandBuffer(cmdBuf);
 
@@ -1229,19 +1270,19 @@ runUndoCommands(Engine* engine, const bool toHost, BufferRegion* bufferRegion)
 
     obdn_SubmitGraphicsCommand(
         engine->instance, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 0, NULL, 1,
-        &engine->releaseImageCommand.semaphore, VK_NULL_HANDLE,
-        engine->releaseImageCommand.buffer);
+        &engine->cmdReleaseImageTransferSource.semaphore, VK_NULL_HANDLE,
+        engine->cmdReleaseImageTransferSource.buffer);
 
     obdn_SubmitTransferCommand(engine->instance, 0,
                                VK_PIPELINE_STAGE_TRANSFER_BIT,
-                               &engine->releaseImageCommand.semaphore,
-                               VK_NULL_HANDLE, &engine->transferImageCommand);
+                               &engine->cmdReleaseImageTransferSource.semaphore,
+                               VK_NULL_HANDLE, &engine->cmdTranferImage);
 
     obdn_SubmitGraphicsCommand(
         engine->instance, 0, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, 1,
-        &engine->transferImageCommand.semaphore, 1,
-        &engine->acquireImageCommand.semaphore,
-        engine->acquireImageCommand.fence, engine->acquireImageCommand.buffer);
+        &engine->cmdTranferImage.semaphore, 1,
+        &engine->cmdAcquireImageTranferSource.semaphore,
+        engine->cmdAcquireImageTranferSource.fence, engine->cmdAcquireImageTranferSource.buffer);
 }
 
 static void
@@ -1365,7 +1406,7 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
 
 static void
 splat(Engine* engine, const VkCommandBuffer cmdBuf, const float x,
-      const float y)
+      const float y, uint32_t rayWidth)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                       engine->paintPipeline);
@@ -1382,7 +1423,7 @@ splat(Engine* engine, const VkCommandBuffer cmdBuf, const float x,
     vkCmdTraceRaysKHR(cmdBuf, &engine->shaderBindingTable.raygenTable,
                       &engine->shaderBindingTable.missTable,
                       &engine->shaderBindingTable.hitTable,
-                      &engine->shaderBindingTable.callableTable, 2000, 2000, 1);
+                      &engine->shaderBindingTable.callableTable, rayWidth, rayWidth, 1);
 }
 
 static void
@@ -1471,7 +1512,7 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
         if (u->dirt & UNDO_BIT)
         {
             if (undo(engine, u))
-                semaphore = engine->acquireImageCommand.semaphore;
+                semaphore = engine->cmdAcquireImageTranferSource.semaphore;
         }
         if (stack->dirt & LAYER_CHANGED_BIT)
         {
@@ -1481,7 +1522,7 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
         if (stack->dirt & LAYER_BACKUP_BIT)
         {
             backupLayer(engine, u);
-            semaphore = engine->acquireImageCommand.semaphore;
+            semaphore = engine->cmdAcquireImageTranferSource.semaphore;
         }
         if (brush->dirt & PAINT_MODE_BIT)
         {
@@ -1554,7 +1595,7 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
             float x     = engine->prevBrushPos.x + xstep;
             float y     = engine->prevBrushPos.y + ystep;
 
-            splat(engine, cmdBuf, x, y);
+            splat(engine, cmdBuf, x, y, engine->rayWidth);
 
             applyPaint(engine, cmdBuf);
 
@@ -1633,6 +1674,19 @@ savePaintCmd(const Hell_Grimoire* grim, void* pengine)
     obdn_SaveImage(engine->memory, &engine->imageA, fileType, strbuf);
 }
 
+static void 
+rayWidthCmd(const Hell_Grimoire* grim, void* pengine)
+{
+    Dali_Engine* engine = pengine;
+    int rayWidth = atoi(hell_GetArg(grim, 1));
+    if (rayWidth < 1 || rayWidth > 10000)
+    {
+        hell_Print("Bad value");
+        return;
+    }
+    engine->rayWidth = rayWidth;
+}
+
 VkSemaphore 
 dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
            const Dali_Brush* brush, Dali_LayerStack* stack,
@@ -1670,11 +1724,11 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     engine->paintCommand =
         obdn_CreateCommand(instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
 
-    engine->releaseImageCommand =
+    engine->cmdReleaseImageTransferSource =
         obdn_CreateCommand(instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
-    engine->transferImageCommand =
+    engine->cmdTranferImage =
         obdn_CreateCommand(instance, OBDN_V_QUEUE_TRANSFER_TYPE);
-    engine->acquireImageCommand =
+    engine->cmdAcquireImageTranferSource =
         obdn_CreateCommand(instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
 
     initPaintImages(engine);
@@ -1696,10 +1750,13 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     engine->activeMaterial = obdn_SceneCreateMaterial(
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
 
+    engine->rayWidth = 2000;
+
     if (grimoire)
     {
         hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
         hell_AddCommand(grimoire, "savepaint", savePaintCmd, engine);
+        hell_AddCommand(grimoire, "raywidth", rayWidthCmd, engine);
     }
 
     hell_Print("PAINT: initialized.\n");
@@ -1723,9 +1780,9 @@ dali_DestroyEngine(Engine* engine)
                                      engine->descriptorSetLayouts[i], NULL);
     }
     obdn_DestroyDescription(engine->device, &engine->description);
-    obdn_DestroyCommand(engine->releaseImageCommand);
-    obdn_DestroyCommand(engine->transferImageCommand);
-    obdn_DestroyCommand(engine->acquireImageCommand);
+    obdn_DestroyCommand(engine->cmdReleaseImageTransferSource);
+    obdn_DestroyCommand(engine->cmdTranferImage);
+    obdn_DestroyCommand(engine->cmdAcquireImageTranferSource);
     obdn_DestroyCommand(engine->paintCommand);
     obdn_FreeImage(&engine->imageA);
     obdn_FreeImage(&engine->imageB);
