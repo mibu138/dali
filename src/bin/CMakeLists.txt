@@ -1,5 +1,5 @@
 if (NOT DEFINED SHIV_URL)
-    set(SHIV_URL https://github.com/mokchira/obsidian)
+    set(SHIV_URL https://github.com/mokchira/shiv)
 endif()
 
 FetchContent_Declare(
