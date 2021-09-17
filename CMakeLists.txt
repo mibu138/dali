@@ -4,15 +4,15 @@ project(Dali VERSION 0.1.0)
 
 option(DALI_SKIP_EXECUTABLE "Skip building executable" OFF)
 
-if(NOT DEFINED GIT_BASE_URL)
-    set(GIT_BASE_URL https://github.com/mokchira)
+if(NOT DEFINED OBSIDIAN_URL)
+    set(OBSIDIAN_URL https://github.com/mokchira/obsidian)
 endif()
 
 include(FetchContent)
 
 FetchContent_Declare(
     obsidian 
-    GIT_REPOSITORY /home/michael/dev/obsidian 
+    GIT_REPOSITORY ${OBSIDIAN_URL}
     GIT_TAG master)
 
 FetchContent_MakeAvailable(obsidian)
