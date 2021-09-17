@@ -1,6 +1,7 @@
 .cache
 build/*
 out/
+test/
 compile_commands.json
 tags
 .clangd/
