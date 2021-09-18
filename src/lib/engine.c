@@ -785,7 +785,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = OBDN_R_BLEND_MODE_32ADD,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp2a.frag.spv"};
 
@@ -797,7 +797,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = OBDN_R_BLEND_MODE_32ADD,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp3a.frag.spv"};
 
@@ -809,7 +809,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = OBDN_R_BLEND_MODE_32ADD,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp4a.frag.spv"};
 
@@ -821,7 +821,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = OBDN_R_BLEND_MODE_32ADD,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp.frag.spv"};
 
@@ -1366,7 +1366,7 @@ updatePaintMode(Engine* engine, const Dali_Brush* b)
     switch (b->mode)
     {
     case PAINT_MODE_OVER:
-        initCompPipelines(engine, OBDN_R_BLEND_MODE_OVER);
+        initCompPipelines(engine, OBDN_R_BLEND_MODE_32ADD);
         break;
     case PAINT_MODE_ERASE:
         initCompPipelines(engine, OBDN_R_BLEND_MODE_ERASE);

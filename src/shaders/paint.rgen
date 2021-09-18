@@ -20,7 +20,7 @@ layout(set = 1, binding = 1) uniform Block {
     Brush brush;
 };
 
-layout(set = 1, binding = 2, rgba32f) uniform image2D image;
+layout(set = 1, binding = 2, r32f) uniform image2D image;
 
 layout(location = 0) rayPayloadEXT hitPayload prd;
 
@@ -71,7 +71,8 @@ void main()
     const float f = brush.anti_falloff;
     float alpha = 1.0 - smoothstep(f, brush.radius, dist);
     alpha *= brush.opacity;
-    vec4 color = vec4(brush.r, brush.g, brush.b, alpha);
+    //vec4 color = vec4(brush.r, brush.g, brush.b, alpha);
+    vec4 color = vec4(alpha, 0, 0, 0); //spec states R component is used for r32f format images
 
     ivec2 texel = ivec2(prd.hitUv * vec2(imageSize(image)));
 
