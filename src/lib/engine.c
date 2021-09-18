@@ -1213,7 +1213,7 @@ runUndoCommands(Engine* engine, const bool toHost /*vs fromHost*/, BufferRegion*
         .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
         .pNext               = NULL,
         .srcAccessMask       = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-        .dstAccessMask       = otherAccessMask, /* ignored for this batter */
+        .dstAccessMask       = 0, /* ignored for this batter */
         .oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
         .newLayout           = otherLayout,
         .srcQueueFamilyIndex = engine->graphicsQueueFamilyIndex,
@@ -1233,6 +1233,9 @@ runUndoCommands(Engine* engine, const bool toHost /*vs fromHost*/, BufferRegion*
     obdn_BeginCommandBuffer(cmdBuf);
 
 // if is where the first validation message occurs
+    imgBarrier.srcAccessMask = 0;
+    imgBarrier.dstAccessMask = otherAccessMask;
+
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
                          VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1,
@@ -1244,7 +1247,7 @@ runUndoCommands(Engine* engine, const bool toHost /*vs fromHost*/, BufferRegion*
         obdn_CmdCopyBufferToImage(cmdBuf, 0, bufferRegion, &engine->imageB);
 
     imgBarrier.srcAccessMask       = otherAccessMask;
-    imgBarrier.dstAccessMask       = VK_ACCESS_SHADER_READ_BIT;
+    imgBarrier.dstAccessMask       = 0; //again, not used on this half of the ownership tranfer but validation layers complain
     imgBarrier.oldLayout           = otherLayout;
     imgBarrier.newLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     imgBarrier.srcQueueFamilyIndex = engine->transferQueueFamilyIndex;
@@ -1260,6 +1263,9 @@ runUndoCommands(Engine* engine, const bool toHost /*vs fromHost*/, BufferRegion*
     cmdBuf = engine->cmdAcquireImageTranferSource.buffer;
 
     obdn_BeginCommandBuffer(cmdBuf);
+
+    imgBarrier.srcAccessMask = 0; // will be ignored 
+    imgBarrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
 
     vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_TRANSFER_BIT,
                          VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
