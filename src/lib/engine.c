@@ -1717,6 +1717,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     engine->device      = obdn_GetDevice(instance);
     engine->textureSize = texSize;
     engine->textureFormat = VK_FORMAT_R8G8B8A8_UNORM; // TODO: should probably be passed in...
+    //foo
 
     assert(texSize > 0);
     assert(texSize % 256 == 0);
