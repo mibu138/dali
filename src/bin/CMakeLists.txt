@@ -5,7 +5,7 @@ endif()
 FetchContent_Declare(
     shiv
     GIT_REPOSITORY ${SHIV_URL}
-    GIT_TAG master)
+    GIT_TAG dali-mask32support)
 set(SHIV_SKIP_EXAMPLES TRUE)
 
 FetchContent_MakeAvailable(shiv)
