@@ -1757,7 +1757,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     engine->activeMaterial = obdn_SceneCreateMaterial(
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
 
-    engine->rayWidth = 2000;
+    engine->rayWidth = 512;
 
     if (grimoire)
     {
