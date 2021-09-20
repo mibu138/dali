@@ -14,11 +14,17 @@
 typedef struct Dali_Engine Dali_Engine;
 typedef Obdn_Image Obdn_Image;
 
+typedef enum Dali_Format {
+    DALI_FORMAT_R8G8B8A8_UNORM,
+    DALI_FORMAT_R32_SFLOAT,
+} Dali_Format;
+
 // grimoire is optional
 void dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
-                       Dali_UndoManager* undo, Obdn_Scene* scene,
-                       const Dali_Brush* brush, const uint32_t texSize,
-                       Hell_Grimoire* grimoire, Dali_Engine* engine);
+                          Dali_UndoManager* undo,
+                          Obdn_Scene* scene, const Dali_Brush* brush,
+                          const uint32_t texSize, Dali_Format textureFormat,
+                          Hell_Grimoire* grimoire, Dali_Engine* engine);
 VkSemaphore dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
                        const Dali_Brush* brush, Dali_LayerStack* stack,
                        Dali_UndoManager* um, VkCommandBuffer cmdbuf);

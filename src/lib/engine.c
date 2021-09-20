@@ -79,7 +79,7 @@ typedef struct Dali_Engine {
     VkRenderPass applyPaintRenderPass;
     VkRenderPass compositeRenderPass;
 
-    VkFormat textureFormat; // = VK_FORMAT_R8G8B8A8_UNORM;
+    Dali_Format textureFormat; // = VK_FORMAT_R8G8B8A8_UNORM;
 
     // Obdn_S_Scene* renderScene;
     // const Dali_Brush* brush;
@@ -111,9 +111,15 @@ typedef Dali_Engine Engine;
 static void
 initPaintImages(Dali_Engine* engine)
 {
+    VkFormat textureFormat;
+    switch (engine->textureFormat)
+    {
+        case DALI_FORMAT_R8G8B8A8_UNORM: textureFormat = VK_FORMAT_B8G8R8A8_UNORM; break; 
+        case DALI_FORMAT_R32_SFLOAT:     textureFormat = VK_FORMAT_R32_SFLOAT; break;
+    }
     engine->imageA = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
-        engine->textureFormat,
+        textureFormat,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | 
         VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
@@ -123,7 +129,7 @@ initPaintImages(Dali_Engine* engine)
 
     engine->imageB = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
-        engine->textureFormat,
+        textureFormat,
         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
             VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
@@ -132,7 +138,7 @@ initPaintImages(Dali_Engine* engine)
 
     engine->imageC = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
-        engine->textureFormat,
+        textureFormat,
         VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -141,7 +147,7 @@ initPaintImages(Dali_Engine* engine)
 
     engine->imageD = obdn_CreateImageAndSampler(
         engine->memory, engine->textureSize, engine->textureSize,
-        engine->textureFormat,
+        textureFormat,
         VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
             VK_IMAGE_USAGE_TRANSFER_DST_BIT |
             VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,
@@ -184,9 +190,16 @@ static void
 initRenderPasses(Engine* engine)
 {
     // apply paint renderpass
+    VkFormat textureFormat;
+    switch (engine->textureFormat)
+    {
+        case DALI_FORMAT_R8G8B8A8_UNORM: textureFormat = VK_FORMAT_B8G8R8A8_UNORM; break; 
+        case DALI_FORMAT_R32_SFLOAT:     textureFormat = VK_FORMAT_R32_SFLOAT; break;
+    }
+
     {
         const VkAttachmentDescription attachmentA = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -195,7 +208,7 @@ initRenderPasses(Engine* engine)
         };
 
         const VkAttachmentDescription attachmentB = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -260,7 +273,7 @@ initRenderPasses(Engine* engine)
     // comp renderpass
     {
         const VkAttachmentDescription attachmentB = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -269,7 +282,7 @@ initRenderPasses(Engine* engine)
         };
 
         const VkAttachmentDescription attachmentC = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -278,7 +291,7 @@ initRenderPasses(Engine* engine)
         };
 
         const VkAttachmentDescription attachmentD = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -287,7 +300,7 @@ initRenderPasses(Engine* engine)
         };
 
         const VkAttachmentDescription attachmentA2 = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_CLEAR,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -409,7 +422,7 @@ initRenderPasses(Engine* engine)
 
     {
         const VkAttachmentDescription srcAttachment = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_DONT_CARE,
@@ -418,7 +431,7 @@ initRenderPasses(Engine* engine)
         };
 
         const VkAttachmentDescription dstAttachment = {
-            .format        = engine->textureFormat,
+            .format        = textureFormat,
             .samples       = VK_SAMPLE_COUNT_1_BIT,
             .loadOp        = VK_ATTACHMENT_LOAD_OP_LOAD,
             .storeOp       = VK_ATTACHMENT_STORE_OP_STORE,
@@ -761,9 +774,26 @@ initPaintPipelineAndShaderBindingTable(Engine* engine)
 }
 
 static void
-initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
+initCompPipelines(Engine* engine, Dali_PaintMode paintMode)
 {
-    assert(blendMode != OBDN_R_BLEND_MODE_NONE);
+    Obdn_BlendMode splatBlendMode, compBlendMode;
+    switch (engine->textureFormat)
+    {
+    case DALI_FORMAT_R8G8B8A8_UNORM: 
+        compBlendMode  = OBDN_BLEND_MODE_OVER_NO_PREMUL;
+        switch (paintMode)
+        {
+        case DALI_PAINT_MODE_OVER: splatBlendMode = OBDN_BLEND_MODE_OVER; break;
+        case DALI_PAINT_MODE_ERASE: splatBlendMode = OBDN_BLEND_MODE_ERASE; break;
+        } break;
+    case DALI_FORMAT_R32_SFLOAT:
+        compBlendMode  = OBDN_BLEND_MODE_OVER_NO_PREMUL_MONOCHROME;
+        switch (paintMode)
+        {
+        case DALI_PAINT_MODE_OVER: splatBlendMode = OBDN_BLEND_MODE_OVER_MONOCHROME; break;
+        case DALI_PAINT_MODE_ERASE: splatBlendMode = OBDN_BLEND_MODE_ERASE_MONOCHROME; break;
+        } break;
+    }
 
     const Obdn_GraphicsPipelineInfo pipeInfo1 = {
         .layout            = engine->pipelineLayout,
@@ -773,7 +803,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = blendMode,
+        .blendMode         = splatBlendMode,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp.frag.spv"};
 
@@ -785,7 +815,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = compBlendMode,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp2a.frag.spv"};
 
@@ -797,7 +827,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = compBlendMode,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp3a.frag.spv"};
 
@@ -809,7 +839,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = compBlendMode,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp4a.frag.spv"};
 
@@ -821,7 +851,7 @@ initCompPipelines(Engine* engine, const Obdn_R_BlendMode blendMode)
         .sampleCount       = VK_SAMPLE_COUNT_1_BIT,
         .primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST,
         .viewportDim       = {engine->textureSize, engine->textureSize},
-        .blendMode         = OBDN_R_BLEND_MODE_OVER_STRAIGHT,
+        .blendMode         = compBlendMode,
         .vertShader        = OBDN_FULL_SCREEN_VERT_SPV,
         .fragShader        = SPVDIR "/comp.frag.spv"};
 
@@ -1363,15 +1393,7 @@ updatePaintMode(Engine* engine, const Dali_Brush* b)
 {
     vkDeviceWaitIdle(engine->device);
     destroyCompPipelines(engine);
-    switch (b->mode)
-    {
-    case PAINT_MODE_OVER:
-        initCompPipelines(engine, OBDN_R_BLEND_MODE_OVER);
-        break;
-    case PAINT_MODE_ERASE:
-        initCompPipelines(engine, OBDN_R_BLEND_MODE_ERASE);
-        break;
-    }
+    initCompPipelines(engine, b->mode);
 }
 
 static void
@@ -1709,7 +1731,8 @@ void
 dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
                           Dali_UndoManager* undo,
                           Obdn_Scene* scene, const Dali_Brush* brush,
-                          const uint32_t texSize, Hell_Grimoire* grimoire, Engine* engine)
+                          const uint32_t texSize, Dali_Format textureFormat,
+                          Hell_Grimoire* grimoire, Engine* engine)
 {
     hell_Print("DALI Engine: starting initialization...\n");
     memset(engine, 0, sizeof(Engine));
@@ -1717,7 +1740,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     engine->memory      = memory;
     engine->device      = obdn_GetDevice(instance);
     engine->textureSize = texSize;
-    engine->textureFormat = VK_FORMAT_R32_SFLOAT; // TODO: should probably be passed in...
+    engine->textureFormat = textureFormat; // TODO: should probably be passed in...
 
     assert(texSize > 0);
     assert(texSize % 256 == 0);
@@ -1744,7 +1767,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     initDescSetsAndPipeLayouts(engine);
     initUniformBuffers(engine);
     initPaintPipelineAndShaderBindingTable(engine);
-    initCompPipelines(engine, OBDN_R_BLEND_MODE_OVER);
+    initCompPipelines(engine, DALI_PAINT_MODE_OVER);
 
     initFramebuffers(engine);
 
