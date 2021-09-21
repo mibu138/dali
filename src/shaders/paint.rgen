@@ -35,20 +35,10 @@ float rand(vec2 co){
     return fract(sin(dot(co.xy ,vec2(12.9898,78.233))) * 43758.5453) - 0.5;
 }
 
-void main() 
+void fireRay(mat4 viewInv, mat4 projInv, vec2 st /*screen space ray origin*/)
 {
-    const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy * pc.seedx), rand(gl_LaunchIDEXT.xy * pc.seedy * 41.45234));
-    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + jitter;
-    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
-    vec2 brushPos = vec2(pc.brushx, pc.brushy);
-    brushPos = brushPos * 2.0 - 1.0; // map to -1, 1 range
-    vec2 d = inUV * 2.0 - 1.0; //normalize to -1, 1 range
-    d = d * brush.radius; // map to -r to r
-    const float dist = length(d);
-    d += brushPos;
-
     vec4 origin = cam.viewInv * vec4(0, 0, 0, 1);
-    vec4 target = cam.projInv * vec4(d.x, d.y, 1, 1);
+    vec4 target = cam.projInv * vec4(st.x, st.y, 1, 1);
     vec4 dir    = cam.viewInv * vec4(normalize(target.xyz), 0);
 
     uint  rayFlags = gl_RayFlagsOpaqueEXT;
@@ -67,6 +57,20 @@ void main()
             tMax,           // ray max range
             0               // payload (location = 0)
     );
+}
+
+void main() 
+{
+    const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy * pc.seedx), rand(gl_LaunchIDEXT.xy * pc.seedy * 41.45234));
+    const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + jitter;
+    const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
+    vec2 brushPos = vec2(pc.brushx, pc.brushy) * 2.0 - 1.0; // map to -1, 1 range
+    vec2 st = inUV * 2.0 - 1.0; //normalize to -1, 1 range
+    st = st * brush.radius;
+    const float dist = length(st);
+    st = st + brushPos; 
+
+    fireRay(cam.viewInv, cam.projInv, st);
 
     const float f = brush.anti_falloff;
     float alpha = 1.0 - smoothstep(f, brush.radius, dist);
