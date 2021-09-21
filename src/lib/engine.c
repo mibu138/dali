@@ -752,13 +752,19 @@ updateDescSetComp(Engine* engine)
 static void
 initPaintPipelineAndShaderBindingTable(Engine* engine)
 {
+    char raygenShader[32];
+    switch (engine->textureFormat)
+    {
+        case DALI_FORMAT_R8G8B8A8_UNORM: strcpy(raygenShader, SPVDIR "/paint.rgen.spv"); break;
+        case DALI_FORMAT_R32_SFLOAT:     strcpy(raygenShader, SPVDIR "/paint32R.rgen.spv"); break;
+    }
     const Obdn_RayTracePipelineInfo pipeInfosRT[] = {
         {// ray trace
          .layout      = engine->pipelineLayout,
          .raygenCount = 1,
          .raygenShaders =
              (char*[]){
-                 SPVDIR "/paint.rgen.spv",
+                 raygenShader
              },
          .missCount = 1,
          .missShaders =

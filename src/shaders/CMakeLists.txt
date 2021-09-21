@@ -5,6 +5,7 @@ set(SRCS
     comp.frag
     paint.rchit
     paint.rgen
+    paint32R.rgen
     paint.rmiss)
 
 include(author_shaders)

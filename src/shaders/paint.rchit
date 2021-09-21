@@ -6,7 +6,7 @@
 
 #include "raycommon.glsl"
 
-layout(location = 0) rayPayloadInEXT hitPayload prd;
+layout(location = 0) rayPayloadInEXT hitPayload hit;
 
 layout(set = 0, binding = 0, scalar) buffer Uv {
     vec2 uv[];
@@ -35,5 +35,5 @@ void main()
 
     const vec2 uv = uv0 * barycen.x + uv1 * barycen.y + uv2 * barycen.z;
 
-    prd.hitUv = uv;
+    hit.uv = uv;
 }

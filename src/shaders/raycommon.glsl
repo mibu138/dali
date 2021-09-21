@@ -1,3 +1,4 @@
 struct hitPayload {
-    vec2 hitUv;
+    vec2 uv;
 };
+

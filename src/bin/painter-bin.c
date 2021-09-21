@@ -359,7 +359,7 @@ painterMain(const char* modelpath)
     dali_SetBrushRadius(brush, 0.01);
     dali_CreateLayerStack(oMemory, texSize, layerStack);
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
-                              brush, 4096, DALI_FORMAT_R32_SFLOAT, grimoire, engine);
+                              brush, 4096, DALI_FORMAT_R8G8B8A8_UNORM, grimoire, engine);
 
     Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, 
         COAL_MAT4_IDENT, dali_GetPaintMaterial(engine), 
