@@ -8,12 +8,16 @@ if(NOT DEFINED OBSIDIAN_URL)
     set(OBSIDIAN_URL https://github.com/mokchira/obsidian)
 endif()
 
+if(WIN32)
+	set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY ${OBSIDIAN_URL}
-    GIT_TAG master)
+    GIT_TAG winbuild)
 
 FetchContent_MakeAvailable(obsidian)
 

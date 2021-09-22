@@ -20,5 +20,6 @@ add_library(Dali::Dali ALIAS dali)
 add_library(Dali::DaliObj ALIAS daliObj)
 
 if(WIN32)
-set_target_properties(dali PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE)
+	set_target_properties(dali PROPERTIES WINDOWS_EXPORT_ALL_SYMBOLS TRUE 
+		RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 endif()

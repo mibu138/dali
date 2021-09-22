@@ -330,7 +330,7 @@ painterMain(const char* modelpath)
         VK_KHR_WIN32_SURFACE_EXTENSION_NAME
     };
     obdn_SetRuntimeSpvPrefix("C:/dev/dali/build/shaders/");
-    testgeopath = "C:/dev/dali/data/flip-uv.tnt";
+    testgeopath = "C:/dev/dali/data/pig.tnt";
     #endif
     Obdn_InstanceParms ip = {
         .enableRayTracing = true,
