@@ -297,11 +297,10 @@ daliFrame(void)
     obdn_PresentFrame(swapchain, LEN(waitSemas), waitSemas);
 }
 
-#define FORMAT DALI_FORMAT_R8G8B8A8_UNORM
-
 int
-painterMain(const char* modelpath)
+painterMain(const char* modelpath, bool maskMode)
 {
+    const Dali_Format format = maskMode ? DALI_FORMAT_R32_SFLOAT : DALI_FORMAT_R8G8B8A8_UNORM;
     eventQueue = hell_AllocEventQueue();
     grimoire   = hell_AllocGrimoire();
     console    = hell_AllocConsole();
@@ -361,7 +360,7 @@ painterMain(const char* modelpath)
     dali_SetBrushRadius(brush, 0.01);
     dali_CreateLayerStack(oMemory, texSize, layerStack);
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
-                              brush, 4096, FORMAT, grimoire, engine);
+                              brush, 4096, format, grimoire, engine);
 
     Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, 
         COAL_MAT4_IDENT, dali_GetPaintMaterial(engine), 
@@ -385,7 +384,7 @@ painterMain(const char* modelpath)
                         obdn_GetSwapchainFramebufferCount(swapchain),
                         obdn_GetSwapchainFramebuffers(swapchain), &sp, renderer);
 
-    if (FORMAT == DALI_FORMAT_R32_SFLOAT)
+    if (format == DALI_FORMAT_R32_SFLOAT)
         shiv_SetDrawMode(renderer, "mono");
 
     sceneMemEng.scene = scene;
@@ -415,11 +414,25 @@ int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
 #elif UNIX
 int main(int argc, char* argv[])
 {
-    if (argc != 2)
+    if (argc < 2 || argc > 3)
     {
-        hell_Print("Usage: %s path-to-model.tnt\n", argv[0]);
+        hell_Print("Usage: %s [-m] path-to-model.tnt\n", argv[0]);
         return 1;
     }
-    painterMain(argv[1]);
+    bool maskMode = false;
+    const char* filePath;
+    if (argc == 3)
+    {
+        if (strcmp(argv[1], "-m") != 0)
+        {
+            hell_Print("Usage: %s [-m] path-to-model.tnt\n", argv[0]);
+            return 1;
+        }
+        maskMode = true;
+        filePath = argv[2];
+    }
+    else 
+        filePath = argv[1];
+    painterMain(filePath, maskMode);
 }
 #endif
