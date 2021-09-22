@@ -51,9 +51,8 @@ void main()
     fireRay(cam.viewInv, cam.projInv, st);
 
     const float f = brush.anti_falloff;
-    float alpha = 1.0 - smoothstep(f, brush.radius, dist);
-    alpha *= brush.opacity;
-    vec4 color = vec4(brush.r, brush.g, brush.b, alpha);
+    float alpha = (1.0 - smoothstep(f, brush.radius, dist)) * brush.opacity;
+    vec4 color = vec4(alpha, 0, 0, 0); //spec states R component is used for r32f format images
 
     ivec2 texel = ivec2(hit.uv * vec2(imageSize(image)));
 

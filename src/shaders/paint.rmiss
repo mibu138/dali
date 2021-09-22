@@ -3,9 +3,9 @@
 
 #include "raycommon.glsl"
 
-layout(location = 0) rayPayloadInEXT hitPayload prd;
+layout(location = 0) rayPayloadInEXT hitPayload hit;
 
 void main()
 {
-    prd.hitUv = vec2(0.0, 0.0);
+    hit.uv = vec2(0.0, 0.0);
 }

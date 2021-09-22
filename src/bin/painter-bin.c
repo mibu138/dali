@@ -297,6 +297,8 @@ daliFrame(void)
     obdn_PresentFrame(swapchain, LEN(waitSemas), waitSemas);
 }
 
+#define FORMAT DALI_FORMAT_R8G8B8A8_UNORM
+
 int
 painterMain(const char* modelpath)
 {
@@ -359,7 +361,7 @@ painterMain(const char* modelpath)
     dali_SetBrushRadius(brush, 0.01);
     dali_CreateLayerStack(oMemory, texSize, layerStack);
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
-                              brush, 4096, grimoire, engine);
+                              brush, 4096, FORMAT, grimoire, engine);
 
     Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, 
         COAL_MAT4_IDENT, dali_GetPaintMaterial(engine), 
@@ -382,6 +384,9 @@ painterMain(const char* modelpath)
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
                         obdn_GetSwapchainFramebufferCount(swapchain),
                         obdn_GetSwapchainFramebuffers(swapchain), &sp, renderer);
+
+    if (FORMAT == DALI_FORMAT_R32_SFLOAT)
+        shiv_SetDrawMode(renderer, "mono");
 
     sceneMemEng.scene = scene;
     sceneMemEng.mem   = oMemory;
