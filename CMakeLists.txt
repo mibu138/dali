@@ -17,7 +17,7 @@ include(FetchContent)
 FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY ${OBSIDIAN_URL}
-    GIT_TAG winbuild)
+    GIT_TAG master)
 
 FetchContent_MakeAvailable(obsidian)
 
