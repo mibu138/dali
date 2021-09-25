@@ -42,6 +42,11 @@ typedef Obdn_BufferRegion BufferRegion;
 typedef Obdn_Command Command;
 typedef Obdn_Image   Image;
 
+typedef enum EngineState {
+    READY,
+    NEEDS_TO_CREATE_IMAGES
+} EngineState;
+
 typedef struct Dali_Engine {
     BufferRegion matrixRegion;
     BufferRegion brushRegion;
@@ -96,6 +101,8 @@ typedef struct Dali_Engine {
 
     uint32_t             rayWidth; // sqrt of ray count (rays per splat)
 
+    EngineState          state;
+    
     bool                 brushActive;
     Vec2                 prevBrushPos;
     Vec2                 brushPos;
@@ -1722,11 +1729,31 @@ rayWidthCmd(const Hell_Grimoire* grim, void* pengine)
     engine->rayWidth = rayWidth;
 }
 
+void
+freeImagesCmd(const Hell_Grimoire* grim, void* engineAndScene)
+{
+    Engine* engine = ((void**)engineAndScene)[0];
+    Obdn_Scene* scene  = ((void**)engineAndScene)[1];
+    dali_EngineDestroyImagesAndDependents(engine, scene); 
+}
+
+void
+reclaimCmd(const Hell_Grimoire* grim, void* engineAndScene)
+{
+    Engine* engine = ((void**)engineAndScene)[0];
+    Obdn_Scene* scene  = ((void**)engineAndScene)[1];
+    dali_EngineCreateImagesAndDependents(engine, scene); 
+}
+
 VkSemaphore 
 dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
            const Dali_Brush* brush, Dali_LayerStack* stack,
            Dali_UndoManager* um, VkCommandBuffer cmdbuf)
 {
+    if (engine->state != READY)
+    {
+        return VK_NULL_HANDLE;
+    }
     VkSemaphore waitSemaphore = sync(engine, scene, stack, brush, um);
     if (engine->activePrim.id == 0) return waitSemaphore;
     updateCommands(engine, cmdbuf);
@@ -1782,17 +1809,21 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     updateDescSetPaint(engine);
     updateDescSetComp(engine);
 
-    Obdn_TextureHandle  tex = obdn_SceneCreateTexture(scene, engine->imageA);
+    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, engine->imageA);
     engine->activeMaterial = obdn_SceneCreateMaterial(
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
 
     engine->rayWidth = 512;
+
+    void* engineAndScene[] = {engine, scene};
 
     if (grimoire)
     {
         hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
         hell_AddCommand(grimoire, "savepaint", savePaintCmd, engine);
         hell_AddCommand(grimoire, "raywidth", rayWidthCmd, engine);
+        hell_AddCommand2(grimoire, "freeimages", freeImagesCmd, engineAndScene, sizeof(engineAndScene));
+        hell_AddCommand2(grimoire, "reclaim", reclaimCmd, engineAndScene, sizeof(engineAndScene));
     }
 
     hell_Print("PAINT: initialized.\n");
@@ -1835,6 +1866,7 @@ dali_DestroyEngine(Engine* engine)
     obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
     obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
 }
+
 Dali_Engine*
 dali_AllocEngine(void)
 {
@@ -1857,6 +1889,36 @@ Obdn_PrimitiveHandle
 dali_GetActivePrim(Dali_Engine* engine)
 {
     return engine->activePrim;
+}
+
+void 
+dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
+{
+    obdn_FreeImage(&engine->imageA);
+    obdn_FreeImage(&engine->imageB);
+    obdn_FreeImage(&engine->imageC);
+    obdn_FreeImage(&engine->imageD);
+    vkDestroyFramebuffer(engine->device, engine->applyPaintFrameBuffer, NULL);
+    vkDestroyFramebuffer(engine->device, engine->compositeFrameBuffer, NULL);
+    vkDestroyFramebuffer(engine->device, engine->backgroundFrameBuffer, NULL);
+    vkDestroyFramebuffer(engine->device, engine->foregroundFrameBuffer, NULL);
+    Obdn_Material* mat = obdn_GetMaterial(scene, engine->activeMaterial);
+    obdn_SceneRemoveTexture(scene, mat->textureAlbedo);
+    mat->textureAlbedo = NULL_TEXTURE;
+    engine->state = NEEDS_TO_CREATE_IMAGES;
+}
+
+void
+dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
+{
+    initPaintImages(engine);
+    initFramebuffers(engine);
+    updateDescSetPaint(engine);
+    updateDescSetComp(engine);
+    Obdn_Material* mat = obdn_GetMaterial(scene, engine->activeMaterial);
+    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, engine->imageA);
+    mat->textureAlbedo = tex;
+    engine->state = READY;
 }
 
 Obdn_Image* 

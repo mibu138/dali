@@ -26,6 +26,8 @@ Dali_LayerStack*  layerStack;
 Dali_UndoManager* undoManager;
 Dali_Brush*       brush;
 
+Obdn_Geometry geo;
+
 Shiv_Renderer* renderer;
 
 Obdn_Command renderCommand;
@@ -362,11 +364,10 @@ painterMain(const char* modelpath, bool maskMode)
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, format, grimoire, engine);
 
-    Obdn_PrimitiveHandle prim = obdn_LoadPrim(scene, testgeopath, 
-        COAL_MAT4_IDENT, dali_GetPaintMaterial(engine), 
-        VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-        VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR 
-        );
+    geo = obdn_LoadGeo(oMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, 
+            testgeopath, true);
+
+    Obdn_PrimitiveHandle prim = obdn_AddPrim(scene, geo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
     dali_SetActivePrim(engine, prim);
     dali_LayerBackup(layerStack); // initial backup
 

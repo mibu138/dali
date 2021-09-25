@@ -37,6 +37,10 @@ Obdn_PrimitiveHandle dali_GetActivePrim(Dali_Engine* engine);
 
 Dali_Engine* dali_AllocEngine(void);
 
+void dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene);
+
+void dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene);
+
 Obdn_Image* 
 dali_GetTextureImage(Dali_Engine*);
 
