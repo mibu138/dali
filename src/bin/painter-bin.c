@@ -42,6 +42,8 @@ static int windowHeight = WHEIGHT;
 
 static bool spaceDown = false;
 
+static bool is2D;
+
 struct SceneMemEng {
     Obdn_Scene* scene;
     Obdn_Memory* mem;
@@ -209,7 +211,20 @@ static bool
         }
     }
     static Vec3 target = {0, 0, 0};
-    obdn_UpdateCamera_ArcBall(scene, &target, windowWidth, windowHeight, 0.1,
+    if (is2D)
+    {
+        float dx = 0, dy = 0, dz = 0;
+        if (pan)
+        {
+            dx = (mx - xprev) * -0.001;
+            dy = (my - yprev) * 0.001;
+        }
+        if (zoom)
+            dz = (mx - xprev) * -0.001;
+        obdn_SceneUpdateCamera_Pos(scene, dx, dy, dz);
+    }
+    else 
+        obdn_UpdateCamera_ArcBall(scene, &target, windowWidth, windowHeight, 0.1,
                               xprev, mx, yprev, my, pan, tumble, zoom, false);
     xprev = mx;
     yprev = my;
@@ -369,10 +384,17 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
                               brush, 4096, format, grimoire, engine);
 
     if (twoDMode)
+    {
         paintGeo = obdn_CreateQuadNDC_2(oMemory, 0, 0, 1, 1);
+        obdn_UpdateCamera_LookAt(scene, (Vec3){0, 0, 1}, (Vec3){0, 0, 0}, (Vec3){0, 1, 0});
+    }
     else 
+    {
         paintGeo = obdn_LoadGeo(oMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, 
             testgeopath, true);
+    }
+
+    is2D = twoDMode;
 
     Obdn_PrimitiveHandle prim = obdn_SceneAddPrim(scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
     dali_SetActivePrim(engine, prim);
