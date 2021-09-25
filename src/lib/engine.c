@@ -618,15 +618,15 @@ updateDescSetPrim(Engine* engine, const Obdn_Scene* scene)
     Obdn_Primitive* prim = obdn_GetPrimitive(scene, engine->activePrim.id);
 
     VkDescriptorBufferInfo uvBufInfo = {
-        .offset = obdn_GetAttrOffset(&prim->geo, "uv"),
-        .range  = obdn_GetAttrRange(&prim->geo, "uv"),
-        .buffer = prim->geo.vertexRegion.buffer,
+        .offset = obdn_GetAttrOffset(prim->geo, "uv"),
+        .range  = obdn_GetAttrRange(prim->geo, "uv"),
+        .buffer = prim->geo->vertexRegion.buffer,
     };
 
     VkDescriptorBufferInfo indexBufInfo = {
-        .offset = prim->geo.indexRegion.offset,
-        .range  = prim->geo.indexRegion.size,
-        .buffer = prim->geo.indexRegion.buffer,
+        .offset = prim->geo->indexRegion.offset,
+        .range  = prim->geo->indexRegion.size,
+        .buffer = prim->geo->indexRegion.buffer,
     };
 
     VkWriteDescriptorSet writes[] = {
@@ -1414,30 +1414,30 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
 {
     assert(engine->activePrim.id != 0);
     Obdn_Primitive* prim = obdn_GetPrimitive(scene, engine->activePrim.id);
-    if (prim->dirt & OBDN_PRIM_UPDATE_REMOVED)
+    if (prim->dirt & OBDN_PRIM_REMOVED_BIT)
     {
         obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
         obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
         engine->activePrim = NULL_PRIM;
         return;
     }
-    assert(prim->geo.vertexRegion.size);
-    if (prim->dirt & OBDN_PRIM_UPDATE_ADDED)
+    assert(prim->geo);
+    if (prim->dirt & OBDN_PRIM_ADDED_BIT)
     {
         Coal_Mat4 xform = COAL_MAT4_IDENT;
-        obdn_BuildBlas(engine->memory, &prim->geo, &engine->bottomLevelAS);
+        obdn_BuildBlas(engine->memory, prim->geo, &engine->bottomLevelAS);
         obdn_BuildTlas(engine->memory, 1, &engine->bottomLevelAS, &xform,
                        &engine->topLevelAS);
 
         updateDescSetPrim(engine, scene);
         return;
     }
-    if (prim->dirt & OBDN_PRIM_UPDATE_TOPOLOGY_CHANGED)
+    if (prim->dirt & OBDN_PRIM_TOPOLOGY_CHANGED_BIT)
     {
         obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
         obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
         Coal_Mat4 xform = COAL_MAT4_IDENT;
-        obdn_BuildBlas(engine->memory, &prim->geo, &engine->bottomLevelAS);
+        obdn_BuildBlas(engine->memory, prim->geo, &engine->bottomLevelAS);
         obdn_BuildTlas(engine->memory, 1, &engine->bottomLevelAS, &xform,
                        &engine->topLevelAS);
 
@@ -1809,7 +1809,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
     updateDescSetPaint(engine);
     updateDescSetComp(engine);
 
-    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, engine->imageA);
+    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, &engine->imageA);
     engine->activeMaterial = obdn_SceneCreateMaterial(
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
 
@@ -1916,7 +1916,7 @@ dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
     updateDescSetPaint(engine);
     updateDescSetComp(engine);
     Obdn_Material* mat = obdn_GetMaterial(scene, engine->activeMaterial);
-    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, engine->imageA);
+    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, &engine->imageA);
     mat->textureAlbedo = tex;
     engine->state = READY;
 }

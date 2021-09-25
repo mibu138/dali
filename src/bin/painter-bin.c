@@ -26,7 +26,7 @@ Dali_LayerStack*  layerStack;
 Dali_UndoManager* undoManager;
 Dali_Brush*       brush;
 
-Obdn_Geometry geo;
+Obdn_Geometry paintGeo;
 
 Shiv_Renderer* renderer;
 
@@ -58,13 +58,15 @@ static void setGeo(const Hell_Grimoire* grim, void* data)
         Obdn_PrimitiveHandle ap = dali_GetActivePrim(sm->engine);
         if (ap.id == 0)
         {
-            Obdn_PrimitiveHandle np = obdn_AddPrim(sm->scene, cube, COAL_MAT4_IDENT, dali_GetPaintMaterial(sm->engine));
+            paintGeo = cube;
+            Obdn_PrimitiveHandle np = obdn_SceneAddPrim(sm->scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(sm->engine));
             dali_SetActivePrim(sm->engine, np);
         }
         else 
         {
-            Obdn_Geometry old = obdn_SceneSwapPrimGeo(sm->scene, dali_GetActivePrim(sm->engine), cube);
-            obdn_FreeGeo(&old);
+            Obdn_Geometry* curgeo = obdn_SceneGetPrimGeo(scene, ap, OBDN_PRIM_TOPOLOGY_CHANGED_BIT);
+            obdn_FreeGeo(curgeo);
+            *curgeo = cube;
         }
     }
 }
@@ -76,6 +78,7 @@ static void rmGeo(const Hell_Grimoire* grim, void* data)
     {
         Obdn_PrimitiveHandle h = dali_GetActivePrim(sm->engine);
         obdn_SceneRemovePrim(sm->scene, h);
+        obdn_FreeGeo(&paintGeo);
     }
 }
 
@@ -364,10 +367,10 @@ painterMain(const char* modelpath, bool maskMode)
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, format, grimoire, engine);
 
-    geo = obdn_LoadGeo(oMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, 
+    paintGeo = obdn_LoadGeo(oMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, 
             testgeopath, true);
 
-    Obdn_PrimitiveHandle prim = obdn_AddPrim(scene, geo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
+    Obdn_PrimitiveHandle prim = obdn_SceneAddPrim(scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
     dali_SetActivePrim(engine, prim);
     dali_LayerBackup(layerStack); // initial backup
 
