@@ -1,4 +1,5 @@
 #include "dali/dali.h"
+#include <unistd.h>
 #include <hell/hell.h>
 #include <hell/platform.h>
 #include <hell/len.h>
@@ -303,7 +304,7 @@ daliFrame(void)
 }
 
 int
-painterMain(const char* modelpath, bool maskMode)
+painterMain(const char* modelpath, bool maskMode, bool twoDMode)
 {
     const Dali_Format format = maskMode ? DALI_FORMAT_R32_SFLOAT : DALI_FORMAT_R8G8B8A8_UNORM;
     eventQueue = hell_AllocEventQueue();
@@ -367,7 +368,10 @@ painterMain(const char* modelpath, bool maskMode)
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, format, grimoire, engine);
 
-    paintGeo = obdn_LoadGeo(oMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, 
+    if (twoDMode)
+        paintGeo = obdn_CreateQuadNDC_2(oMemory, 0, 0, 1, 1);
+    else 
+        paintGeo = obdn_LoadGeo(oMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, 
             testgeopath, true);
 
     Obdn_PrimitiveHandle prim = obdn_SceneAddPrim(scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
@@ -390,6 +394,8 @@ painterMain(const char* modelpath, bool maskMode)
 
     if (format == DALI_FORMAT_R32_SFLOAT)
         shiv_SetDrawMode(renderer, "mono");
+    else 
+        shiv_SetDrawMode(renderer, "uvgrid");
 
     sceneMemEng.scene = scene;
     sceneMemEng.mem   = oMemory;
@@ -407,6 +413,8 @@ painterMain(const char* modelpath, bool maskMode)
     return 0;
 }
 
+#define USAGE_STR "Usage: %s [-m] [path-to-model.tnt]|[-d]\n"
+
 #ifdef WIN32
 int APIENTRY WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance,
     _In_ PSTR lpCmdLine, _In_ int nCmdShow)
@@ -420,23 +428,38 @@ int main(int argc, char* argv[])
 {
     if (argc < 2 || argc > 3)
     {
-        hell_Print("Usage: %s [-m] path-to-model.tnt\n", argv[0]);
+        hell_Print(USAGE_STR, argv[0]);
         return 1;
     }
     bool maskMode = false;
+    bool twoDMode = false;
     const char* filePath;
     if (argc == 3)
     {
         if (strcmp(argv[1], "-m") != 0)
         {
-            hell_Print("Usage: %s [-m] path-to-model.tnt\n", argv[0]);
+            hell_Print(USAGE_STR, argv[0]);
             return 1;
         }
         maskMode = true;
         filePath = argv[2];
     }
     else 
+    {
         filePath = argv[1];
-    painterMain(filePath, maskMode);
+    }
+    if (strncmp(filePath, "-d", 2) == 0)
+    {
+        twoDMode = true;
+    }
+    else
+    {
+        if (access(filePath, R_OK) != 0)
+        {
+            hell_Print("Cannot find file %s or read permissions not set\n", filePath);
+            return 1;
+        }
+    }
+    painterMain(filePath, maskMode, twoDMode);
 }
 #endif
