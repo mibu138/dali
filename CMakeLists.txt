@@ -25,7 +25,7 @@ include(FetchContent)
 FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY ${OBSIDIAN_URL}
-    GIT_TAG master)
+    GIT_TAG pressureSupport)
 
 FetchContent_MakeAvailable(obsidian)
 

@@ -425,7 +425,7 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMemEng);
     hell_AddCommand(grimoire, "rmgeo", rmGeo, &sceneMemEng);
 
-    hell_Subscribe(eventQueue, HELL_EVENT_MASK_MOUSE_BIT,
+    hell_Subscribe(eventQueue, HELL_EVENT_MASK_POINTER_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_KEY_BIT,
                    hell_GetWindowID(window), handleKeyEvent, &sceneMemEng);
