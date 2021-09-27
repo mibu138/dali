@@ -50,9 +50,9 @@ typedef struct Dali_Brush {
     float         r;
     float         g;
     float         b;
-    bool          active;
     float         opacity;
     float         falloff;
+    bool          active;
     PaintMode     mode;
     DirtMask      dirt;
 } Dali_Brush;

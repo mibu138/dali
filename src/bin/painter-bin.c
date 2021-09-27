@@ -1,3 +1,4 @@
+#include <math.h>
 #include "dali/dali.h"
 #include <unistd.h>
 #include <hell/hell.h>
@@ -249,6 +250,12 @@ handlePaintEvent(const Hell_Event* ev, void* data)
     {
         dali_SetBrushInactive(brush);
         dali_LayerBackup(layerStack);
+    }
+    if (ev->type == HELL_EVENT_TYPE_STYLUS)
+    {
+        float pressure = ev->data.winData.data.stylusData.pressure;
+        pressure = pow(pressure, 3);
+        dali_SetBrushOpacity(brush, pressure);
     }
     return false;
 }
