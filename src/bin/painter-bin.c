@@ -156,6 +156,8 @@ handleWindowResizeEvent(const Hell_Event* ev, void* data)
     if (ev->type != HELL_EVENT_TYPE_RESIZE) return false;
     windowWidth = ev->data.winData.data.resizeData.width;
     windowHeight = ev->data.winData.data.resizeData.height;
+    float ar = (float)windowWidth / (float)windowHeight;
+    obdn_SceneCameraUpdateAspectRatio(scene, ar);
     return false;
 }
 
@@ -376,7 +378,7 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     obdn_CreateSwapchain(oInstance, oMemory, eventQueue, window,
                          VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 1, &depthAov,
                          swapchain);
-    obdn_CreateScene(grimoire, oMemory, 0.01, 100, scene);
+    obdn_CreateScene(grimoire, oMemory, 1, 1, 0.01, 100, scene);
 
     engine      = dali_AllocEngine();
     layerStack  = dali_AllocLayerStack();
