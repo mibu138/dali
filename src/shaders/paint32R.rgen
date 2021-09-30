@@ -45,11 +45,10 @@ void main()
     vec2 brushPos = vec2(pc.brushx, pc.brushy) * 2.0 - 1.0; // map to -1, 1 range
     vec2 st = inUV * 2.0 - 1.0; //normalize to -1, 1 range
     st = st * brush.radius;
+
+    fireRay(cam.viewInv, cam.projInv, st, brushPos);
+
     const float dist = length(st);
-    st = st + brushPos; 
-
-    fireRay(cam.viewInv, cam.projInv, st);
-
     const float f = brush.anti_falloff;
     float alpha = (1.0 - smoothstep(f, brush.radius, dist)) * brush.opacity;
     vec4 color = vec4(alpha, 0, 0, 0); //spec states R component is used for r32f format images
