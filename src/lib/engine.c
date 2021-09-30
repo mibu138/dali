@@ -1358,7 +1358,7 @@ updateView(Engine* engine, const Obdn_Scene* scene)
 {
     UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
     matrices->view        = obdn_GetCameraView(scene);
-    matrices->viewInv     = coal_Invert4x4(matrices->view);
+    matrices->viewInv     = coal_Invert4x4(matrices->view); //TODO: replace with cam.xform
 }
 
 static void
@@ -1367,7 +1367,6 @@ updateProj(Engine* engine, const Obdn_Scene* scene)
     UboMatrices* matrices = (UboMatrices*)engine->matrixRegion.hostData;
     matrices->proj        = obdn_GetCameraProjection(scene);
     matrices->projInv     = coal_Invert4x4(matrices->proj);
-    coal_PrintMat4(matrices->proj);
 }
 
 static void

@@ -144,3 +144,10 @@ void dali_BrushClearDirt(Dali_Brush* brush)
 {
     brush->dirt = 0;
 }
+
+Vec2
+dali_GetBrushPos(Dali_Brush* brush)
+{
+    Vec2 pos = {brush->x, brush->y};
+    return pos;
+}

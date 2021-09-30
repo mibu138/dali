@@ -275,6 +275,31 @@ handleMouseEvent(const Hell_Event* ev, void* data)
 
 static VkSemaphore acquireSemaphore;
 
+#ifdef DEBUG_BRUSH
+static void 
+debugBrush() 
+{
+    const Obdn_Camera* cam = obdn_SceneGetCamera(scene);
+    Vec2 bp = dali_GetBrushPos(brush);
+    //Vec4 brushPos = (Vec4){bp.x * 2 - 1, bp.y * 2 - 1, 0, 1};
+    Vec4 brushPos = (Vec4){0, 0, -0.01 * 100 / (100 - 0.01), 0};
+    Mat4 viewInv = cam->xform;
+    Mat4 projInv = coal_Invert4x4(cam->proj);
+    hell_Print("View inverted:\n");
+    coal_PrintMat4(viewInv);
+    hell_Print("Proj inverted:\n");
+    coal_PrintMat4(projInv);
+    hell_Print("Brush Pos:\n");
+    coal_PrintVec4(brushPos);
+    hell_Print("projInv * pos:\n");
+    brushPos = coal_Mult_Mat4Vec4(projInv, brushPos);
+    coal_PrintVec4(brushPos);
+    hell_Print("viewInv * projInv * pos:\n");
+    brushPos = coal_Mult_Mat4Vec4(viewInv, brushPos);
+    coal_PrintVec4(brushPos);
+}
+#endif
+
 void
 daliFrame(void)
 {

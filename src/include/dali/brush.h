@@ -1,6 +1,8 @@
 #ifndef DALI_BRUSH_H
 #define DALI_BRUSH_H
 
+#include <coal/coal.h>
+
 typedef struct Dali_Brush Dali_Brush;
 
 typedef struct Hell_Grimoire Hell_Grimoire;
@@ -23,5 +25,7 @@ void dali_SetBrushFalloff(Dali_Brush* brush, float f);
 void dali_SetBrushMode(Dali_Brush* brush, Dali_PaintMode mode);
 Dali_PaintMode dali_GetBrushPaintMode(const Dali_Brush* brush);
 void dali_BrushClearDirt(Dali_Brush* brush);
+
+Coal_Vec2 dali_GetBrushPos(Dali_Brush* brush);
 
 #endif /* end of include guard: DALI_BRUSH_H */

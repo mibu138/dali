@@ -10,4 +10,6 @@ set(SRCS
 
 include(author_shaders)
 author_shaders(dali_shaders dali Obsidian::glslc
-    SOURCES ${SRCS})
+    SOURCES ${SRCS} 
+    DEPS 
+    fireray.glsl)
