@@ -39,8 +39,7 @@ float rand(vec2 co){
 
 void main() 
 {
-    //const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy * pc.seedx), rand(gl_LaunchIDEXT.xy * pc.seedy * 41.45234));
-    const vec2 jitter = vec2(0, 0);
+    const vec2 jitter = vec2(rand(gl_LaunchIDEXT.xy * pc.seedx), rand(gl_LaunchIDEXT.xy * pc.seedy * 41.45234));
     const vec2 pixelCenter = vec2(gl_LaunchIDEXT.xy) + vec2(0.5) + jitter;
     const vec2 inUV = pixelCenter / vec2(gl_LaunchSizeEXT.xy); // map to 0 to 1
     vec2 brushPos = vec2(pc.brushx, pc.brushy) * 2.0 - 1.0; // map to -1, 1 range
