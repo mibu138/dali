@@ -255,7 +255,6 @@ handlePaintEvent(const Hell_Event* ev, void* data)
     }
     if (ev->type == HELL_EVENT_TYPE_STYLUS)
     {
-        hell_Print("Got stylus event\n");
         float pressure = ev->data.winData.data.stylusData.pressure;
         pressure = pow(pressure, 3);
         dali_SetBrushOpacity(brush, pressure);
