@@ -1566,7 +1566,7 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
             backupLayer(engine, u);
             semaphore = engine->cmdAcquireImageTranferSource.semaphore;
         }
-        if (brush->dirt & PAINT_MODE_BIT)
+        if (brush->dirt & BRUSH_PAINT_MODE_BIT)
         {
             updatePaintMode(engine, brush);
         }

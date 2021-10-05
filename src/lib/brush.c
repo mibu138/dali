@@ -54,6 +54,7 @@ static void setBrushInactiveCmd(const Hell_Grimoire* grim, void* brushptr)
     dali_SetBrushInactive(brush);
 }
 
+
 Dali_Brush* dali_AllocBrush(void)
 {
     return hell_Malloc(sizeof(Dali_Brush));
@@ -69,7 +70,7 @@ void dali_CreateBrush(Hell_Grimoire* grim, Dali_Brush *brush)
     brush->radius = 1.0;
     brush->falloff = 0.8;
     brush->mode = PAINT_MODE_OVER;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt = -1;
 
     if (grim)
     {
@@ -137,7 +138,7 @@ PaintMode dali_GetBrushPaintMode(const Dali_Brush* brush)
 void dali_SetBrushMode(Dali_Brush* brush, Dali_PaintMode mode)
 {
     brush->mode = mode;
-    brush->dirt |= PAINT_MODE_BIT;
+    brush->dirt |= BRUSH_PAINT_MODE_BIT;
 }
 
 void dali_BrushClearDirt(Dali_Brush* brush)
@@ -151,3 +152,4 @@ dali_GetBrushPos(Dali_Brush* brush)
     Vec2 pos = {brush->x, brush->y};
     return pos;
 }
+
