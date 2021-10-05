@@ -88,7 +88,7 @@ void dali_SetBrushPos(Dali_Brush* brush, float x, float y)
 {
     brush->x = x;
     brush->y = y;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt |= BRUSH_GENERAL_BIT;
 }
 
 void dali_SetBrushColor(Dali_Brush* brush, float r, float g, float b)
@@ -96,37 +96,37 @@ void dali_SetBrushColor(Dali_Brush* brush, float r, float g, float b)
     brush->r = r;
     brush->g = g;
     brush->b = b;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt |= BRUSH_GENERAL_BIT;
 }
 
 void dali_SetBrushRadius(Dali_Brush* brush, float r)
 {
     brush->radius = r;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt |= BRUSH_GENERAL_BIT;
 }
 
 void dali_SetBrushActive(Dali_Brush* brush)
 {
     brush->active = true;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt |= BRUSH_GENERAL_BIT;
 }
 
 void dali_SetBrushOpacity(Dali_Brush* brush, float o)
 {
     brush->opacity = o;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt |= BRUSH_GENERAL_BIT;
 }
 
 void dali_SetBrushFalloff(Dali_Brush* brush, float f)
 {
     brush->falloff = f;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt |= BRUSH_GENERAL_BIT;
 }
 
 void dali_SetBrushInactive(Dali_Brush* brush)
 {
     brush->active = false;
-    brush->dirt |= BRUSH_BIT;
+    brush->dirt |= BRUSH_GENERAL_BIT;
 }
 
 PaintMode dali_GetBrushPaintMode(const Dali_Brush* brush)
@@ -153,3 +153,8 @@ dali_GetBrushPos(Dali_Brush* brush)
     return pos;
 }
 
+void dali_SetBrushAlpha(Dali_Brush* brush, Obdn_Image* alpha)
+{
+    brush->alphaImg = alpha;
+    brush->dirt |= BRUSH_ALPHA_BIT;
+}

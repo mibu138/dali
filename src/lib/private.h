@@ -13,7 +13,7 @@ typedef uint32_t DirtMask;
 #define PAINT_MODE_ERASE DALI_PAINT_MODE_ERASE
 
 typedef enum {
-    BRUSH_BIT            = (DirtMask)1 << 1,
+    BRUSH_GENERAL_BIT    = (DirtMask)1 << 1,
     BRUSH_PAINT_MODE_BIT = (DirtMask)1 << 2,
     BRUSH_ALPHA_BIT      = (DirtMask)1 << 3
 } BrushDirtyBits;
@@ -55,7 +55,7 @@ typedef struct Dali_Brush {
     float         opacity;
     float         falloff;
     PaintMode     mode;
-    Obdn_Image    alphaImg;
+    Obdn_Image*   alphaImg; //non-owning
     DirtMask      dirt;
 } Dali_Brush;
 

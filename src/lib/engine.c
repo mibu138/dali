@@ -1379,34 +1379,36 @@ updateBrushColor(Engine* engine, float r, float g, float b)
 }
 
 static void
-updateBrush(Engine* engine, const Dali_Brush* b)
+syncBrush(Engine* engine, const Dali_Brush* b)
 {
     UboBrush* brush = (UboBrush*)engine->brushRegion.hostData;
-    if (b->mode != PAINT_MODE_ERASE)
-        updateBrushColor(engine, b->r, b->g, b->b);
-    else
-        updateBrushColor(engine, 1, 1, 1); // must be white for erase to work
 
-    engine->brushActive = b->active;
+    if (b->dirt & BRUSH_PAINT_MODE_BIT)
+    {
+        vkDeviceWaitIdle(engine->device);
+        destroyCompPipelines(engine);
+        initCompPipelines(engine, b->mode);
+    }
 
-    engine->prevBrushPos.x = engine->brushPos.x;
-    engine->prevBrushPos.y = engine->brushPos.y;
-    engine->brushPos.x     = b->x;
-    engine->brushPos.y     = b->y;
+    if (b->dirt & BRUSH_GENERAL_BIT)
+    {
+        if (b->mode != PAINT_MODE_ERASE)
+            updateBrushColor(engine, b->r, b->g, b->b);
+        else
+            updateBrushColor(engine, 1, 1, 1); // must be white for erase to work
+        engine->brushActive = b->active;
 
-    brush->radius       = b->radius;
-    brush->x            = b->x;
-    brush->y            = b->y;
-    brush->opacity      = b->opacity;
-    brush->anti_falloff = (1.0 - b->falloff) * b->radius;
-}
+        engine->prevBrushPos.x = engine->brushPos.x;
+        engine->prevBrushPos.y = engine->brushPos.y;
+        engine->brushPos.x     = b->x;
+        engine->brushPos.y     = b->y;
 
-static void
-updatePaintMode(Engine* engine, const Dali_Brush* b)
-{
-    vkDeviceWaitIdle(engine->device);
-    destroyCompPipelines(engine);
-    initCompPipelines(engine, b->mode);
+        brush->radius       = b->radius;
+        brush->x            = b->x;
+        brush->y            = b->y;
+        brush->opacity      = b->opacity;
+        brush->anti_falloff = (1.0 - b->falloff) * b->radius;
+    }
 }
 
 static void
@@ -1547,8 +1549,8 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
             updateView(engine, scene);
         if (sceneDirt & OBDN_SCENE_CAMERA_PROJ_BIT)
             updateProj(engine, scene);
-        if (brush->dirt & BRUSH_BIT)
-            updateBrush(engine, brush);
+        if (brush->dirt)
+            syncBrush(engine, brush);
         if (sceneDirt & OBDN_SCENE_PRIMS_BIT)
             updatePrim(engine, scene);
         if (u->dirt & UNDO_BIT)
@@ -1565,10 +1567,6 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
         {
             backupLayer(engine, u);
             semaphore = engine->cmdAcquireImageTranferSource.semaphore;
-        }
-        if (brush->dirt & BRUSH_PAINT_MODE_BIT)
-        {
-            updatePaintMode(engine, brush);
         }
     }
     return semaphore;
