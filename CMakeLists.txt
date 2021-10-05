@@ -23,6 +23,11 @@ endif()
 include(FetchContent)
 
 FetchContent_Declare(
+    hell 
+    GIT_REPOSITORY https://github.com/mokchira/hell
+    GIT_TAG dali)
+
+FetchContent_Declare(
     obsidian 
     GIT_REPOSITORY ${OBSIDIAN_URL}
     GIT_TAG dali)

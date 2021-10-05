@@ -164,6 +164,7 @@ handleWindowResizeEvent(const Hell_Event* ev, void* data)
 static bool 
     handleViewEvent(const Hell_Event* ev, void* data)
 {
+    if (ev->type == HELL_EVENT_TYPE_STYLUS) return false;
     int         mx     = ev->data.winData.data.mouseData.x;
     int         my     = ev->data.winData.data.mouseData.y;
     static bool tumble = false;
@@ -367,7 +368,7 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     hell_CreateWindow(eventQueue, WWIDTH, WHEIGHT, NULL, window);
     hell_CreateHellmouth(grimoire, eventQueue, console, 1, &window, daliFrame,
                          NULL, hellmouth);
-    hell_SetVar(grimoire, "maxFps", "1000", 0);
+    hell_SetVar(grimoire, "maxFps", "500", 0);
 
     oInstance = obdn_AllocInstance();
     oMemory   = obdn_AllocMemory();
