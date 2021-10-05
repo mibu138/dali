@@ -1409,6 +1409,18 @@ syncBrush(Engine* engine, const Dali_Brush* b)
         brush->opacity      = b->opacity;
         brush->anti_falloff = (1.0 - b->falloff) * b->radius;
     }
+
+    if (b->dirt & BRUSH_ALPHA_BIT)
+    {
+        hell_Print("Brush alpha dirty!\n");
+        if (b->alphaImg)
+        {
+        }
+        else 
+        {
+        hell_Print("Brush has no alpha so ignoring!\n");
+        }
+    }
 }
 
 static void
