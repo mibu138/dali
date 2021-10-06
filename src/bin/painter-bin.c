@@ -95,6 +95,10 @@ static void loadAlphaImage(const Hell_Grimoire* grim, void* data)
     const char* path = hell_GetArg(grim, 1);
     if (access(path, R_OK) == 0)
     {
+        if (brushAlpha.size != 0)
+        {
+            obdn_FreeImage(&brushAlpha);
+        }
         obdn_LoadImage(
             oMemory, path, 4, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT,
             VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, VK_FILTER_LINEAR,

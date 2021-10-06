@@ -18,6 +18,7 @@
 #include <obsidian/raytrace.h>
 #include <obsidian/util.h>
 #include <stdio.h>
+#include <math.h>
 #include <string.h>
 
 #ifdef SPVDIR_PREFIX 
@@ -103,13 +104,14 @@ typedef struct Dali_Engine {
     Obdn_MaterialHandle  activeMaterial;
     Obdn_PrimitiveHandle activePrim;
 
-    uint32_t             rayWidth; // sqrt of ray count (rays per splat)
-
     EngineState          state;
     
     bool                 brushActive;
-    Vec2                 prevBrushPos;
+    bool                 brushWasActive;
+    float                strokeLength;
+    uint32_t             rayWidth; // sqrt of ray count (rays per splat)
     Vec2                 brushPos;
+    Vec2                 prevBrushPos;
     Obdn_Memory*         memory;
     const Obdn_Instance* instance;
     VkDevice             device;
@@ -1737,29 +1739,53 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
 
     if (engine->brushActive)
     {
-        static const float unit = 0.001; // in screen space
-        const float        brushDist =
-            coal_Distance(engine->brushPos, engine->prevBrushPos);
-        const int splatCount = MIN(MAX(brushDist / unit, 1), 30);
-        for (int i = 0; i < splatCount; i++)
+        if (!engine->brushWasActive)
         {
-            float t     = (float)i / splatCount;
-            float xstep = t * (engine->brushPos.x - engine->prevBrushPos.x);
-            float ystep = t * (engine->brushPos.y - engine->prevBrushPos.y);
-            float x     = engine->prevBrushPos.x + xstep;
-            float y     = engine->prevBrushPos.y + ystep;
-
-            splat(engine, cmdBuf, x, y, engine->rayWidth);
-
-            applyPaint(engine, cmdBuf);
-
+            engine->brushWasActive = true;
+            engine->strokeLength = 0.0;
             vkCmdClearColorImage(cmdBuf, engine->imageA.handle,
                                  VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1,
                                  &imageRange);
+
+            splat(engine, cmdBuf, engine->brushPos.x, engine->brushPos.y, engine->rayWidth);
+        }
+        else 
+        {
+            static const float unit = 0.04; // in screen space
+            const float        brushDist =
+                coal_Distance(engine->brushPos, engine->prevBrushPos);
+            float remainder = fmodf(engine->strokeLength, unit);
+            float totalNewLength = remainder + brushDist;
+            engine->strokeLength += brushDist;
+            const int splatCount = (int)(MIN(totalNewLength / unit, 30));
+            Coal_Vec2 splatVector = {
+                engine->brushPos.x - engine->prevBrushPos.x, 
+                engine->brushPos.y - engine->prevBrushPos.y};
+            float t = unit - remainder;
+            float stepSize = totalNewLength / splatCount; 
+            for (int i = 0; i < splatCount; i++)
+            {
+                float xstep = t * splatVector.x;
+                float ystep = t * splatVector.y;
+                float x     = engine->prevBrushPos.x + xstep;
+                float y     = engine->prevBrushPos.y + ystep;
+                t += stepSize;
+
+                vkCmdClearColorImage(cmdBuf, engine->imageA.handle,
+                                     VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1,
+                                     &imageRange);
+
+                splat(engine, cmdBuf, x, y, engine->rayWidth);
+
+                applyPaint(engine, cmdBuf);
+            }
         }
     }
-    else
-        applyPaint(engine, cmdBuf);
+    else 
+    {
+        engine->brushWasActive = false;
+    }
+    applyPaint(engine, cmdBuf);
 
     comp(engine, cmdBuf);
 }
