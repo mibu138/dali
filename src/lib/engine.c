@@ -74,6 +74,10 @@ typedef struct Dali_Engine {
     Image imageB;
     Image imageC; // primarily background layers
     Image imageD; // primarily foreground layers
+    
+    // default alpha is created once and 
+    // it is shared by all brushes across 
+    Image defaultBrushAlpha; 
 
     VkFramebuffer applyPaintFrameBuffer;
     VkFramebuffer compositeFrameBuffer;
@@ -548,7 +552,12 @@ initDescSetsAndPipeLayouts(Engine* engine)
         {// paint image
          .descriptorCount = 1,
          .type            = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-         .stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR}};
+         .stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR},
+        {// alpha image
+         .descriptorCount = 1,
+         .type            = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+         .stageFlags      = VK_SHADER_STAGE_RAYGEN_BIT_KHR}
+    };
 
     Obdn_DescriptorBinding bindingsC[] = {
         {
@@ -606,6 +615,61 @@ initDescSetsAndPipeLayouts(Engine* engine)
                                pipeLayoutInfos, &engine->pipelineLayout);
 }
 
+static void 
+createDefaultBrushAlpha(Engine* engine)
+{
+    Obdn_Image image = obdn_CreateImageAndSampler(engine->memory, 32, 32, VK_FORMAT_R32_SFLOAT,
+                     VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                     VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, 1, VK_FILTER_LINEAR, OBDN_MEMORY_DEVICE_TYPE);
+
+    Obdn_Command cmd = obdn_CreateCommand(engine->instance, OBDN_V_QUEUE_GRAPHICS_TYPE);
+    
+    VkImageSubresourceRange ssRange = {
+            .aspectMask = VK_IMAGE_ASPECT_COLOR_BIT, 
+            .baseArrayLayer = 0,
+            .baseMipLevel = 0,
+            .levelCount = 1,
+            .layerCount = 1
+    };
+
+    VkImageMemoryBarrier barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .image = image.handle,
+        .srcAccessMask = 0,
+        .dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED,
+        .newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+        .subresourceRange = ssRange
+    };
+
+    VkClearColorValue color = {
+        .float32 = {1., 1., 1., 1.}
+    };
+
+    obdn_BeginCommandBuffer(cmd.buffer);
+    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+                         VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1,
+                         &barrier);
+    vkCmdClearColorImage(cmd.buffer, image.handle, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &color, 1, &ssRange);
+
+    barrier.srcAccessMask = barrier.dstAccessMask;
+    barrier.dstAccessMask = 0;
+    barrier.oldLayout = barrier.newLayout;
+    barrier.newLayout = VK_IMAGE_LAYOUT_GENERAL;
+
+    vkCmdPipelineBarrier(cmd.buffer, VK_PIPELINE_STAGE_TRANSFER_BIT,
+                         VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+                         VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1,
+                         &barrier);
+
+    obdn_EndCommandBuffer(cmd.buffer);
+
+    obdn_SubmitAndWait(&cmd, 0);
+
+    engine->defaultBrushAlpha = image;
+}
+
 static void
 updateDescSetPrim(Engine* engine, const Obdn_Scene* scene)
 {
@@ -655,8 +719,26 @@ updateDescSetPrim(Engine* engine, const Obdn_Scene* scene)
     vkUpdateDescriptorSets(engine->device, LEN(writes), writes, 0, NULL);
 }
 
-static void
-updateDescSetPaint(Engine* engine)
+static void 
+updateDescriptorsAlphaImage(Engine* engine, const Obdn_Image* image)
+{
+    VkDescriptorImageInfo imageInfo = {.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                       .imageView   = image->view,
+                                       .sampler     = image->sampler};
+    VkWriteDescriptorSet write = {
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+        .dstSet          = engine->description.descriptorSets[DESC_SET_PAINT],
+        .dstBinding      = 3,
+        .descriptorCount = 1,
+        .pImageInfo      = &imageInfo
+    };
+
+    vkUpdateDescriptorSets(engine->device, 1, &write, 0, NULL);
+}
+
+static void 
+updateDescriptorsPaintUBOS(Engine* engine)
 {
     VkDescriptorBufferInfo uniformInfoMatrices = {
         .range  = engine->matrixRegion.size,
@@ -669,10 +751,6 @@ updateDescSetPaint(Engine* engine)
         .offset = engine->brushRegion.offset,
         .buffer = engine->brushRegion.buffer,
     };
-
-    VkDescriptorImageInfo imageInfo = {.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                       .imageView   = engine->imageA.view,
-                                       .sampler     = engine->imageA.sampler};
 
     VkWriteDescriptorSet writes[] = {
         {.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
@@ -688,16 +766,39 @@ updateDescSetPaint(Engine* engine)
          .dstBinding      = 1,
          .descriptorCount = 1,
          .descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
-         .pBufferInfo     = &uniformInfoBrush},
-        {.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+         .pBufferInfo     = &uniformInfoBrush}};
+
+    vkUpdateDescriptorSets(engine->device, LEN(writes), writes, 0, NULL);
+}
+
+static void 
+updateDescriptorsPaintImage(Engine* engine)
+{
+    VkDescriptorImageInfo imageInfo = {.imageLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                       .imageView   = engine->imageA.view,
+                                       .sampler     = engine->imageA.sampler};
+    VkWriteDescriptorSet write =  {
+         .sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
          .dstArrayElement = 0,
          .dstSet          = engine->description.descriptorSets[DESC_SET_PAINT],
          .dstBinding      = 2,
          .descriptorCount = 1,
          .descriptorType  = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-         .pImageInfo      = &imageInfo}};
+         .pImageInfo      = &imageInfo};
 
-    vkUpdateDescriptorSets(engine->device, LEN(writes), writes, 0, NULL);
+    vkUpdateDescriptorSets(engine->device, 1, &write, 0, NULL);
+}
+
+static void
+updateAllPaintDescriptors(Engine* engine, const Dali_Brush* brush)
+{
+    updateDescriptorsPaintUBOS(engine);
+    updateDescriptorsPaintImage(engine);
+
+    if (brush->alphaImg)
+        updateDescriptorsAlphaImage(engine, brush->alphaImg);
+    else 
+        updateDescriptorsAlphaImage(engine, &engine->defaultBrushAlpha);
 }
 
 static void
@@ -1415,10 +1516,11 @@ syncBrush(Engine* engine, const Dali_Brush* b)
         hell_Print("Brush alpha dirty!\n");
         if (b->alphaImg)
         {
+            updateDescriptorsAlphaImage(engine, b->alphaImg);
         }
         else 
         {
-        hell_Print("Brush has no alpha so ignoring!\n");
+            updateDescriptorsAlphaImage(engine, &engine->defaultBrushAlpha);
         }
     }
 }
@@ -1816,7 +1918,9 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
 
     assert(engine->imageA.size > 0);
 
-    updateDescSetPaint(engine);
+    createDefaultBrushAlpha(engine);
+
+    updateAllPaintDescriptors(engine, brush);
     updateDescSetComp(engine);
 
     Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, &engine->imageA);
@@ -1923,7 +2027,7 @@ dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
 {
     initPaintImages(engine);
     initFramebuffers(engine);
-    updateDescSetPaint(engine);
+    updateDescriptorsPaintImage(engine);
     updateDescSetComp(engine);
     Obdn_Material* mat = obdn_GetMaterial(scene, engine->activeMaterial);
     Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, &engine->imageA);

@@ -4,6 +4,7 @@
 #include "private.h"
 #include <stdlib.h>
 
+
 static void setBrushPosCmd(const Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
@@ -53,7 +54,6 @@ static void setBrushInactiveCmd(const Hell_Grimoire* grim, void* brushptr)
     Dali_Brush* brush = brushptr;
     dali_SetBrushInactive(brush);
 }
-
 
 Dali_Brush* dali_AllocBrush(void)
 {
@@ -158,3 +158,4 @@ void dali_SetBrushAlpha(Dali_Brush* brush, Obdn_Image* alpha)
     brush->alphaImg = alpha;
     brush->dirt |= BRUSH_ALPHA_BIT;
 }
+

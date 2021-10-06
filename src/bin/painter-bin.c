@@ -6,10 +6,12 @@
 #include <hell/len.h>
 #include <hell/debug.h>
 #include <obsidian/obsidian.h>
+#include <obsidian/image.h>
 #include <obsidian/ui.h>
 #include <shiv/shiv.h>
 #include <string.h>
 #include <stdlib.h>
+#include <unistd.h>
 
 Hell_EventQueue* eventQueue;
 Hell_Grimoire*   grimoire;
@@ -27,6 +29,8 @@ Dali_Engine*      engine;
 Dali_LayerStack*  layerStack;
 Dali_UndoManager* undoManager;
 Dali_Brush*       brush;
+
+Obdn_Image brushAlpha;
 
 Obdn_Geometry paintGeo;
 
@@ -83,6 +87,23 @@ static void rmGeo(const Hell_Grimoire* grim, void* data)
         Obdn_PrimitiveHandle h = dali_GetActivePrim(sm->engine);
         obdn_SceneRemovePrim(sm->scene, h);
         obdn_FreeGeo(&paintGeo);
+    }
+}
+
+static void loadAlphaImage(const Hell_Grimoire* grim, void* data)
+{
+    const char* path = hell_GetArg(grim, 1);
+    if (access(path, R_OK) == 0)
+    {
+        obdn_LoadImage(
+            oMemory, path, 4, VK_FORMAT_B8G8R8A8_UNORM, VK_IMAGE_USAGE_SAMPLED_BIT,
+            VK_IMAGE_ASPECT_COLOR_BIT, VK_SAMPLE_COUNT_1_BIT, VK_FILTER_LINEAR,
+            VK_IMAGE_LAYOUT_GENERAL, false, OBDN_MEMORY_DEVICE_TYPE, &brushAlpha);
+        dali_SetBrushAlpha(brush, &brushAlpha);
+    }
+    else 
+    {
+        hell_Print("Could not access file.\n");
     }
 }
 
@@ -459,6 +480,7 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     sceneMemEng.engine = engine;
     hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMemEng);
     hell_AddCommand(grimoire, "rmgeo", rmGeo, &sceneMemEng);
+    hell_AddCommand(grimoire, "loadalpha", loadAlphaImage, brush);
 
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_POINTER_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);
