@@ -30,6 +30,9 @@ void dali_SetBrushAlpha(Dali_Brush* brush, Obdn_Image* alpha);
 
 void dali_SetBrushSpacing(Dali_Brush* brush, float spacing);
 
+// set angle in radians
+void dali_SetBrushAngle(Dali_Brush* brush, float angle);
+
 Coal_Vec2 dali_GetBrushPos(Dali_Brush* brush);
 
 #endif /* end of include guard: DALI_BRUSH_H */
