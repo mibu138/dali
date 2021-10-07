@@ -604,9 +604,10 @@ initDescSetsAndPipeLayouts(Engine* engine)
                               engine->descriptorSetLayouts,
                               &engine->description);
 
+    // seedx, seedy, x, y, angle
     VkPushConstantRange pcRange = {.stageFlags = VK_SHADER_STAGE_RAYGEN_BIT_KHR,
                                    .offset     = 0,
-                                   .size       = sizeof(float) * 4};
+                                   .size       = sizeof(float) * 5};
 
     const Obdn_PipelineLayoutInfo pipeLayoutInfos[] = {
         {.descriptorSetCount   = LEN(descSets),
@@ -1568,7 +1569,7 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
 
 static void
 splat(Engine* engine, const VkCommandBuffer cmdBuf, const float x,
-      const float y, uint32_t rayWidth)
+      const float y, float angle, uint32_t rayWidth)
 {
     vkCmdBindPipeline(cmdBuf, VK_PIPELINE_BIND_POINT_RAY_TRACING_KHR,
                       engine->paintPipeline);
@@ -1577,7 +1578,7 @@ splat(Engine* engine, const VkCommandBuffer cmdBuf, const float x,
                             engine->pipelineLayout, 0, 2,
                             engine->description.descriptorSets, 0, NULL);
 
-    float pc[4] = {coal_Rand(), coal_Rand(), x, y};
+    float pc[5] = {coal_Rand(), coal_Rand(), x, y, angle};
 
     vkCmdPushConstants(cmdBuf, engine->pipelineLayout,
                        VK_SHADER_STAGE_RAYGEN_BIT_KHR, 0, sizeof(pc), pc);
@@ -1749,7 +1750,7 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
                                  VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1,
                                  &imageRange);
 
-            splat(engine, cmdBuf, engine->brushPos.x, engine->brushPos.y, engine->rayWidth);
+            splat(engine, cmdBuf, engine->brushPos.x, engine->brushPos.y, 0.0, engine->rayWidth);
         }
         else 
         {
@@ -1776,7 +1777,7 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
                                      VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1,
                                      &imageRange);
 
-                splat(engine, cmdBuf, x, y, engine->rayWidth);
+                splat(engine, cmdBuf, x, y, coal_RandRange(0.0, 2 * M_PI), engine->rayWidth);
 
                 applyPaint(engine, cmdBuf);
             }

@@ -31,6 +31,7 @@ layout(push_constant) uniform PC {
     float seedy;
     float brushx;
     float brushy;
+    float angle;
 } pc;
 
 float rand(vec2 co){
@@ -38,6 +39,15 @@ float rand(vec2 co){
 }
 
 #include "fireray.glsl"
+
+vec2 samplePos(vec2 uv, float a)
+{
+    mat2 R = mat2(cos(a), -sin(a), sin(a), cos(a));
+    uv -= vec2(0.5, 0.5);
+    uv = R * uv;
+    uv += vec2(0.5, 0.5);
+    return uv;
+}
 
 void main() 
 {
@@ -53,7 +63,7 @@ void main()
     const float dist = length(st);
     const float f = brush.anti_falloff;
     float alpha = (1.0 - smoothstep(f, brush.radius, dist)) * brush.opacity;
-    float imgAlpha = texture(alphaImage, inUV).r;
+    float imgAlpha = texture(alphaImage, samplePos(inUV, pc.angle)).r;
     //float imgAlpha = 1.0;
     vec4 color = vec4(alpha * imgAlpha, 0, 0, 0); //spec states R component is used for r32f format images
 

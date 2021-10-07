@@ -3,6 +3,7 @@
 #include "brush.h"
 #include "private.h"
 #include <stdlib.h>
+#include <math.h>
 
 
 static void setBrushPosCmd(const Hell_Grimoire* grim, void* brushptr)
@@ -85,6 +86,7 @@ void dali_CreateBrush(Hell_Grimoire* grim, Dali_Brush *brush)
     brush->falloff = 0.8;
     brush->mode = PAINT_MODE_OVER;
     brush->spacing = 0.01;
+    brush->angleVariation = M_PI_2;
     brush->dirt = -1;
 
     if (grim)
@@ -184,6 +186,6 @@ void dali_SetBrushSpacing(Dali_Brush* brush, float spacing)
 
 void dali_SetBrushAngle(Dali_Brush* brush, float angle)
 {
-    brush->angle = angle;
+    brush->angleVariation = angle;
     brush->dirt |= BRUSH_GENERAL_BIT;
 }

@@ -56,6 +56,7 @@ typedef struct Dali_Brush {
     float         falloff;
     float         spacing;
     float         angle;
+    float         angleVariation;
     PaintMode     mode;
     Obdn_Image*   alphaImg; //non-owning
     DirtMask      dirt;

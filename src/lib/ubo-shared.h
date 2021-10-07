@@ -1,5 +1,9 @@
 #include <coal/coal.h>
 
+// WARNING. these structs must match the shaders use.
+// If you edit these edit those to match and be
+// wary of alignment issues.
+
 typedef struct {
     Mat4 model;
     Mat4 view;
