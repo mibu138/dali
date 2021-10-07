@@ -43,6 +43,13 @@ static void setBrushFalloffCmd(const Hell_Grimoire* grim, void* brushptr)
     dali_SetBrushFalloff(brush, f);
 }
 
+static void setBrushSpacingCmd(const Hell_Grimoire* grim, void* brushptr)
+{
+    Dali_Brush* brush = brushptr;
+    float s = atof(hell_GetArg(grim, 1));
+    dali_SetBrushSpacing(brush, s);
+}
+
 static void setBrushActiveCmd(const Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
@@ -70,6 +77,7 @@ void dali_CreateBrush(Hell_Grimoire* grim, Dali_Brush *brush)
     brush->radius = 1.0;
     brush->falloff = 0.8;
     brush->mode = PAINT_MODE_OVER;
+    brush->spacing = 0.01;
     brush->dirt = -1;
 
     if (grim)
@@ -81,6 +89,7 @@ void dali_CreateBrush(Hell_Grimoire* grim, Dali_Brush *brush)
         hell_AddCommand(grim, "brushia", setBrushInactiveCmd, brush);
         hell_AddCommand(grim, "brushopac", setBrushOpacityCmd, brush);
         hell_AddCommand(grim, "brushfall", setBrushFalloffCmd, brush);
+        hell_AddCommand(grim, "brushspacing", setBrushSpacingCmd, brush);
     }
 }
 
@@ -159,3 +168,8 @@ void dali_SetBrushAlpha(Dali_Brush* brush, Obdn_Image* alpha)
     brush->dirt |= BRUSH_ALPHA_BIT;
 }
 
+void dali_SetBrushSpacing(Dali_Brush* brush, float spacing)
+{
+    brush->spacing = spacing;
+    brush->dirt |= BRUSH_GENERAL_BIT;
+}

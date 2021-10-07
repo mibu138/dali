@@ -28,6 +28,8 @@ Dali_PaintMode dali_GetBrushPaintMode(const Dali_Brush* brush);
 void dali_BrushClearDirt(Dali_Brush* brush);
 void dali_SetBrushAlpha(Dali_Brush* brush, Obdn_Image* alpha);
 
+void dali_SetBrushSpacing(Dali_Brush* brush, float spacing);
+
 Coal_Vec2 dali_GetBrushPos(Dali_Brush* brush);
 
 #endif /* end of include guard: DALI_BRUSH_H */

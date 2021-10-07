@@ -54,6 +54,7 @@ typedef struct Dali_Brush {
     bool          active;
     float         opacity;
     float         falloff;
+    float         spacing;
     PaintMode     mode;
     Obdn_Image*   alphaImg; //non-owning
     DirtMask      dirt;

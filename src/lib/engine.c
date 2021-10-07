@@ -109,6 +109,7 @@ typedef struct Dali_Engine {
     bool                 brushActive;
     bool                 brushWasActive;
     float                strokeLength;
+    float                brushSpacing;
     uint32_t             rayWidth; // sqrt of ray count (rays per splat)
     Vec2                 brushPos;
     Vec2                 prevBrushPos;
@@ -1505,6 +1506,7 @@ syncBrush(Engine* engine, const Dali_Brush* b)
         engine->prevBrushPos.y = engine->brushPos.y;
         engine->brushPos.x     = b->x;
         engine->brushPos.y     = b->y;
+        engine->brushSpacing   = b->spacing;
 
         brush->radius       = b->radius;
         brush->x            = b->x;
@@ -1751,9 +1753,8 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
         }
         else 
         {
-            static const float unit = 0.04; // in screen space
-            const float        brushDist =
-                coal_Distance(engine->brushPos, engine->prevBrushPos);
+            const float unit = engine->brushSpacing;
+            const float        brushDist = coal_Distance(engine->brushPos, engine->prevBrushPos);
             float remainder = fmodf(engine->strokeLength, unit);
             float totalNewLength = remainder + brushDist;
             engine->strokeLength += brushDist;
