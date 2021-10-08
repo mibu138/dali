@@ -27,6 +27,12 @@
 #define SPVDIR "dali"
 #endif
 
+#ifdef DALI_BRUSH_STROKE_DEBUG_MESSAGES 
+#define DPRINT(fmt, ...) hell_DebugPrint("dali_brush", fmt, ##__VA_ARGS__)
+#else 
+#define DPRINT(fmt, ...) (void)0 
+#endif
+
 enum { DESC_SET_PRIM, DESC_SET_PAINT, DESC_SET_COMP, DESC_SET_COUNT };
 
 enum {
@@ -113,6 +119,8 @@ typedef struct Dali_Engine {
     uint32_t             rayWidth; // sqrt of ray count (rays per splat)
     Vec2                 brushPos;
     Vec2                 prevBrushPos;
+    float                brushAngle;
+    float                brushAngleVariation;
     Obdn_Memory*         memory;
     const Obdn_Instance* instance;
     VkDevice             device;
@@ -911,6 +919,9 @@ initCompPipelines(Engine* engine, Dali_PaintMode paintMode)
         case DALI_PAINT_MODE_OVER: splatBlendMode = OBDN_BLEND_MODE_OVER_MONOCHROME; break;
         case DALI_PAINT_MODE_ERASE: splatBlendMode = OBDN_BLEND_MODE_ERASE_MONOCHROME; break;
         } break;
+    default:
+        hell_Print("Error. Unsupported textureFormat\n");
+        exit(1);
     }
 
     const Obdn_GraphicsPipelineInfo pipeInfo1 = {
@@ -1508,6 +1519,8 @@ syncBrush(Engine* engine, const Dali_Brush* b)
         engine->brushPos.x     = b->x;
         engine->brushPos.y     = b->y;
         engine->brushSpacing   = b->spacing;
+        engine->brushAngle     = b->angle;
+        engine->brushAngleVariation = b->angleVariation;
 
         brush->radius       = b->radius;
         brush->x            = b->x;
@@ -1518,7 +1531,6 @@ syncBrush(Engine* engine, const Dali_Brush* b)
 
     if (b->dirt & BRUSH_ALPHA_BIT)
     {
-        hell_Print("Brush alpha dirty!\n");
         if (b->alphaImg)
         {
             updateDescriptorsAlphaImage(engine, b->alphaImg);
@@ -1750,21 +1762,25 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
                                  VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1,
                                  &imageRange);
 
-            splat(engine, cmdBuf, engine->brushPos.x, engine->brushPos.y, 0.0, engine->rayWidth);
+            splat(engine, cmdBuf, engine->brushPos.x, engine->brushPos.y, engine->brushAngle, engine->rayWidth);
         }
         else 
         {
             const float unit = engine->brushSpacing;
-            const float        brushDist = coal_Distance(engine->brushPos, engine->prevBrushPos);
-            float remainder = fmodf(engine->strokeLength, unit);
-            float totalNewLength = remainder + brushDist;
+            const float brushDist = coal_Distance(engine->brushPos, engine->prevBrushPos);
+            const float remainder = fmodf(engine->strokeLength, unit);
+            const float totalNewLength = remainder + brushDist;
             engine->strokeLength += brushDist;
             const int splatCount = (int)(MIN(totalNewLength / unit, 30));
+            DPRINT("strokeLength %f brushDist %f remainder %f "
+                       "totalNewLength %f Splat count: %d\n",
+                       engine->strokeLength, brushDist, remainder,
+                       totalNewLength, splatCount);
             Coal_Vec2 splatVector = {
                 engine->brushPos.x - engine->prevBrushPos.x, 
                 engine->brushPos.y - engine->prevBrushPos.y};
             float t = unit - remainder;
-            float stepSize = totalNewLength / splatCount; 
+            const float stepSize = 1.0 / splatCount; 
             for (int i = 0; i < splatCount; i++)
             {
                 float xstep = t * splatVector.x;
@@ -1777,7 +1793,9 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
                                      VK_IMAGE_LAYOUT_GENERAL, &clearColor, 1,
                                      &imageRange);
 
-                splat(engine, cmdBuf, x, y, coal_RandRange(0.0, 2 * M_PI), engine->rayWidth);
+                float var = M_PI * engine->brushAngleVariation;
+                float angle = engine->brushAngle;
+                splat(engine, cmdBuf, x, y, coal_RandRange(angle - var, angle + var), engine->rayWidth);
 
                 applyPaint(engine, cmdBuf);
             }
@@ -1805,7 +1823,12 @@ dali_SavePaintImage(Dali_Engine* engine)
 {
     hell_Print("Please enter a file name with extension.\n");
     char strbuf[32];
-    fgets(strbuf, 32, stdin);
+    if (fgets(strbuf, 32, stdin) == NULL)
+    {
+        hell_Print("Failed to load image at path. Possibly path exceeds limit "
+                   "of 32 characters\n");
+        return;
+    }
     uint8_t len = strlen(strbuf);
     if (len < 5)
     {
@@ -1841,7 +1864,6 @@ savePaintCmd(const Hell_Grimoire* grim, void* pengine)
         return;
     }
     const char* ext = strbuf + len - 3;
-    hell_Print("%s", ext);
     Obdn_V_ImageFileType fileType;
     if (strncmp(ext, "png", 3) == 0)
         fileType = OBDN_V_IMAGE_FILE_TYPE_PNG;

@@ -33,6 +33,10 @@ void dali_SetBrushSpacing(Dali_Brush* brush, float spacing);
 // set angle in radians
 void dali_SetBrushAngle(Dali_Brush* brush, float angle);
 
+// sets the angle spread. brush will be randomly angled 
+// from (angle - av) to (angle + av)
+void dali_SetBrushAngleVariation(Dali_Brush* brush, float av);
+
 Coal_Vec2 dali_GetBrushPos(Dali_Brush* brush);
 
 #endif /* end of include guard: DALI_BRUSH_H */

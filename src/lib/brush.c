@@ -70,6 +70,13 @@ static void setBrushAngleCmd(const Hell_Grimoire* grim, void* brushptr)
     dali_SetBrushAngle(brush, angle);
 }
 
+static void setBrushAngleVariationCmd(const Hell_Grimoire* grim, void* brushptr)
+{
+    Dali_Brush* brush = brushptr;
+    float angle = atof(hell_GetArg(grim, 1));
+    dali_SetBrushAngleVariation(brush, angle);
+}
+
 Dali_Brush* dali_AllocBrush(void)
 {
     return hell_Malloc(sizeof(Dali_Brush));
@@ -85,7 +92,8 @@ void dali_CreateBrush(Hell_Grimoire* grim, Dali_Brush *brush)
     brush->radius = 1.0;
     brush->falloff = 0.8;
     brush->mode = PAINT_MODE_OVER;
-    brush->spacing = 0.01;
+    brush->spacing = 0.001;
+    brush->angle = 0.0;
     brush->angleVariation = M_PI_2;
     brush->dirt = -1;
 
@@ -100,6 +108,7 @@ void dali_CreateBrush(Hell_Grimoire* grim, Dali_Brush *brush)
         hell_AddCommand(grim, "brushfall", setBrushFalloffCmd, brush);
         hell_AddCommand(grim, "brushspacing", setBrushSpacingCmd, brush);
         hell_AddCommand(grim, "brushangle", setBrushAngleCmd, brush);
+        hell_AddCommand(grim, "brushangvar", setBrushAngleVariationCmd, brush);
     }
 }
 
@@ -185,6 +194,12 @@ void dali_SetBrushSpacing(Dali_Brush* brush, float spacing)
 }
 
 void dali_SetBrushAngle(Dali_Brush* brush, float angle)
+{
+    brush->angle = angle;
+    brush->dirt |= BRUSH_GENERAL_BIT;
+}
+
+void dali_SetBrushAngleVariation(Dali_Brush* brush, float angle)
 {
     brush->angleVariation = angle;
     brush->dirt |= BRUSH_GENERAL_BIT;
