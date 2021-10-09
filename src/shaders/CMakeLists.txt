@@ -6,6 +6,7 @@ set(SRCS
     paint.rchit
     paint.rgen
     paint32R.rgen
+    paint-image-r8g8b8a8.rgen
     paint.rmiss)
 
 include(author_shaders)
