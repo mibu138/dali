@@ -1085,43 +1085,6 @@ initFramebuffers(Engine* engine)
     }
 }
 
-static void 
-recordCmdReleaseImage(Engine* engine, VkCommandBuffer cmdBuf, VkImageLayout newLayout)
-{
-    obdn_BeginCommandBuffer(cmdBuf);
-
-    const VkImageSubresourceRange range = {.aspectMask =
-                                               VK_IMAGE_ASPECT_COLOR_BIT,
-                                           .baseMipLevel   = 0,
-                                           .levelCount     = 1,
-                                           .baseArrayLayer = 0,
-                                           .layerCount     = 1};
-
-    VkImageMemoryBarrier imgBarrier = {
-        .sType               = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-        .pNext               = NULL,
-        .srcAccessMask       = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT,
-        .dstAccessMask       = 0, /* ignored for this batter */
-        .oldLayout           = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
-        .newLayout           = newLayout,
-        .srcQueueFamilyIndex = engine->graphicsQueueFamilyIndex,
-        .dstQueueFamilyIndex = engine->transferQueueFamilyIndex,
-        .image               = engine->imageB.handle,
-        .subresourceRange    = range};
-
-    vkCmdPipelineBarrier(cmdBuf, VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-                         VK_PIPELINE_STAGE_TRANSFER_BIT,
-                         VK_DEPENDENCY_BY_REGION_BIT, 0, NULL, 0, NULL, 1,
-                         &imgBarrier);
-
-    obdn_EndCommandBuffer(cmdBuf);
-}
-
-static void 
-recordCmdTranferImage(Engine* engine, VkCommandBuffer cmdBuf, VkImageLayout layout)
-{
-}
-
 static void
 onLayerChange(Engine* engine, Dali_LayerStack* stack, Dali_LayerId newLayerId)
 {
