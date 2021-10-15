@@ -1774,7 +1774,7 @@ updateCommands(Engine* engine, VkCommandBuffer cmdBuf)
 }
 
 static void
-printTextureDim(const Hell_Grimoire* grim, void* enginePtr)
+printTextureDim(Hell_Grimoire* grim, void* enginePtr)
 {
     Engine* engine = (Engine*)enginePtr;
     hell_Print("%dx%d\n", engine->textureSize, engine->textureSize);
@@ -1816,7 +1816,7 @@ dali_SavePaintImage(Dali_Engine* engine)
 }
 
 static void 
-savePaintCmd(const Hell_Grimoire* grim, void* pengine)
+savePaintCmd(Hell_Grimoire* grim, void* pengine)
 {
     Dali_Engine* engine = pengine;
     const char* strbuf = hell_GetArg(grim, 1);
@@ -1842,7 +1842,7 @@ savePaintCmd(const Hell_Grimoire* grim, void* pengine)
 }
 
 static void 
-rayWidthCmd(const Hell_Grimoire* grim, void* pengine)
+rayWidthCmd(Hell_Grimoire* grim, void* pengine)
 {
     Dali_Engine* engine = pengine;
     int rayWidth = atoi(hell_GetArg(grim, 1));
@@ -1855,7 +1855,7 @@ rayWidthCmd(const Hell_Grimoire* grim, void* pengine)
 }
 
 void
-freeImagesCmd(const Hell_Grimoire* grim, void* engineAndScene)
+freeImagesCmd(Hell_Grimoire* grim, void* engineAndScene)
 {
     Engine* engine = ((void**)engineAndScene)[0];
     Obdn_Scene* scene  = ((void**)engineAndScene)[1];
@@ -1863,7 +1863,7 @@ freeImagesCmd(const Hell_Grimoire* grim, void* engineAndScene)
 }
 
 void
-reclaimCmd(const Hell_Grimoire* grim, void* engineAndScene)
+reclaimCmd(Hell_Grimoire* grim, void* engineAndScene)
 {
     Engine* engine = ((void**)engineAndScene)[0];
     Obdn_Scene* scene  = ((void**)engineAndScene)[1];
