@@ -44,12 +44,15 @@ enum {
     PIPELINE_COMP_COUNT
 };
 
+static const uint32_t PRIM_DIRTY_BITS = 3;
+
 typedef Obdn_BufferRegion BufferRegion;
 
 typedef Obdn_Command Command;
 typedef Obdn_Image   Image;
 
 typedef enum EngineState {
+    DEAD, // will cause paint to return if engine struct is 0'd out
     READY,
     NEEDS_TO_CREATE_IMAGES
 } EngineState;
@@ -74,7 +77,6 @@ typedef struct Dali_Engine {
     Command cmdReleaseImageTransferSource;
     Command cmdTranferImage;
     Command cmdAcquireImageTranferSource;
-
     Command paintCommand;
 
     Image imageA; // will use for brush and then as final frambuffer target
@@ -111,6 +113,8 @@ typedef struct Dali_Engine {
     Obdn_PrimitiveHandle activePrim;
 
     EngineState          state;
+
+    uint32_t             dirt;
     
     bool                 brushActive;
     bool                 brushWasActive;
@@ -1518,7 +1522,7 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
         return;
     }
     assert(prim->geo);
-    if (prim->dirt & OBDN_PRIM_ADDED_BIT)
+    if (prim->dirt & OBDN_PRIM_ADDED_BIT || engine->dirt & DALI_PRIM_ADDED_BIT)
     {
         Coal_Mat4 xform = COAL_MAT4_IDENT;
         obdn_BuildBlas(engine->memory, prim->geo, &engine->bottomLevelAS);
@@ -1528,7 +1532,7 @@ updatePrim(Engine* engine, const Obdn_Scene* scene)
         updateDescSetPrim(engine, scene);
         return;
     }
-    if (prim->dirt & OBDN_PRIM_TOPOLOGY_CHANGED_BIT)
+    if (prim->dirt & OBDN_PRIM_TOPOLOGY_CHANGED_BIT || engine->dirt & DALI_PRIM_CHANGED_BIT)
     {
         obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
         obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
@@ -1637,7 +1641,7 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
 {
     VkSemaphore                semaphore = VK_NULL_HANDLE;
     const Obdn_SceneDirtyFlags sceneDirt = obdn_GetSceneDirt(scene);
-    if (brush->dirt || sceneDirt || stack->dirt || u->dirt)
+    if (brush->dirt || sceneDirt || stack->dirt || u->dirt || engine->dirt)
     {
         if (sceneDirt & OBDN_SCENE_CAMERA_VIEW_BIT)
             updateView(engine, scene);
@@ -1645,7 +1649,7 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
             updateProj(engine, scene);
         if (brush->dirt)
             syncBrush(engine, brush);
-        if (sceneDirt & OBDN_SCENE_PRIMS_BIT)
+        if (sceneDirt & OBDN_SCENE_PRIMS_BIT || engine->dirt & PRIM_DIRTY_BITS)
             updatePrim(engine, scene);
         if (u->dirt & UNDO_BIT)
         {
@@ -1663,6 +1667,7 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
             semaphore = engine->cmdAcquireImageTranferSource.semaphore;
         }
     }
+    engine->dirt = 0;
     return semaphore;
 }
 
@@ -1941,6 +1946,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
         scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
 
     engine->rayWidth = 512;
+    engine->state = READY;
 
     void* engineAndScene[] = {engine, scene};
 
@@ -1957,7 +1963,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
 }
 
 void
-dali_DestroyEngine(Engine* engine)
+dali_DestroyEngine(Engine* engine, Obdn_Scene* scene)
 {
     obdn_FreeBufferRegion(&engine->matrixRegion);
     obdn_FreeBufferRegion(&engine->brushRegion);
@@ -1978,20 +1984,16 @@ dali_DestroyEngine(Engine* engine)
     obdn_DestroyCommand(engine->cmdTranferImage);
     obdn_DestroyCommand(engine->cmdAcquireImageTranferSource);
     obdn_DestroyCommand(engine->paintCommand);
-    obdn_FreeImage(&engine->imageA);
-    obdn_FreeImage(&engine->imageB);
-    obdn_FreeImage(&engine->imageC);
-    obdn_FreeImage(&engine->imageD);
-    vkDestroyFramebuffer(engine->device, engine->applyPaintFrameBuffer, NULL);
-    vkDestroyFramebuffer(engine->device, engine->compositeFrameBuffer, NULL);
-    vkDestroyFramebuffer(engine->device, engine->backgroundFrameBuffer, NULL);
-    vkDestroyFramebuffer(engine->device, engine->foregroundFrameBuffer, NULL);
+
+    dali_EngineDestroyImagesAndDependents(engine, scene);
+
     vkDestroyRenderPass(engine->device, engine->singleCompositeRenderPass,
                         NULL);
     vkDestroyRenderPass(engine->device, engine->applyPaintRenderPass, NULL);
     vkDestroyRenderPass(engine->device, engine->compositeRenderPass, NULL);
     obdn_DestroyAccelerationStruct(engine->device, &engine->bottomLevelAS);
     obdn_DestroyAccelerationStruct(engine->device, &engine->topLevelAS);
+    memset(engine, 0, sizeof(Engine));
 }
 
 Dali_Engine*
@@ -2007,9 +2009,10 @@ dali_GetPaintMaterial(Engine* engine)
 }
 
 void 
-dali_SetActivePrim(Engine* engine, Obdn_PrimitiveHandle prim)
+dali_SetActivePrim(Engine* engine, Obdn_PrimitiveHandle prim, Dali_EngineDirt mask)
 {
     engine->activePrim = prim;
+    engine->dirt |= mask;
 }
 
 Obdn_PrimitiveHandle 
@@ -2029,8 +2032,10 @@ dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
     vkDestroyFramebuffer(engine->device, engine->compositeFrameBuffer, NULL);
     vkDestroyFramebuffer(engine->device, engine->backgroundFrameBuffer, NULL);
     vkDestroyFramebuffer(engine->device, engine->foregroundFrameBuffer, NULL);
+    obdn_SceneRemoveMaterial(scene, engine->activeMaterial);
     Obdn_Material* mat = obdn_GetMaterial(scene, engine->activeMaterial);
     obdn_SceneRemoveTexture(scene, mat->textureAlbedo);
+    engine->activeMaterial = NULL_MATERIAL;
     mat->textureAlbedo = NULL_TEXTURE;
     engine->state = NEEDS_TO_CREATE_IMAGES;
 }
@@ -2042,9 +2047,9 @@ dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
     initFramebuffers(engine);
     updateDescriptorsPaintImage(engine);
     updateDescSetComp(engine);
-    Obdn_Material* mat = obdn_GetMaterial(scene, engine->activeMaterial);
     Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, &engine->imageA);
-    mat->textureAlbedo = tex;
+    engine->activeMaterial = obdn_SceneCreateMaterial(
+        scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
     engine->state = READY;
 }
 

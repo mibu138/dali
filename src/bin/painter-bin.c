@@ -30,6 +30,10 @@ Dali_LayerStack*  layerStack;
 Dali_UndoManager* undoManager;
 Dali_Brush*       brush;
 
+Dali_Format format;
+
+Obdn_PrimitiveHandle prim;
+
 Obdn_Image brushAlpha;
 
 Obdn_Geometry paintGeo;
@@ -55,7 +59,7 @@ struct SceneMemEng {
     Dali_Engine* engine;
 } sceneMemEng;
 
-static void setGeo(const Hell_Grimoire* grim, void* data)
+static void setGeo(Hell_Grimoire* grim, void* data)
 {
     struct SceneMemEng* sm = data;
     const char* geoType = hell_GetArg(grim, 1);
@@ -68,7 +72,7 @@ static void setGeo(const Hell_Grimoire* grim, void* data)
         {
             paintGeo = cube;
             Obdn_PrimitiveHandle np = obdn_SceneAddPrim(sm->scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(sm->engine));
-            dali_SetActivePrim(sm->engine, np);
+            dali_SetActivePrim(sm->engine, np, DALI_PRIM_CHANGED_BIT);
         }
         else 
         {
@@ -79,7 +83,7 @@ static void setGeo(const Hell_Grimoire* grim, void* data)
     }
 }
 
-static void rmGeo(const Hell_Grimoire* grim, void* data)
+static void rmGeo(Hell_Grimoire* grim, void* data)
 {
     struct SceneMemEng* sm = data;
     if (obdn_GetPrimCount(sm->scene) > 0)
@@ -90,7 +94,7 @@ static void rmGeo(const Hell_Grimoire* grim, void* data)
     }
 }
 
-static void loadAlphaImage(const Hell_Grimoire* grim, void* data)
+static void loadAlphaImage(Hell_Grimoire* grim, void* data)
 {
     const char* path = hell_GetArg(grim, 1);
     if (access(path, R_OK) == 0)
@@ -111,8 +115,19 @@ static void loadAlphaImage(const Hell_Grimoire* grim, void* data)
     }
 }
 
+static void createEngine(Hell_Grimoire* grim, void* data)
+{
+    dali_CreateEngine(oInstance, oMemory, undoManager, scene, brush, 4096, format, grimoire, engine);
+    dali_SetActivePrim(engine, prim, DALI_PRIM_ADDED_BIT);
+}
+
+static void destroyEngine(Hell_Grimoire* grim, void* data)
+{
+    dali_DestroyEngine(engine, scene);
+}
+
 void 
-setBrushColor(const Hell_Grimoire* grim, void* pbrush)
+setBrushColor(Hell_Grimoire* grim, void* pbrush)
 {
     Dali_Brush* brush = pbrush;
     float r = atof(hell_GetArg(grim, 1));
@@ -381,7 +396,7 @@ daliFrame(void)
 int
 painterMain(const char* modelpath, bool maskMode, bool twoDMode)
 {
-    const Dali_Format format = maskMode ? DALI_FORMAT_R32_SFLOAT : DALI_FORMAT_R8G8B8A8_UNORM;
+    format = maskMode ? DALI_FORMAT_R32_SFLOAT : DALI_FORMAT_R8G8B8A8_UNORM;
     eventQueue = hell_AllocEventQueue();
     grimoire   = hell_AllocGrimoire();
     console    = hell_AllocConsole();
@@ -456,8 +471,8 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
 
     is2D = twoDMode;
 
-    Obdn_PrimitiveHandle prim = obdn_SceneAddPrim(scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
-    dali_SetActivePrim(engine, prim);
+    prim = obdn_SceneAddPrim(scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
+    dali_SetActivePrim(engine, prim, DALI_PRIM_ADDED_BIT);
     dali_LayerBackup(layerStack); // initial backup
 
     obdn_CreateSemaphore(obdn_GetDevice(oInstance), &acquireSemaphore);
@@ -485,6 +500,8 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     hell_AddCommand(grimoire, "setgeo", setGeo, &sceneMemEng);
     hell_AddCommand(grimoire, "rmgeo", rmGeo, &sceneMemEng);
     hell_AddCommand(grimoire, "loadalpha", loadAlphaImage, brush);
+    hell_AddCommand(grimoire, "createengine", createEngine, NULL);
+    hell_AddCommand(grimoire, "destroyengine", destroyEngine, NULL);
 
     hell_Subscribe(eventQueue, HELL_EVENT_MASK_POINTER_BIT,
                    hell_GetWindowID(window), handleMouseEvent, NULL);

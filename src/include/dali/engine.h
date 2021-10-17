@@ -19,6 +19,11 @@ typedef enum Dali_Format {
     DALI_FORMAT_R32_SFLOAT,
 } Dali_Format;
 
+typedef enum Dali_EngineDirt {
+    DALI_PRIM_CHANGED_BIT = 1 << 0,
+    DALI_PRIM_ADDED_BIT   = 1 << 1
+} Dali_EngineDirt;
+
 // grimoire is optional
 void dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
                           Dali_UndoManager* undo,
@@ -28,11 +33,11 @@ void dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
 VkSemaphore dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
                        const Dali_Brush* brush, Dali_LayerStack* stack,
                        Dali_UndoManager* um, VkCommandBuffer cmdbuf);
-void        dali_DestroyEngine(Dali_Engine* engine);
 
+void dali_DestroyEngine(Dali_Engine* engine, Obdn_Scene* scene);
 Obdn_MaterialHandle dali_GetPaintMaterial(Dali_Engine* engine);
 
-void dali_SetActivePrim(Dali_Engine* engine, Obdn_PrimitiveHandle prim);
+void dali_SetActivePrim(Dali_Engine* engine, Obdn_PrimitiveHandle prim, Dali_EngineDirt mask);
 Obdn_PrimitiveHandle dali_GetActivePrim(Dali_Engine* engine);
 
 Dali_Engine* dali_AllocEngine(void);
