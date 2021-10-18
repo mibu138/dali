@@ -44,7 +44,7 @@ enum {
     PIPELINE_COMP_COUNT
 };
 
-static const uint32_t PRIM_DIRTY_BITS = 3;
+#define PRIM_DIRTY_BITS (DALI_PRIM_ADDED_BIT | DALI_PRIM_CHANGED_BIT)
 
 typedef Obdn_BufferRegion BufferRegion;
 
