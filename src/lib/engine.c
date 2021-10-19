@@ -1641,6 +1641,12 @@ sync(Engine* engine, const Obdn_Scene* scene, Dali_LayerStack* stack,
 {
     VkSemaphore                semaphore = VK_NULL_HANDLE;
     const Obdn_SceneDirtyFlags sceneDirt = obdn_GetSceneDirt(scene);
+    if (engine->dirt & DALI_ENGINE_JUST_CREATED_BIT)
+    {
+        updateView(engine, scene);
+        updateProj(engine, scene);
+        syncBrush(engine, brush);
+    }
     if (brush->dirt || sceneDirt || stack->dirt || u->dirt || engine->dirt)
     {
         if (sceneDirt & OBDN_SCENE_CAMERA_VIEW_BIT)
@@ -1947,6 +1953,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
 
     engine->rayWidth = 512;
     engine->state = READY;
+    engine->dirt |= DALI_ENGINE_JUST_CREATED_BIT;
 
     void* engineAndScene[] = {engine, scene};
 
@@ -1986,7 +1993,8 @@ dali_DestroyEngine(Engine* engine, Obdn_Scene* scene)
     obdn_DestroyCommand(engine->cmdAcquireImageTranferSource);
     obdn_DestroyCommand(engine->paintCommand);
 
-    dali_EngineDestroyImagesAndDependents(engine, scene);
+    if (!(engine->state & NEEDS_TO_CREATE_IMAGES))
+        dali_EngineDestroyImagesAndDependents(engine, scene);
     obdn_FreeImage(&engine->defaultBrushAlpha);
 
     vkDestroyRenderPass(engine->device, engine->singleCompositeRenderPass,
@@ -2026,6 +2034,7 @@ dali_GetActivePrim(Dali_Engine* engine)
 void 
 dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
 {
+    vkDeviceWaitIdle(engine->device);
     obdn_FreeImage(&engine->imageA);
     obdn_FreeImage(&engine->imageB);
     obdn_FreeImage(&engine->imageC);

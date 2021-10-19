@@ -20,8 +20,9 @@ typedef enum Dali_Format {
 } Dali_Format;
 
 typedef enum Dali_EngineDirt {
-    DALI_PRIM_CHANGED_BIT = 1 << 0,
-    DALI_PRIM_ADDED_BIT   = 1 << 1
+    DALI_PRIM_CHANGED_BIT        = 1 << 0,
+    DALI_PRIM_ADDED_BIT          = 1 << 1,
+    DALI_ENGINE_JUST_CREATED_BIT = 1 << 2
 } Dali_EngineDirt;
 
 // grimoire is optional
