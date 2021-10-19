@@ -1965,6 +1965,7 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
 void
 dali_DestroyEngine(Engine* engine, Obdn_Scene* scene)
 {
+    vkDeviceWaitIdle(engine->device);
     obdn_FreeBufferRegion(&engine->matrixRegion);
     obdn_FreeBufferRegion(&engine->brushRegion);
     vkDestroyPipeline(engine->device, engine->paintPipeline, NULL);
@@ -1986,6 +1987,7 @@ dali_DestroyEngine(Engine* engine, Obdn_Scene* scene)
     obdn_DestroyCommand(engine->paintCommand);
 
     dali_EngineDestroyImagesAndDependents(engine, scene);
+    obdn_FreeImage(&engine->defaultBrushAlpha);
 
     vkDestroyRenderPass(engine->device, engine->singleCompositeRenderPass,
                         NULL);

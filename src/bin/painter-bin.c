@@ -118,12 +118,18 @@ static void loadAlphaImage(Hell_Grimoire* grim, void* data)
 static void createEngine(Hell_Grimoire* grim, void* data)
 {
     dali_CreateEngine(oInstance, oMemory, undoManager, scene, brush, 4096, format, grimoire, engine);
+    hell_Print("Post-create engine\n------------------\n");
+    obdn_MemoryReportSimple(oMemory);
     dali_SetActivePrim(engine, prim, DALI_PRIM_ADDED_BIT);
 }
 
 static void destroyEngine(Hell_Grimoire* grim, void* data)
 {
+    hell_Print("Pre-destroy engine\n------------------\n");
+    obdn_MemoryReportSimple(oMemory);
     dali_DestroyEngine(engine, scene);
+    hell_Print("Post-destroy engine\n------------------\n");
+    obdn_MemoryReportSimple(oMemory);
 }
 
 void 
@@ -457,6 +463,9 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     dali_CreateLayerStack(oMemory, texSize, layerStack);
     dali_CreateEngine(oInstance, oMemory, undoManager, scene,
                               brush, 4096, format, grimoire, engine);
+
+    hell_Print("Initial-create engine\n------------------\n");
+    obdn_MemoryReportSimple(oMemory);
 
     if (twoDMode)
     {
