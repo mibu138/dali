@@ -358,7 +358,7 @@ debugBrush()
 #endif
 
 void
-daliFrame(void)
+daliFrame(u64 frame, u64 dt)
 {
     dali_UpdateUndo(undoManager, layerStack);
 

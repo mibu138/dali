@@ -6,7 +6,7 @@
 #include <math.h>
 
 
-static void setBrushPosCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushPosCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float x = atof(hell_GetArg(grim, 1));
@@ -14,7 +14,7 @@ static void setBrushPosCmd(const Hell_Grimoire* grim, void* brushptr)
     dali_SetBrushPos(brush, x, y);
 }
 
-static void setBrushColorCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushColorCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float r = atof(hell_GetArg(grim, 1));
@@ -23,54 +23,54 @@ static void setBrushColorCmd(const Hell_Grimoire* grim, void* brushptr)
     dali_SetBrushColor(brush, r, g, b);
 }
 
-static void setBrushRadiusCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushRadiusCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float r = atof(hell_GetArg(grim, 1));
     dali_SetBrushRadius(brush, r);
 }
 
-static void setBrushOpacityCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushOpacityCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float o = atof(hell_GetArg(grim, 1));
     dali_SetBrushOpacity(brush, o);
 }
 
-static void setBrushFalloffCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushFalloffCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float f = atof(hell_GetArg(grim, 1));
     dali_SetBrushFalloff(brush, f);
 }
 
-static void setBrushSpacingCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushSpacingCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float s = atof(hell_GetArg(grim, 1));
     dali_SetBrushSpacing(brush, s);
 }
 
-static void setBrushActiveCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushActiveCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     dali_SetBrushActive(brush);
 }
 
-static void setBrushInactiveCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushInactiveCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     dali_SetBrushInactive(brush);
 }
 
-static void setBrushAngleCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushAngleCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float angle = atof(hell_GetArg(grim, 1));
     dali_SetBrushAngle(brush, angle);
 }
 
-static void setBrushAngleVariationCmd(const Hell_Grimoire* grim, void* brushptr)
+static void setBrushAngleVariationCmd(Hell_Grimoire* grim, void* brushptr)
 {
     Dali_Brush* brush = brushptr;
     float angle = atof(hell_GetArg(grim, 1));
