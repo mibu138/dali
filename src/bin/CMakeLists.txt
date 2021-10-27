@@ -8,7 +8,12 @@ FetchContent_Declare(
     GIT_TAG master)
 set(SHIV_SKIP_EXAMPLES TRUE)
 
-FetchContent_MakeAvailable(shiv)
+FetchContent_Declare(
+    leaves 
+    GIT_REPOSITORY /home/michaelb/dev/leaves 
+    GIT_TAG dali)
+
+FetchContent_MakeAvailable(shiv leaves)
 
 add_executable(paint painter-bin.c)
 target_link_libraries(paint Dali::Dali Shiv::Shiv)

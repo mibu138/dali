@@ -23,11 +23,16 @@ endif()
 include(FetchContent)
 
 FetchContent_Declare(
-    obsidian 
-    GIT_REPOSITORY ${OBSIDIAN_URL}
-    GIT_TAG master)
+    hell 
+    GIT_REPOSITORY /home/michaelb/dev/hell
+    GIT_TAG leaves)
 
-FetchContent_MakeAvailable(obsidian)
+FetchContent_Declare(
+    obsidian 
+    GIT_REPOSITORY /home/michaelb/dev/obsidian
+    GIT_TAG leaves)
+
+FetchContent_MakeAvailable(obsidian hell)
 
 # So we can use the author_shaders cmake function 
 list(APPEND CMAKE_MODULE_PATH ${obsidian_SOURCE_DIR}/cmake)
