@@ -109,7 +109,6 @@ typedef struct Dali_Engine {
 
     Dali_LayerId curLayerId;
 
-    Obdn_MaterialHandle  activeMaterial;
     Obdn_PrimitiveHandle activePrim;
 
     EngineState          state;
@@ -806,15 +805,12 @@ updateDescriptorsPaintImage(Engine* engine)
 }
 
 static void
-updateAllPaintDescriptors(Engine* engine, const Dali_Brush* brush)
+updateAllPaintDescriptors(Engine* engine)
 {
     updateDescriptorsPaintUBOS(engine);
     updateDescriptorsPaintImage(engine);
 
-    if (brush->alphaImg)
-        updateDescriptorsAlphaImage(engine, brush->alphaImg);
-    else 
-        updateDescriptorsAlphaImage(engine, &engine->defaultBrushAlpha);
+    updateDescriptorsAlphaImage(engine, &engine->defaultBrushAlpha);
 }
 
 static void
@@ -1866,19 +1862,10 @@ rayWidthCmd(Hell_Grimoire* grim, void* pengine)
 }
 
 void
-freeImagesCmd(Hell_Grimoire* grim, void* engineAndScene)
+reclaimCmd(Hell_Grimoire* grim, void* pengine)
 {
-    Engine* engine = ((void**)engineAndScene)[0];
-    Obdn_Scene* scene  = ((void**)engineAndScene)[1];
-    dali_EngineDestroyImagesAndDependents(engine, scene); 
-}
-
-void
-reclaimCmd(Hell_Grimoire* grim, void* engineAndScene)
-{
-    Engine* engine = ((void**)engineAndScene)[0];
-    Obdn_Scene* scene  = ((void**)engineAndScene)[1];
-    dali_EngineCreateImagesAndDependents(engine, scene); 
+    Engine* engine = pengine;
+    dali_EngineCreateImagesAndDependents(engine);
 }
 
 VkSemaphore 
@@ -1898,8 +1885,6 @@ dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
 
 void
 dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
-                          Dali_UndoManager* undo,
-                          Obdn_Scene* scene, const Dali_Brush* brush,
                           const uint32_t texSize, Dali_Format textureFormat,
                           Hell_Grimoire* grimoire, Engine* engine)
 {
@@ -1944,26 +1929,18 @@ dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
 
     createDefaultBrushAlpha(engine);
 
-    updateAllPaintDescriptors(engine, brush);
+    updateAllPaintDescriptors(engine);
     updateDescSetComp(engine);
-
-    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, &engine->imageA);
-    engine->activeMaterial = obdn_SceneCreateMaterial(
-        scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
 
     engine->rayWidth = 512;
     engine->state = READY;
     engine->dirt |= DALI_ENGINE_JUST_CREATED_BIT;
-
-    void* engineAndScene[] = {engine, scene};
 
     if (grimoire)
     {
         hell_AddCommand(grimoire, "texsize", printTextureDim, engine);
         hell_AddCommand(grimoire, "savepaint", savePaintCmd, engine);
         hell_AddCommand(grimoire, "raywidth", rayWidthCmd, engine);
-        hell_AddCommand2(grimoire, "freeimages", freeImagesCmd, engineAndScene, sizeof(engineAndScene));
-        hell_AddCommand2(grimoire, "reclaim", reclaimCmd, engineAndScene, sizeof(engineAndScene));
     }
 
     hell_Print("PAINT: initialized.\n");
@@ -1994,7 +1971,7 @@ dali_DestroyEngine(Engine* engine, Obdn_Scene* scene)
     obdn_DestroyCommand(engine->paintCommand);
 
     if (!(engine->state & NEEDS_TO_CREATE_IMAGES))
-        dali_EngineDestroyImagesAndDependents(engine, scene);
+        dali_EngineDestroyImagesAndDependents(engine);
     obdn_FreeImage(&engine->defaultBrushAlpha);
 
     vkDestroyRenderPass(engine->device, engine->singleCompositeRenderPass,
@@ -2012,12 +1989,6 @@ dali_AllocEngine(void)
     return hell_Malloc(sizeof(Dali_Engine));
 }
 
-Obdn_MaterialHandle 
-dali_GetPaintMaterial(Engine* engine)
-{
-    return engine->activeMaterial;
-}
-
 void 
 dali_SetActivePrim(Engine* engine, Obdn_PrimitiveHandle prim, Dali_EngineDirt mask)
 {
@@ -2032,7 +2003,7 @@ dali_GetActivePrim(Dali_Engine* engine)
 }
 
 void 
-dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
+dali_EngineDestroyImagesAndDependents(Dali_Engine* engine)
 {
     vkDeviceWaitIdle(engine->device);
     obdn_FreeImage(&engine->imageA);
@@ -2043,24 +2014,16 @@ dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
     vkDestroyFramebuffer(engine->device, engine->compositeFrameBuffer, NULL);
     vkDestroyFramebuffer(engine->device, engine->backgroundFrameBuffer, NULL);
     vkDestroyFramebuffer(engine->device, engine->foregroundFrameBuffer, NULL);
-    obdn_SceneRemoveMaterial(scene, engine->activeMaterial);
-    Obdn_Material* mat = obdn_GetMaterial(scene, engine->activeMaterial);
-    obdn_SceneRemoveTexture(scene, mat->textureAlbedo);
-    engine->activeMaterial = NULL_MATERIAL;
-    mat->textureAlbedo = NULL_TEXTURE;
     engine->state = NEEDS_TO_CREATE_IMAGES;
 }
 
 void
-dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene)
+dali_EngineCreateImagesAndDependents(Dali_Engine* engine)
 {
     initPaintImages(engine);
     initFramebuffers(engine);
     updateDescriptorsPaintImage(engine);
     updateDescSetComp(engine);
-    Obdn_TextureHandle  tex = obdn_SceneAddTexture(scene, &engine->imageA);
-    engine->activeMaterial = obdn_SceneCreateMaterial(
-        scene, (Vec3){1, 1, 1}, 0.3, tex, NULL_TEXTURE, NULL_TEXTURE);
     engine->state = READY;
 }
 

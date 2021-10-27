@@ -33,6 +33,8 @@ Dali_Brush*       brush;
 Dali_Format format;
 
 Obdn_PrimitiveHandle prim;
+Obdn_TextureHandle   paintTexture;
+Obdn_MaterialHandle  paintMaterial;
 
 Obdn_Image brushAlpha;
 
@@ -71,7 +73,7 @@ static void setGeo(Hell_Grimoire* grim, void* data)
         if (ap.id == 0)
         {
             paintGeo = cube;
-            Obdn_PrimitiveHandle np = obdn_SceneAddPrim(sm->scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(sm->engine));
+            Obdn_PrimitiveHandle np = obdn_SceneAddPrim(sm->scene, &paintGeo, COAL_MAT4_IDENT, paintMaterial);
             dali_SetActivePrim(sm->engine, np, DALI_PRIM_CHANGED_BIT);
         }
         else 
@@ -115,9 +117,18 @@ static void loadAlphaImage(Hell_Grimoire* grim, void* data)
     }
 }
 
+static void
+freeImagesCmd(Hell_Grimoire* grim, void* engineAndScene)
+{
+    Dali_Engine* engine = ((void**)engineAndScene)[0];
+    Obdn_Scene* scene  = ((void**)engineAndScene)[1];
+    dali_EngineDestroyImagesAndDependents(engine);
+    obdn_SceneRemoveTexture(scene, paintTexture);
+}
+
 static void createEngine(Hell_Grimoire* grim, void* data)
 {
-    dali_CreateEngine(oInstance, oMemory, undoManager, scene, brush, 4096, format, grimoire, engine);
+    dali_CreateEngine(oInstance, oMemory, 4096, format, grimoire, engine);
     hell_Print("Post-create engine\n------------------\n");
     obdn_MemoryReportSimple(oMemory);
     dali_SetActivePrim(engine, prim, DALI_PRIM_ADDED_BIT);
@@ -461,8 +472,7 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     dali_CreateBrush(grimoire, brush);
     dali_SetBrushRadius(brush, 0.01);
     dali_CreateLayerStack(oMemory, texSize, layerStack);
-    dali_CreateEngine(oInstance, oMemory, undoManager, scene,
-                              brush, 4096, format, grimoire, engine);
+    dali_CreateEngine(oInstance, oMemory, 4096, format, grimoire, engine);
 
     hell_Print("Initial-create engine\n------------------\n");
     obdn_MemoryReportSimple(oMemory);
@@ -480,7 +490,9 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
 
     is2D = twoDMode;
 
-    prim = obdn_SceneAddPrim(scene, &paintGeo, COAL_MAT4_IDENT, dali_GetPaintMaterial(engine));
+    paintTexture = obdn_SceneAddTexture(scene, dali_GetTextureImage(engine));
+    paintMaterial = obdn_SceneCreateMaterial(scene, (Vec3){1, 1, 1}, 1, paintTexture, NULL_TEXTURE, NULL_TEXTURE);
+    prim = obdn_SceneAddPrim(scene, &paintGeo, COAL_MAT4_IDENT, paintMaterial);
     dali_SetActivePrim(engine, prim, DALI_PRIM_ADDED_BIT);
     dali_LayerBackup(layerStack); // initial backup
 

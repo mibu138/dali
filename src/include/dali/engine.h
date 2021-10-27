@@ -27,8 +27,6 @@ typedef enum Dali_EngineDirt {
 
 // grimoire is optional
 void dali_CreateEngine(const Obdn_Instance* instance, Obdn_Memory* memory,
-                          Dali_UndoManager* undo,
-                          Obdn_Scene* scene, const Dali_Brush* brush,
                           const uint32_t texSize, Dali_Format textureFormat,
                           Hell_Grimoire* grimoire, Dali_Engine* engine);
 VkSemaphore dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
@@ -36,16 +34,15 @@ VkSemaphore dali_Paint(Dali_Engine* engine, const Obdn_Scene* scene,
                        Dali_UndoManager* um, VkCommandBuffer cmdbuf);
 
 void dali_DestroyEngine(Dali_Engine* engine, Obdn_Scene* scene);
-Obdn_MaterialHandle dali_GetPaintMaterial(Dali_Engine* engine);
 
 void dali_SetActivePrim(Dali_Engine* engine, Obdn_PrimitiveHandle prim, Dali_EngineDirt mask);
 Obdn_PrimitiveHandle dali_GetActivePrim(Dali_Engine* engine);
 
 Dali_Engine* dali_AllocEngine(void);
 
-void dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene);
+void dali_EngineDestroyImagesAndDependents(Dali_Engine* engine);
 
-void dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene);
+void dali_EngineCreateImagesAndDependents(Dali_Engine* engine);
 
 Obdn_Image* 
 dali_GetTextureImage(Dali_Engine*);
