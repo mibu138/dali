@@ -16,7 +16,7 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(shiv leaves)
 
 add_executable(paint painter-bin.c)
-target_link_libraries(paint Dali::Dali Shiv::Shiv)
+target_link_libraries(paint Dali::Dali Shiv::Shiv Leaves::Leaves)
 
 if(WIN32)
 set_target_properties(paint PROPERTIES WIN32_EXECUTABLE TRUE)

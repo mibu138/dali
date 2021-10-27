@@ -9,6 +9,8 @@
 #include <obsidian/image.h>
 #include <obsidian/ui.h>
 #include <shiv/shiv.h>
+#include <leaves/leaves.h>
+#include <leaves/colorswatch.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -22,7 +24,6 @@ Hell_Hellmouth*  hellmouth;
 Obdn_Instance*  oInstance;
 Obdn_Memory*    oMemory;
 Obdn_Scene*     scene;
-Obdn_Swapchain* swapchain;
 Obdn_UI*        ui;
 
 Dali_Engine*      engine;
@@ -42,8 +43,11 @@ Obdn_Geometry paintGeo;
 
 Shiv_Renderer* renderer;
 
-Obdn_Command renderCommand;
+Obdn_Command shivRenderCmd;
 Obdn_Command paintCommand;
+
+Leaf_Root* root;
+Leaf_StemHandle colorPalette;
 
 #define WWIDTH 888
 #define WHEIGHT 888
@@ -330,8 +334,6 @@ handleMouseEvent(const Hell_Event* ev, void* data)
 
 #define TARGET_RENDER_INTERVAL 10000 // render every 30 ms
 
-static VkSemaphore acquireSemaphore;
-
 #ifdef DEBUG_BRUSH
 static void 
 debugBrush() 
@@ -364,26 +366,26 @@ daliFrame(u64 frame, u64 dt)
 
     obdn_WaitForFence(obdn_GetDevice(oInstance), &paintCommand.fence);
 
-    VkFence                 fence = VK_NULL_HANDLE;
-    const Obdn_Framebuffer* fb =
-        obdn_AcquireSwapchainFramebuffer(swapchain, &fence, &acquireSemaphore);
+    VkSemaphore acquireSemaphore;
+    const Obdn_Framebuffer* fb = leaf_RootAcquireSwapchainFramebuffer(root, frame, &acquireSemaphore);
 
     VkSemaphore undoWaitSemaphore = VK_NULL_HANDLE;
-    obdn_ResetCommand(&paintCommand);
     obdn_BeginCommandBuffer(paintCommand.buffer);
     undoWaitSemaphore = dali_Paint(engine, scene, brush, layerStack, undoManager, paintCommand.buffer);
     obdn_EndCommandBuffer(paintCommand.buffer);
 
-    obdn_ResetCommand(&renderCommand);
-    obdn_BeginCommandBuffer(renderCommand.buffer);
-    shiv_Render(renderer, scene, fb, renderCommand.buffer);
-    obdn_EndCommandBuffer(renderCommand.buffer);
+    obdn_BeginCommandBuffer(shivRenderCmd.buffer);
+    shiv_Render(renderer, scene, fb, shivRenderCmd.buffer);
+    obdn_EndCommandBuffer(shivRenderCmd.buffer);
 
     obdn_SceneEndFrame(scene);
     dali_EndFrame(layerStack, brush, undoManager);
 
+    VkCommandBuffer rootRenderCmd;
+    VkSemaphore     rootRenderSema;
+    leaf_RootRender(root, frame, fb, &rootRenderCmd, &rootRenderSema);
+
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-    VkPipelineStageFlags renderStageFlags = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     VkSubmitInfo paintSubmit = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1,
@@ -394,20 +396,30 @@ daliFrame(u64 frame, u64 dt)
         .pWaitSemaphores = &undoWaitSemaphore,
         .pCommandBuffers = &paintCommand.buffer,
     };
+
+    VkSemaphore shivRenderWaits[2] = {paintCommand.semaphore, acquireSemaphore};
+
     VkSubmitInfo renderSubmit = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1,
-        .waitSemaphoreCount = 1,
+        .waitSemaphoreCount = 2,
         .signalSemaphoreCount = 1,
-        .pWaitDstStageMask = &renderStageFlags,
-        .pSignalSemaphores = &renderCommand.semaphore,
-        .pWaitSemaphores = &paintCommand.semaphore,
-        .pCommandBuffers = &renderCommand.buffer,
+        .pWaitDstStageMask = &stageFlags,
+        .pSignalSemaphores = &shivRenderCmd.semaphore,
+        .pWaitSemaphores = shivRenderWaits,
+        .pCommandBuffers = &shivRenderCmd.buffer
     };
-    VkSubmitInfo submitinfos[] = {paintSubmit, renderSubmit};
+
+    VkSubmitInfo render2Submit = renderSubmit;
+    render2Submit.waitSemaphoreCount = 1,
+    render2Submit.pCommandBuffers = &rootRenderCmd;
+    render2Submit.pWaitSemaphores = &shivRenderCmd.semaphore;
+    render2Submit.pSignalSemaphores = &rootRenderSema;
+
+    VkSubmitInfo submitinfos[] = {paintSubmit, renderSubmit, render2Submit};
     obdn_SubmitGraphicsCommands(oInstance, 0, LEN(submitinfos), submitinfos, paintCommand.fence);
-    VkSemaphore waitSemas[] = {acquireSemaphore, renderCommand.semaphore};
-    obdn_PresentFrame(swapchain, LEN(waitSemas), waitSemas);
+
+    leaf_RootPresent(root, 1, &rootRenderSema);
 }
 
 int
@@ -429,7 +441,6 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
 
     oInstance = obdn_AllocInstance();
     oMemory   = obdn_AllocMemory();
-    swapchain = obdn_AllocSwapchain();
     scene     = obdn_AllocScene();
     const char* testgeopath;
     #if UNIX
@@ -457,9 +468,6 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
                              .usageFlags =
                                  VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT,
                              .format = VK_FORMAT_D24_UNORM_S8_UINT};
-    obdn_CreateSwapchain(oInstance, oMemory, eventQueue, window,
-                         VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 1, &depthAov,
-                         swapchain);
     obdn_CreateScene(grimoire, oMemory, 1, 1, 0.01, 100, scene);
 
     engine      = dali_AllocEngine();
@@ -496,24 +504,29 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     dali_SetActivePrim(engine, prim, DALI_PRIM_ADDED_BIT);
     dali_LayerBackup(layerStack); // initial backup
 
-    obdn_CreateSemaphore(obdn_GetDevice(oInstance), &acquireSemaphore);
+    root = leaf_AllocRoot();
+    leaf_CreateRoot(window, oInstance, oMemory, eventQueue, 1, &depthAov, root);
+
     paintCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
-    renderCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
+    shivRenderCmd = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
     renderer = shiv_AllocRenderer();
     Shiv_Parms sp = {
         .clearColor = (Vec4){0.1, 0.1, 0.1, 1.0},
         .grim = grimoire
     };
+
     shiv_CreateRenderer(oInstance, oMemory, 
                         VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,
                         VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL,
-                        obdn_GetSwapchainFramebufferCount(swapchain),
-                        obdn_GetSwapchainFramebuffers(swapchain), &sp, renderer);
+                        2,
+                        leaf_GetFramebuffers(root), &sp, renderer);
 
     if (format == DALI_FORMAT_R32_SFLOAT)
         shiv_SetDrawMode(renderer, "mono");
     else 
         shiv_SetDrawMode(renderer, "uvgrid");
+
+    colorPalette = leaf_CreateColorPaletteStem(root, 0.2, 0.3, 0.5, 0.5);
 
     sceneMemEng.scene = scene;
     sceneMemEng.mem   = oMemory;
