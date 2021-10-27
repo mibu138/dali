@@ -383,7 +383,7 @@ daliFrame(u64 frame, u64 dt)
 
     VkCommandBuffer rootRenderCmd;
     VkSemaphore     rootRenderSema;
-    leaf_RootRender(root, frame, fb, &rootRenderCmd, &rootRenderSema);
+    leaf_RootRender(root, frame, fb, false, &rootRenderCmd, &rootRenderSema);
 
     VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
     VkSubmitInfo paintSubmit = {
@@ -470,6 +470,11 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
                              .format = VK_FORMAT_D24_UNORM_S8_UINT};
     obdn_CreateScene(grimoire, oMemory, 1, 1, 0.01, 100, scene);
 
+    root = leaf_AllocRoot();
+    leaf_CreateRoot(window, oInstance, oMemory, eventQueue, 1, &depthAov, root);
+
+    colorPalette = leaf_CreateColorPaletteStem(root, 0.2, 0.3, 0.6, 0.6);
+
     engine      = dali_AllocEngine();
     layerStack  = dali_AllocLayerStack();
     brush       = dali_AllocBrush();
@@ -504,9 +509,6 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     dali_SetActivePrim(engine, prim, DALI_PRIM_ADDED_BIT);
     dali_LayerBackup(layerStack); // initial backup
 
-    root = leaf_AllocRoot();
-    leaf_CreateRoot(window, oInstance, oMemory, eventQueue, 1, &depthAov, root);
-
     paintCommand = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
     shivRenderCmd = obdn_CreateCommand(oInstance, OBDN_V_QUEUE_GRAPHICS_TYPE);
     renderer = shiv_AllocRenderer();
@@ -525,8 +527,6 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
         shiv_SetDrawMode(renderer, "mono");
     else 
         shiv_SetDrawMode(renderer, "uvgrid");
-
-    colorPalette = leaf_CreateColorPaletteStem(root, 0.2, 0.3, 0.5, 0.5);
 
     sceneMemEng.scene = scene;
     sceneMemEng.mem   = oMemory;
