@@ -473,7 +473,6 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     root = leaf_AllocRoot();
     leaf_CreateRoot(window, oInstance, oMemory, eventQueue, 1, &depthAov, root);
 
-    colorPalette = leaf_CreateColorPaletteStem(root, 0.2, 0.3, 0.6, 0.6);
 
     engine      = dali_AllocEngine();
     layerStack  = dali_AllocLayerStack();
@@ -486,6 +485,7 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
     dali_SetBrushRadius(brush, 0.01);
     dali_CreateLayerStack(oMemory, texSize, layerStack);
     dali_CreateEngine(oInstance, oMemory, 4096, format, grimoire, engine);
+
 
     hell_Print("Initial-create engine\n------------------\n");
     obdn_MemoryReportSimple(oMemory);
@@ -500,6 +500,7 @@ painterMain(const char* modelpath, bool maskMode, bool twoDMode)
         paintGeo = obdn_LoadGeo(oMemory, VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR, 
             testgeopath, true);
     }
+    colorPalette = leaf_CreateColorPaletteStem(root, 0.2, 0.3, 0.6, 0.6);
 
     is2D = twoDMode;
 
