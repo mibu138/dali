@@ -47,6 +47,8 @@ void dali_EngineDestroyImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scen
 
 void dali_EngineCreateImagesAndDependents(Dali_Engine* engine, Obdn_Scene* scene);
 
+void dali_SetRayWidth(Dali_Engine* engine, u32 width);
+
 Obdn_Image* 
 dali_GetTextureImage(Dali_Engine*);
 

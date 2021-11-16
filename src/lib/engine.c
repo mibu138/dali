@@ -2069,3 +2069,8 @@ dali_GetTextureImage(Dali_Engine* e)
 {
     return &e->imageA;
 }
+
+void dali_SetRayWidth(Dali_Engine* engine, u32 width)
+{
+    engine->rayWidth = width;
+}
