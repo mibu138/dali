@@ -366,6 +366,22 @@ daliFrame(u64 frame, u64 dt)
 
     obdn_WaitForFence(obdn_GetDevice(oInstance), &paintCommand.fence);
 
+    char buffer[500];
+    u32 dc;
+    leaf_RootUpdate(root, dt);
+    if (leaf_RootCollectDrops(root, 500, buffer, &dc))
+    {
+        Leaf_Drop* drops = (Leaf_Drop*)buffer;
+        for (u32 i = 0; i < dc; i++)
+        {
+            if (drops[i].stemHandle == colorPalette)
+            {
+                float* c = drops[i].payload.floatData;
+                dali_SetBrushColor(brush, c[0], c[1], c[2]);
+            }
+        }
+    }
+
     VkSemaphore acquireSemaphore;
     const Obdn_Framebuffer* fb = leaf_RootAcquireSwapchainFramebuffer(root, frame, &acquireSemaphore);
 
