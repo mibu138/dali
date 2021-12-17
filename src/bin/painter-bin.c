@@ -401,13 +401,13 @@ daliFrame(u64 frame, u64 dt)
     VkSemaphore     rootRenderSema;
     leaf_RootRender(root, frame, fb, false, &rootRenderCmd, &rootRenderSema);
 
-    VkPipelineStageFlags stageFlags = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    VkPipelineStageFlags wait_stage_mask[2] = {VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT, VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT};
     VkSubmitInfo paintSubmit = {
         .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
         .commandBufferCount = 1,
         .waitSemaphoreCount = undoWaitSemaphore == VK_NULL_HANDLE ? 0 : 1,
         .signalSemaphoreCount = 1,
-        .pWaitDstStageMask = &stageFlags,
+        .pWaitDstStageMask = wait_stage_mask,
         .pSignalSemaphores = &paintCommand.semaphore,
         .pWaitSemaphores = &undoWaitSemaphore,
         .pCommandBuffers = &paintCommand.buffer,
@@ -420,7 +420,7 @@ daliFrame(u64 frame, u64 dt)
         .commandBufferCount = 1,
         .waitSemaphoreCount = 2,
         .signalSemaphoreCount = 1,
-        .pWaitDstStageMask = &stageFlags,
+        .pWaitDstStageMask = wait_stage_mask,
         .pSignalSemaphores = &shivRenderCmd.semaphore,
         .pWaitSemaphores = shivRenderWaits,
         .pCommandBuffers = &shivRenderCmd.buffer
