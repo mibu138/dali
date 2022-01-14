@@ -327,6 +327,7 @@ handlePaintEvent(const Hell_Event* ev, void* data)
 bool
 handleMouseEvent(const Hell_Event* ev, void* data)
 {
+    hell_Print("Got Mouse event!\n");
     handleViewEvent(ev, data);
     if (!spaceDown) handlePaintEvent(ev, data);
     return false;
@@ -362,6 +363,7 @@ debugBrush()
 void
 daliFrame(u64 frame, u64 dt)
 {
+    hell_Print("Running frame!\n");
     dali_UpdateUndo(undoManager, layerStack);
 
     obdn_WaitForFence(obdn_GetDevice(oInstance), &paintCommand.fence);
