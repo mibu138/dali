@@ -22,6 +22,8 @@ endif()
 
 include(FetchContent)
 
+set(FETCHCONTENT_UPDATES_DISCONNECTED ON)
+
 FetchContent_Declare(
     hell 
     GIT_REPOSITORY /home/michaelb/dev/hell
